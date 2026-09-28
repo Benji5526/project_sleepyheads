@@ -5,9 +5,15 @@
 | 프로젝트 | project_sleepyheads — 질문형 기업 분석 서비스 (공시 숫자 + 뉴스 단서) |
 | 작성자 | Sung, Hyun-Joon |
 | 작성일 | 2026-09-28 |
-| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.4 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.3 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.2 |
+| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.4.1 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.4 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.1 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.2.1 |
 
-> 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 3개를 따른다.
+### 변경 이력
+| 날짜 | 내용 |
+|---|---|
+| 2026-09-28 | 최초 작성 (역할 4개, 첫 작업, 계약, 키 관리, 협업 규칙) |
+| 2026-09-28 | 백엔드 구성(Supabase + Vercel) 확정, **API_SPEC 추가**에 따라 역할별 첫 작업·계약·환경변수·첫 주 목표 갱신 |
+
+> 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
 ---
 
@@ -15,7 +21,9 @@
 
 | 구분 | 상태 |
 |---|---|
-| 기획 문서 | ✅ PRD v0.4, TECH_SPEC v0.3, WORK_UNITS v0.2 작성 완료 |
+| 기획 문서 | ✅ PRD v0.4.1, TECH_SPEC v0.4, WORK_UNITS v0.2.1 작성 완료 |
+| **서버 API 명세** | ✅ **API_SPEC v0.1** — 엔드포인트 23개, 계약 타입, Supabase·Vercel 설정까지 확정 |
+| 백엔드 구성 | ✅ **Supabase(DB·로그인) + Vercel(서버 API·예약 실행·배포)**로 확정 |
 | 코드 | ⬜ **아직 없음** (첫 작업 WU-001에서 앱 뼈대 생성) |
 | 외부 서비스 계정·키 | ⬜ 아직 없음 (WU-002, WU-003) |
 | 배포 주소 | ⬜ 아직 없음 (WU-003에서 생성) |
@@ -28,8 +36,9 @@
 ### 꼭 먼저 읽을 곳 (역할 공통, 약 30분)
 1. [PRD §1~3, §12](DevelopDoc/PRD.md) — 무엇을 만드는지, Step별 범위
 2. [TECH_SPEC §0, §1, §4](DevelopDoc/TECH_SPEC.md) — 원칙, 구성도, 분석 처리 흐름
-3. [WORK_UNITS §1](DevelopDoc/WORK_UNITS.md) — 진행 현황표와 작업 순서도
-4. 이 문서의 내 역할 부분 (§3)
+3. [API_SPEC §0, §3](DevelopDoc/API_SPEC.md) — 백엔드 구성도, 엔드포인트 목록 (기획/화면·데이터/서버는 **§2 계약 타입**까지)
+4. [WORK_UNITS §1](DevelopDoc/WORK_UNITS.md) — 진행 현황표와 작업 순서도
+5. 이 문서의 내 역할 부분 (§3)
 
 ---
 
@@ -37,13 +46,25 @@
 
 | 역할 | 한 줄 책임 | 담당자 | 소유 문서 | 소유 폴더 (작업 후 생성) |
 |---|---|---|---|---|
-| **기획/화면** | 사용자가 보는 모든 화면과 문구 | (이름) | PRD | `src/app/**/page.tsx`, `src/components/` |
-| **데이터/서버** | 데이터 수집·계산·AI 호출 등 서비스의 두뇌 | (이름) | TECH_SPEC §3~11, §15 | `src/lib/`, `supabase/migrations/`, `supabase/seed/` |
-| **통합/배포** | 뼈대·로그인·한도·API 연결·배포 등 서비스의 뼈와 혈관 | (이름) | TECH_SPEC §2, §13~14, §16~18 | `src/app/api/`, `src/middleware.ts`, `.github/`, 설정 파일 |
+| **기획/화면** | 사용자가 보는 모든 화면과 문구 | (이름) | PRD, API_SPEC §2(공동) | `src/app/**/page.tsx`, `src/components/` |
+| **데이터/서버** | 데이터 수집·계산·AI 호출 등 서비스의 두뇌 | (이름) | TECH_SPEC §3~11, §15, API_SPEC §2(공동)·§7.3 | `src/lib/`, `supabase/migrations/`, `supabase/seed/` |
+| **통합/배포** | 뼈대·로그인·한도·API 연결·배포 등 서비스의 뼈와 혈관 | (이름) | TECH_SPEC §2, §13~14, §16~18, **API_SPEC** | `src/app/api/`, `src/app/auth/`, `src/middleware.ts`, `vercel.json`, `.github/`, 설정 파일 |
 | **검증/문서** | "정말 맞게 동작하는가"의 증거와 문서 관리 | (이름) | WORK_UNITS 진행표, FINAL_CHECKLIST, README | `tests/regression/`, `tests/accuracy/`, `tests/perf/`, `DevelopDoc/`, `README.md` |
 
 - 단위 테스트(`tests/unit/`)는 **그 코드를 만든 사람**이 함께 작성한다.
 - 공통 약속 폴더 `src/contracts/`는 **데이터/서버 + 기획/화면이 공동 소유**한다 (§5).
+
+### 2.1 백엔드 구성 요약 (자세히: [API_SPEC §0, §7, §8](DevelopDoc/API_SPEC.md))
+| 구성 요소 | 무엇을 하나 | 담당 |
+|---|---|---|
+| **Vercel — 서버 API** | Next.js Route Handlers(`src/app/api/**/route.ts`). 외부 API·계산·AI 호출은 모두 여기서만 | 통합/배포(경로·권한·한도) + 데이터/서버(내부 로직 `src/lib/`) |
+| **Vercel — 예약 실행(Cron)** | 매일 1회 기업 목록 동기화, 비로그인 예시 갱신 (무료 플랜은 하루 1회까지, 1시간 오차) | 통합/배포 |
+| **Vercel — 배포** | `main` → 운영, PR → Preview 주소 자동 생성 | 통합/배포 |
+| **Supabase — Auth** | 구글 로그인만, 이메일·비밀번호 가입 끔 | 통합/배포 |
+| **Supabase — Postgres** | 모든 데이터, RLS, 한도 차감 등 DB 함수 5개 | 데이터/서버 |
+| **Supabase 프로젝트 2개** | `sleepyheads-dev`(로컬·Preview), `sleepyheads-prod`(운영) | 통합/배포 |
+
+- **브라우저는 Supabase DB를 직접 조회하지 않는다.** 로그인·로그아웃만 브라우저에서 Supabase를 쓰고, 나머지 데이터는 모두 `/api/*`를 거친다.
 
 ---
 
@@ -67,7 +88,8 @@
 1. **화면 설계도(와이어프레임)** 5장: ① 빈 대기화면 ② 결과 화면(좌/우, 1280px·375px) ③ 분석 계획 카드·진행 상태 ④ 전처리 진단 카드 ⑤ 비로그인 화면. 기준: [TECH_SPEC §12.2](DevelopDoc/TECH_SPEC.md) 배치도.
 2. **화면 문구 초안**: 투자 유의 고지·비상업 안내·출처(PRD §9 문구 기반), 이용약관, 개인정보 처리방침(수집 항목·목적·보관 기간·파기), 오류·되묻기 안내 문구(TECH §16 오류 코드별).
 3. **예시 질문 6개 이상** (PRD §6.2의 질문 유형별 1개 이상) — 대기화면 칩과 비로그인 예시에 사용.
-4. 데이터/서버와 **결과 객체 계약**(§5) 초안 합의 → 합의되면 **가짜 결과 JSON**으로 WU-113 화면을 먼저 만든다 (서버 완성을 기다리지 않음).
+4. **결과 객체 계약은 이미 [API_SPEC §2.5~2.6](DevelopDoc/API_SPEC.md)에 초안이 있다.** 검토해 고칠 점을 데이터/서버와 합의하고, [API_SPEC Q2 응답 예시](DevelopDoc/API_SPEC.md)를 본뜬 **가짜 결과 JSON**(`tests/fixtures/mock/`)으로 WU-113 화면을 먼저 만든다 (서버 완성을 기다리지 않음).
+5. 화면별로 어떤 API를 어떤 순서로 부르는지는 [API_SPEC §6 화면 호출 흐름](DevelopDoc/API_SPEC.md)과 §4 각 엔드포인트의 "화면이 할 일" 표를 따른다.
 
 **완료 판단**: 각 WU의 완료조건 + 화면 캡처(데스크톱 1280px, 휴대폰 375px)를 PR에 첨부.
 
@@ -86,9 +108,9 @@
 | 5 | WU-502 재무+주가 결합 | WU-501(단계 잠금), WU-503, WU-504 |
 
 **지금 바로 시작할 일**
-1. **결과 객체 계약**(§5)과 **분석 요청 형식**(TECH §4.2)을 TypeScript 타입 + Zod 스키마 초안으로 작성 → 기획/화면과 합의.
+1. **계약 타입 검토**: [API_SPEC §2](DevelopDoc/API_SPEC.md)의 타입이 계산 엔진·실행기 결과로 실제로 만들 수 있는 모양인지 확인하고, 서버 쪽 **Zod 스키마**와 AI 내부 형식(TECH §4.2, snake_case) → API 형식(camelCase) 변환 함수를 설계 → 기획/화면과 합의.
 2. **계산 엔진 순수 함수**(WU-106) 먼저 작성: TECH §6.2~6.4는 외부 API 없이 가상 입력으로 개발·테스트할 수 있다. 3월 결산 달력 환산 예시(TECH §6.3 표)를 첫 테스트로.
-3. **DB 스키마 SQL 초안**(WU-101): TECH §15를 마이그레이션 파일로. 적용은 WU-003(Supabase 프로젝트 생성) 후.
+3. **DB 스키마 SQL 초안**(WU-101): TECH §15 테이블 + [API_SPEC §7.3 DB 함수 5개](DevelopDoc/API_SPEC.md) + §7.4 RLS를 마이그레이션 파일로. 적용은 WU-003(`sleepyheads-dev` 생성) 후.
 4. 개발용 OpenDART 키를 **본인 이름으로 발급**(§6.2)해 SK하이닉스·삼성전자·KB금융 응답 샘플을 받아 둔다.
 
 **지켜야 할 원칙 (TECH §0)**: 숫자는 서버가 계산, AI는 숫자를 직접 쓰지 않음(자리표시자), 허용 도구만 실행, 원본 응답·기사 본문 저장 금지, 모든 외부 호출은 공통 래퍼 경유.
@@ -109,10 +131,12 @@
 | 5 | WU-501 작업 큐 보강, WU-505 배포 전 보안·운영 점검 | WU-599(최종 배포) |
 
 **지금 바로 시작할 일**
-1. **WU-001을 가장 먼저** 끝낸다. 다른 역할의 코드 작업이 이것을 기다린다. 목표: 오늘 안에 `pnpm dev`가 되는 뼈대 + `src/contracts/` 빈 폴더 + CI.
+1. **WU-001을 가장 먼저** 끝낸다. 다른 역할의 코드 작업이 이것을 기다린다. 목표: `pnpm dev`가 되는 뼈대 + `src/contracts/`에 [API_SPEC §2](DevelopDoc/API_SPEC.md) 타입 옮기기 + `vercel.json`(§8.1 crons) + CI.
 2. 현준님과 **WU-002·WU-003** 진행: 운영용 계정·키는 현준님 명의(또는 팀 공용)로 만들고, 운영 키는 Vercel 환경변수에만 넣는다.
-3. **Supabase 프로젝트 2개**를 만든다: `sleepyheads-dev`(개발·테스트용), `sleepyheads-prod`(운영·시연용). 무료 플랜의 활성 프로젝트 한도가 2개라 딱 맞다.
-4. `.env.example`과 §6의 키 배포 방식을 팀에 공지한다.
+3. **Supabase 프로젝트 2개**를 만든다: `sleepyheads-dev`(로컬·Preview), `sleepyheads-prod`(운영·시연). 무료 플랜의 활성 프로젝트 한도가 2개라 딱 맞다.
+4. **Vercel 환경변수를 환경별로 등록**: [API_SPEC §8.3 표](DevelopDoc/API_SPEC.md) 그대로. Preview에는 절대 prod DB를 연결하지 않는다. `CRON_SECRET`은 16자 이상 무작위 문자열.
+5. **API 뼈대 만들기**: [API_SPEC §3](DevelopDoc/API_SPEC.md)의 23개 경로에 빈 Route Handler를 만들고, 공통 처리(세션 검증·약관 확인·소유자 검사·오류 형식 §1.7·요청 속도 §1.6·`Idempotency-Key`)를 미들웨어·헬퍼로 먼저 구현한다. 내부 로직은 데이터/서버가 채운다.
+6. `.env.example`과 §6의 키 배포 방식을 팀에 공지한다.
 
 **지켜야 할 원칙**: 서버 전용 키에 `NEXT_PUBLIC_` 금지, `.env*` 커밋 금지, 모든 서비스 무료 플랜 유지(결제 수단 등록 금지, OpenAI 제외).
 
@@ -164,16 +188,16 @@ flowchart LR
 
 ## 5. 역할 간 약속 (계약)
 
-여러 사람이 동시에 일하려면 **주고받는 데이터 모양**을 먼저 정해야 한다. 아래 약속은 `src/contracts/`에 TypeScript 타입으로 둔다. **바꿀 때는 PR에 관련 역할 모두의 확인이 필요하다.**
+여러 사람이 동시에 일하려면 **주고받는 데이터 모양**을 먼저 정해야 한다. 모든 약속은 **[API_SPEC.md](DevelopDoc/API_SPEC.md)에 초안이 확정**되어 있고, 코드로는 `src/contracts/`에 TypeScript 타입으로 둔다. **바꿀 때는 API_SPEC을 먼저 고치고, PR에 관련 역할 모두의 확인이 필요하다** (API_SPEC §9).
 
 | 약속 | 내용 | 만드는 쪽 | 쓰는 쪽 | 기준 |
 |---|---|---|---|---|
-| 분석 요청 형식 | 질문 해석 결과(JSON) | 데이터/서버 | 데이터/서버, 검증/문서(회귀 기대표) | TECH §4.2 |
-| **결과 객체** | 차트·표 데이터, 숫자 ID(`f1`…), 단위, 기준 보고서, 분석 기준 바 정보 | 데이터/서버 | **기획/화면** | TECH §4.4, §12.2~12.3 |
-| 분석 글 형식 | 결론·근거·뉴스 단서·주의사항 | 데이터/서버 | 기획/화면 | TECH §11.3 |
-| 서버 API | 경로·요청·응답·오류 코드 | 통합/배포 | 기획/화면 | TECH §16 |
-| 분석 상태 | `queued / awaiting_approval / running / succeeded / failed / canceled / partial` | 데이터/서버 | 기획/화면, 통합/배포 | TECH §4.9 |
-| DB 스키마 | 테이블·컬럼 | 데이터/서버 | 통합/배포 | TECH §15 |
+| 분석 요청 (화면용) | 서버가 해석·검사한 질문 (`AnalysisRequestView`) | 데이터/서버 | 기획/화면 | API_SPEC §2.2 (AI 내부 형식은 TECH §4.2) |
+| **결과 객체** | 차트·표 데이터, 숫자 ID(`f1`…), 단위, 기준 보고서, 분석 기준 바, 사용된 데이터 | 데이터/서버 | **기획/화면** | **API_SPEC §2.5** |
+| 분석 글 형식 | 결론·근거·뉴스 단서·주의사항 | 데이터/서버 | 기획/화면 | API_SPEC §2.6 |
+| 분석 상태 | `needs_clarification / awaiting_approval / awaiting_preprocess / queued / running / succeeded / partial / failed / canceled` | 데이터/서버 | 기획/화면, 통합/배포 | API_SPEC §2.3, §5 |
+| 서버 API | 경로·권한·요청·응답·오류 코드·요청 속도 | 통합/배포 | 기획/화면 | API_SPEC §1, §3, §4 |
+| DB 스키마·DB 함수 | 테이블·컬럼·RLS·RPC 5개 | 데이터/서버 | 통합/배포 | TECH §15, API_SPEC §7.3~7.4 |
 
 - 계약이 정해지기 전에는 **가짜 데이터(`tests/fixtures/mock/`)**로 각자 개발한다.
 
@@ -199,6 +223,9 @@ flowchart LR
 | 네이버 검색 API | 각자 애플리케이션 등록 | 팀 운영 키 | 통합/배포 |
 | OpenAI (유료) | **팀 키 1개 공유** (월 예산 상한 설정 필수) | 같은 키 또는 운영 전용 키 | 현준님 |
 | Supabase | `sleepyheads-dev` 프로젝트 키 | `sleepyheads-prod` 프로젝트 키 | 통합/배포 |
+| `CRON_SECRET` | 임의 값 | 운영 값 (Vercel Production에만) | 통합/배포 |
+
+- 환경별 전체 목록(로컬·Preview·Production)은 [API_SPEC §8.3](DevelopDoc/API_SPEC.md).
 
 - 키는 **각자 `.env.local`에만** 둔다. 채팅방·이슈·PR·커밋에 절대 붙여넣지 않는다.
 - 공유가 필요한 키(OpenAI, Supabase dev)는 **비밀번호 관리자나 1회용 비밀 메시지**로 전달한다.
@@ -262,7 +289,7 @@ git clone git@github.com:wilstein91/project_sleepyheads.git
 
 | 역할 | 첫 주에 끝낼 것 |
 |---|---|
-| 기획/화면 | 화면 설계도 5장, 문구 초안, 예시 질문, 결과 객체 계약 합의, 가짜 JSON으로 대기화면·결과 화면 초안 |
-| 데이터/서버 | 계약 초안, 계산 엔진 순수 함수 + 달력 환산 테스트, DB 스키마 SQL, 샘플 응답 수집 |
-| 통합/배포 | WU-001·002·003 완료 (배포 주소에서 빈 페이지 확인), 키 배포 방식 공지 |
+| 기획/화면 | 화면 설계도 5장, 문구 초안, 예시 질문, API_SPEC §2 계약 검토·합의, 가짜 JSON으로 대기화면·결과 화면 초안 |
+| 데이터/서버 | 계약 검토·Zod 스키마, 계산 엔진 순수 함수 + 달력 환산 테스트, DB 스키마·DB 함수·RLS SQL, 샘플 응답 수집 |
+| 통합/배포 | WU-001·002·003 완료 (배포 주소에서 빈 페이지 확인), Supabase 2개·Vercel 환경변수·Cron 설정, API 23개 경로 뼈대와 공통 처리, 키 배포 방식 공지 |
 | 검증/문서 | 샘플 기업 목록, 손 계산 정답표 1차, T7 조사 보고, 회귀 질문 초안, FINAL_CHECKLIST 초안 |

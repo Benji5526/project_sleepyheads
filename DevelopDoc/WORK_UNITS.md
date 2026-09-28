@@ -6,14 +6,15 @@
 | 문서 종류 | WORK_UNITS (단위 작업 명세) |
 | 작성자 | Sung, Hyun-Joon |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.2 |
-| 기준 문서 | [PRD.md](./PRD.md) v0.4, [TECH_SPEC.md](./TECH_SPEC.md) v0.3 |
+| 버전 | v0.2.1 |
+| 기준 문서 | [PRD.md](./PRD.md) v0.4.1, [TECH_SPEC.md](./TECH_SPEC.md) v0.4, [API_SPEC.md](./API_SPEC.md) v0.1 |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |
 |---|---|---|
 | v0.1 | 2026-09-28 | 초안 (고정 대시보드 기준, WU-00~36) |
 | **v0.2** | 2026-09-28 | **질문형 분석 구조 + 수업 워크플로우 Step 1~5 순서로 전면 재편. Step마다 통과 테스트·배포 시연 작업 단위 추가** |
+| v0.2.1 | 2026-09-28 | API_SPEC 반영: WU-001 계약 타입 폴더·환경변수 10개, WU-101 DB 함수·한도 키, WU-103 Vercel Cron 확정, WU-114 요청 속도 제한 구분 |
 
 ---
 
@@ -164,14 +165,16 @@ flowchart LR
 
 **작업 내용**
 - Next.js(App Router) + TypeScript + Tailwind CSS (pnpm), TECH §18.1 폴더 구조
-- `.gitignore`(`.env*` 포함), `.env.example`(TECH §18 변수 이름만)
+- `.gitignore`(`.env*` 포함), `.env.example`(API_SPEC §8.3 변수 이름만)
+- `src/contracts/`에 API_SPEC §2 계약 타입 파일 뼈대, `vercel.json`(API_SPEC §8.1 crons)
 - ESLint, Prettier, Vitest, Playwright
 - GitHub Actions(공개 저장소 무료)로 푸시마다 검사·테스트
 
 **완료조건**
 - [ ] `pnpm dev` 후 `http://localhost:3000`에서 기본 페이지가 뜬다
 - [ ] `pnpm lint`, `pnpm test`, `pnpm build`가 오류 없이 끝난다
-- [ ] `.env.example`에 TECH §18의 변수 9개가 **값 없이** 있다
+- [ ] `.env.example`에 API_SPEC §8.3의 변수 10개가 **값 없이** 있다
+- [ ] `src/contracts/`에 API_SPEC §2의 타입이 옮겨져 있고 빌드가 통과한다
 - [ ] `.env.local`을 만들어도 `git status`에 나타나지 않는다
 - [ ] GitHub 푸시 시 Actions 검사가 통과한다
 
@@ -237,13 +240,16 @@ flowchart LR
 - 마이그레이션: §15.1(회원·사용량), §15.3(기업·섹터), §15.4(수집 데이터), `projects`·`analyses`(Step 1용 최소 컬럼), `guest_examples`
 - 모든 테이블 RLS: 🔒 테이블은 `owner_id = auth.uid()`, 🗄️ 테이블은 정책 없음
 - 시드: `sectors`, `sector_rules`, `sector_overrides`(SK하이닉스 포함), `account_map`, `issue_rules`(§15.5), `quota_config`(§4.7, §13)
+- DB 함수(API_SPEC §7.3): `consume_quota`, `refund_quota`, `check_and_record_api_usage`, `acquire_step_lock`, `delete_my_data` — `SECURITY DEFINER` + `anon`·`authenticated` 실행 권한 회수
+- `sleepyheads-dev`에 먼저 적용
 
 **완료조건**
 - [ ] 빈 DB에 마이그레이션을 적용하면 오류 없이 모든 테이블이 생긴다
 - [ ] Supabase Security Advisor(보안 진단)의 "RLS 꺼진 테이블" 경고가 0건이다
 - [ ] 테스트: 회원 A 세션으로 회원 B의 `analyses`를 조회하면 0행
 - [ ] 테스트: 공개 키로 🗄️ 테이블(`companies` 등)을 조회하면 0행
-- [ ] `quota_config`에 TECH §13 표의 키 8개와 §4.7의 질문당 상한 6개가 있다
+- [ ] `quota_config`에 TECH §13 표의 키 9개와 §4.7의 질문당 상한 6개가 있다
+- [ ] 테스트: 사용자 세션으로 DB 함수(`consume_quota` 등)를 직접 호출하면 권한 오류가 난다
 - [ ] 금융 섹터 4개만 `is_financial = true`
 
 ---
@@ -282,7 +288,7 @@ flowchart LR
 | 선행 | WU-102 |
 
 **작업 내용**
-- `corpCode.xml` → 종목코드 있는 **상장사만** `companies`에 저장, 하루 1회 자동 실행 (무료 방법을 작업 시 공식 문서로 확인해 선택: Vercel Cron 또는 GitHub Actions 예약 실행)
+- `corpCode.xml` → 종목코드 있는 **상장사만** `companies`에 저장. **Vercel Cron 하루 1회**(`GET /api/cron/sync-companies`, API_SPEC C1·§8.1), `CRON_SECRET` 검사, 여러 번 실행돼도 결과가 같게(멱등)
 - `resolve_company`: 이름·종목코드·흔한 줄임말(예: "하이닉스") → 기업 확정, 후보 여러 개면 후보 목록 반환
 - `GET /api/search?q=` 자동완성 (DB만)
 
@@ -292,7 +298,8 @@ flowchart LR
 - [ ] `하이닉스` → SK하이닉스, `005930` → 삼성전자로 확정된다
 - [ ] 후보가 여럿인 이름(예: `현대`)은 후보 목록을 돌려준다
 - [ ] 기업 찾기·자동완성은 외부 호출 0건
-- [ ] 자동 동기화가 하루 1회 실행된 기록이 있다
+- [ ] 자동 동기화가 하루 1회 실행된 기록이 Vercel 로그에 있다
+- [ ] `CRON_SECRET` 없이 호출하면 `401`
 
 ---
 
@@ -523,7 +530,8 @@ flowchart LR
 **완료조건**
 - [ ] 21번째 질문은 429 `QUOTA_EXCEEDED`, 이미 만든 분석은 계속 열린다
 - [ ] 같은 질문을 동시에 2번 보내도 1회만 차감된다
-- [ ] 1분에 11번째 요청은 429 `RATE_LIMITED`
+- [ ] 1분에 11번째 질문 관련 요청(`ask`·`clarify`·`rewrite`·`rerun`)은 429 `RATE_LIMITED`, 진행 상태 확인·단계 실행은 분당 120회까지 허용
+- [ ] AI 장애로 질문 해석이 실패하면 질문 수가 되돌려진다 (`refund_quota`)
 - [ ] 한국 시간 00:00에 초기화된다 (시각을 바꿔 테스트)
 - [ ] 화면에 남은 질문 수가 표시·갱신된다
 - [ ] 전체 AI 질문 상한(300) 도달 시 새 질문이 `SERVICE_BUDGET`으로 안내된다

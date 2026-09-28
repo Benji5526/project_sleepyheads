@@ -6,8 +6,9 @@
 | 문서 종류 | TECH_SPEC (기술 명세) |
 | 작성자 | Sung, Hyun-Joon |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3 |
-| 기준 PRD | [PRD.md](./PRD.md) v0.4 |
+| 버전 | v0.4 |
+| 기준 PRD | [PRD.md](./PRD.md) v0.4.1 |
+| 관련 문서 | [API_SPEC.md](./API_SPEC.md) v0.1 — 서버 API 상세 명세 |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |
@@ -15,6 +16,7 @@
 | v0.1 | 2026-09-28 | 초안 |
 | v0.2 | 2026-09-28 | 무료 서비스 한도, OpenAI GPT API, 구글 로그인 단일화, 달력 분기 환산, 금융사 부채비율 주석, DB 용량 절약 |
 | **v0.3** | 2026-09-28 | **질문형 분석 구조로 전환: 분석 요청 형식·허용 도구·서버 검사(§4), 데이터 버전(§5), 전처리 진단(§9), 네이버 뉴스 수집(§10), AI 역할 확대·숫자 자리표시자 방식(§11), 좌 차트/우 분석 글 화면(§12), 질문 단위 한도(§13), 실행 기록·취소·작업 큐(§4.8~4.9), 재무+주가 결합 검증(§6.6), 회귀·대용량 테스트(§20)** |
+| v0.4 | 2026-09-28 | 백엔드를 Supabase + Vercel로 확정하고 서버 API 상세를 [API_SPEC.md](./API_SPEC.md)로 분리. 기업 목록 동기화를 Vercel Cron(하루 1회)으로 확정, 요청 속도 제한을 질문 관련(분당 10회)·전체(분당 120회)로 분리, `CRON_SECRET` 추가 |
 
 > 이 문서는 PRD의 "무엇을 만들지"를 "어떻게 만들지"로 옮긴 것이다. 기능 ID(F-xx)는 PRD v0.4의 요구사항 ID를 그대로 쓴다.
 
@@ -77,7 +79,7 @@ flowchart LR
 ### 2.1 무료 서비스 한도와 대응 (공식 문서 확인, 2026-09-28 기준)
 | 서비스 | 무료 한도 | 대응 |
 |---|---|---|
-| **Vercel Hobby** | 서버 함수 최대 실행 **300초**, Active CPU **월 4 CPU-시간**, 함수 호출 월 100만 회, 전송 월 100GB. 초과 시 최대 30일 중지. **비상업·개인용 전용** | 분석을 짧은 단계로 나눠 실행(§4.9), 캐시로 연산 최소화 |
+| **Vercel Hobby** | 서버 함수 최대 실행 **300초**, Active CPU **월 4 CPU-시간**, 함수 호출 월 100만 회, 전송 월 100GB. 초과 시 최대 30일 중지. **비상업·개인용 전용**. 예약 실행(Cron)은 **하루 1회까지, 지정 시각의 1시간 안 아무 때나** 실행 | 분석을 짧은 단계로 나눠 실행(§4.9), 캐시로 연산 최소화, Cron 작업은 여러 번 실행돼도 안전하게(멱등) |
 | **Supabase Free** | DB **500MB**, 월 활성 사용자 5만, 활성 프로젝트 2개, 전송 5GB. **1주일 미사용 시 일시정지** | 원본 응답 대신 추출 값만 저장(§15.6), 400MB 경고, 시연 전 상태 확인 |
 | **OpenDART** | 무료, 일일 한도 약 2만 건 | 최소 기간 조회, 저장·재사용, 한도(§13) |
 | **금융위원회_주식시세정보** | 무료, 개발 계정 **하루 10,000건**, 출처표시·상업적 이용금지·변경금지 | 종목별 하루 1회, 출처·비상업 안내 |
@@ -92,7 +94,7 @@ flowchart LR
 ### 3.1 OpenDART (https://opendart.fss.or.kr) — 수업 워크플로우의 CSV를 대체
 | 용도 | API | 호출 시점 |
 |---|---|---|
-| 기업 고유번호 목록 | 고유번호 (`corpCode.xml`, ZIP) | 하루 1회 시스템 동기화 → `companies` |
+| 기업 고유번호 목록 | 고유번호 (`corpCode.xml`, ZIP) | **Vercel Cron 하루 1회** 동기화 → `companies` (API_SPEC C1) |
 | 기업 기본 정보 | 기업개황 (`company.json`) | 첫 조회 시, 이후 30일마다 (업종코드, **결산월 `acc_mt`**) |
 | 공시 목록 | 공시검색 (`list.json`) | 분석 기간 중 마지막 확인 이후분만 |
 | 전체 재무제표 | 단일회사 전체 재무제표 (`fnlttSinglAcntAll.json`) | 필요한 보고서만, 보고서별 1회 |
@@ -551,7 +553,8 @@ sequenceDiagram
 | 키 | 기본값 | 의미 |
 |---|---|---|
 | `questions_per_day` | 20 | 회원별 새 질문·후속 질문·설명 다시 쓰기 |
-| `requests_per_minute` | 10 | 분당 요청 수 |
+| `question_requests_per_minute` | 10 | 회원별 질문 관련 요청(`ask`·`clarify`·`rewrite`·`rerun`) 분당 수 |
+| `requests_per_minute` | 120 | 회원별 전체 요청 분당 수 (진행 상태 확인·단계 실행 포함) |
 | `dart_calls_per_user_per_day` | 400 | 회원별 OpenDART 소모 상한 (숨은 한도) |
 | `dart_global_soft_limit` | 16,000 | 넘으면 회원의 새 수집 중단 (저장 데이터만) |
 | `dart_global_hard_limit` | 19,000 | 넘으면 시스템 수집도 중단 |
@@ -651,6 +654,8 @@ sequenceDiagram
 
 ## 16. 서버 API (Next.js Route Handlers)
 
+> 요청·응답 형식, 계약 타입, 권한, 상태 전이, Supabase·Vercel 설정 등 **상세는 [API_SPEC.md](./API_SPEC.md)** 를 따른다. 아래는 요약이다.
+
 | 메서드·경로 | 설명 | 질문 차감 |
 |---|---|---|
 | `POST /api/ask` `{question, projectId?, idempotencyKey}` | 질문 제출 → `needs_clarification` / `awaiting_approval` / `running` / `succeeded` | 1 |
@@ -720,6 +725,7 @@ sequenceDiagram
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 🔒 |
 | `OPENAI_API_KEY` | 🔒 |
 | `OPENAI_MODEL` | 서버 (기본 `gpt-6-luna`) |
+| `CRON_SECRET` | 🔒 (Vercel Cron 호출 인증, 16자 이상 무작위 문자열) |
 
 ### 18.1 저장소 구조 (안)
 ```
