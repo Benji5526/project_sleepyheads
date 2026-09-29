@@ -4,7 +4,7 @@
 |---|---|
 | 프로젝트 | project_sleepyheads |
 | 문서 종류 | API_SPEC (서버 API 명세) |
-| 작성자 | Sung, Hyun-Joon |
+| 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
 | 버전 | v0.1 |
 | 기준 문서 | [PRD](./PRD.md) v0.4.1 · [TECH_SPEC](./TECH_SPEC.md) v0.4 |

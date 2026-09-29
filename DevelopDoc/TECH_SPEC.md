@@ -4,7 +4,7 @@
 |---|---|
 | 프로젝트 | project_sleepyheads |
 | 문서 종류 | TECH_SPEC (기술 명세) |
-| 작성자 | Sung, Hyun-Joon |
+| 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
 | 버전 | v0.4 |
 | 기준 PRD | [PRD.md](./PRD.md) v0.4.1 |

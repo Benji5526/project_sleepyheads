@@ -4,7 +4,7 @@
 |---|---|
 | 프로젝트 | project_sleepyheads |
 | 문서 종류 | WORK_UNITS (단위 작업 명세) |
-| 작성자 | Sung, Hyun-Joon |
+| 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
 | 버전 | v0.2.1 |
 | 기준 문서 | [PRD.md](./PRD.md) v0.4.1, [TECH_SPEC.md](./TECH_SPEC.md) v0.4, [API_SPEC.md](./API_SPEC.md) v0.1 |
@@ -934,7 +934,7 @@ flowchart LR
 **완료조건**
 - [ ] `README.md`: 서비스 소개(질문형 분석, 좌 차트/우 분석 글), 화면 캡처, 주요 기능, 기술 스택, 데이터 출처(DART·금융위·네이버·OpenAI), **비상업 안내**, 수업 워크플로우 대응표(제외 항목 포함), 로컬 실행 방법, 환경변수 이름, 문서 링크
 - [ ] README만 보고 새 폴더에서 `pnpm install` → `pnpm dev`까지 따라 해 성공
-- [ ] 작성자 표기 `Sung, Hyun-Joon`
+- [ ] 작성자 표기 `Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min` (3명)
 - [ ] 운영 메모: 시연 전 점검(Supabase 일시정지 해제), 한도 값 변경법, 키 재발급 절차, 비로그인 예시 재생성 방법
 
 ---

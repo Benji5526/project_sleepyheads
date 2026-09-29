@@ -4,7 +4,7 @@
 |---|---|
 | 프로젝트 | project_sleepyheads |
 | 문서 종류 | PRD (Product Requirements Document, 제품 요구 사항) |
-| 작성자 | Sung, Hyun-Joon |
+| 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
 | 버전 | v0.4.1 |
 | 상태 | 검토 중 |

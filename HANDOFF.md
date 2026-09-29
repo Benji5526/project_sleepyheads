@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 |---|---|
 | 프로젝트 | project_sleepyheads — 질문형 기업 분석 서비스 (공시 숫자 + 뉴스 단서) |
-| 작성자 | Sung, Hyun-Joon |
+| 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
 | 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.4.1 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.4 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.1 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.2.1 |
 
