@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = 3000;
+// 개발 서버(3000)와 겹치지 않는 포트
+const PORT = 3100;
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -23,11 +24,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 } },
     },
   ],
-  // CI에서는 빌드된 앱을, 로컬에서는 개발 서버를 띄워 테스트한다
+  // 화면 테스트는 항상 가짜 모드로 빌드한 앱에서 돌린다 (서버 API·외부 키 없이 같은 결과)
   webServer: {
-    command: process.env.CI ? "pnpm start" : "pnpm dev",
+    command: `pnpm build && pnpm start -p ${PORT}`,
     url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    env: { NEXT_PUBLIC_API_MOCK: "1" },
+    reuseExistingServer: false,
+    timeout: 240_000,
   },
 });
