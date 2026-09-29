@@ -6,7 +6,7 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.1 |
+| 버전 | v0.3.2 |
 | 기준 문서 | [PRD](./PRD.md) v0.6 · [TECH_SPEC](./TECH_SPEC.md) v0.6 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
@@ -19,6 +19,7 @@
 | v0.2.2 | 2026-09-29 | 서버 API 뼈대 반영: 오류 코드 `INTERNAL_ERROR`(500)·`NOT_IMPLEMENTED`(501) 추가(§1.7), A2 로그아웃을 약관 동의 전에도 허용(🔑*) |
 | v0.3 | 2026-09-29 | **분석 글에 투자 포인트 `insights` 추가**(§2.6, 필드 추가만 — 기존 필드 그대로), 분량 상한 `EXPLANATION_LIMITS`. 뉴스 출처를 Google 뉴스 RSS로 교체해 환경변수 `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` 삭제(§8.3), 개발 전용 `NEXT_PUBLIC_API_MOCK` 추가(§8.3) |
 | v0.3.1 | 2026-09-29 | WU-108 구글 로그인 반영: A1 실패 시 `/login?error=callback&next=…`로 이동·이동은 `303`, 회원 정보(`profiles`)는 첫 로그인 때 서버가 만든다, Auth 설정(§7.5) Site URL·Redirect URL(`/**` 와일드카드)·구글 클라우드 승인된 리디렉션 URI 확정 |
+| v0.3.2 | 2026-09-29 | Q4 `step` 최대 실행 시간 60초 → 300초 (운영 첫 질문이 시간 초과로 실패, §8.2) |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -595,7 +596,7 @@ interface Analysis {
 
 ### Q4 `POST /api/analyses/:id/step` 🛡️
 - **한 번에 한 단계만** 실행한다 (TECH §4.9). 상태가 `queued` / `running`일 때만.
-- 함수 최대 실행 시간: 60초
+- 함수 최대 실행 시간: 300초 (처음 조회하는 기업은 보고서 20여 개 수집 + 설명 작성으로 60초를 넘길 수 있음, v0.3.2)
 - 같은 단계를 동시에 부르면 하나만 실행되고 나머지는 현재 진행 상태만 돌려준다 (DB 잠금).
 
 요청: 본문 없음
@@ -865,7 +866,8 @@ sequenceDiagram
 ### 8.2 함수 설정
 | 경로 | 실행 환경 | 최대 실행 시간 (`maxDuration`) |
 |---|---|---|
-| `/api/ask`, `/api/analyses/:id/step`, `/api/boards/:id` (PATCH) | Node.js | 60초 |
+| `/api/ask`, `/api/boards/:id` (PATCH) | Node.js | 60초 |
+| `/api/analyses/:id/step` | Node.js | 300초 (Hobby 최대 — 첫 조회 기업의 보고서 수집) |
 | `/api/analyses/:id/rewrite`, `/rerun` | Node.js | 60초 |
 | `/api/cron/sync-companies` | Node.js | 300초 (Hobby 최대) |
 | `/api/cron/refresh-guest-example` | Node.js | 120초 |

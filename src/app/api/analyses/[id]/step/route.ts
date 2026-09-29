@@ -6,8 +6,9 @@ import { generateExplanation } from "@/lib/explain/generate";
 import { executeAnalysis } from "@/lib/runner/execute";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-// API_SPEC §8.2
-export const maxDuration = 60;
+// API_SPEC §8.2. 처음 조회하는 기업은 보고서 수집 + 설명 작성(AI)까지 60초를 넘길 수 있어
+// Vercel Hobby 최대값(300초, Fluid compute)으로 둔다.
+export const maxDuration = 300;
 
 interface StepRow {
   id: string;
