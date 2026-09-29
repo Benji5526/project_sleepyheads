@@ -16,6 +16,7 @@
 | 2026-09-29 | WU-001 완료, 서버 API 뼈대 반영(API_SPEC v0.2.2), Next.js 16 `proxy.ts` 이름 반영 |
 | 2026-09-29 | WU-112 완료·WU-113 화면(가짜 데이터 기준) 완료, **뉴스 출처 Google 뉴스 RSS로 교체**(네이버 키 불필요), **분석 글을 투자 인사이트(투자 포인트)로 전환**, 주가 API 주소 V2 반영 |
 | 2026-09-29 | **§0 이어서 시작하기 추가** (하루 마감 기준 진행 현황·결정·다음 할 일), 서버 작업 WU-101~107(PR #7·#8) main 반영, 외부 키 4개 시험 호출 성공, 배포 주소 동작 확인, 담당자 이름 기입, `pnpm check:keys` 추가 |
+| 2026-09-29 | 서버 오류(`INTERNAL_ERROR`) 안내 화면 추가 — "잠시 후 다시 시도" + 요청 ID 표시 (§0.3 6번 앞부분 완료), 가짜 모드 "서버 오류" 추가 |
 
 > 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
@@ -57,7 +58,7 @@
 | 3 | 통합/배포 | **WU-108 구글 로그인** — 구글 OAuth 클라이언트는 현준님 계정으로 발급(👤), Supabase Authentication → Providers → Google에 등록 | 화면(`/login`, `/onboarding`)은 완료, `signInWithGoogle()`의 TODO만 채우면 됨 |
 | 4 | 통합/배포 | WU-003 마무리 확인 (Vercel 환경변수 환경별 등록, Supabase GitHub 연결이 main 머지 때 운영 DB에 마이그레이션을 자동 적용하는지) → WORK_UNITS 상태 갱신 | 배포 주소는 동작 중 |
 | 5 | 데이터/서버 | WORK_UNITS 진행표 WU-102~107 상태를 완료조건 기준으로 갱신 (지금 ⬜) | |
-| 6 | 기획/화면 | 서버 오류 `INTERNAL_ERROR` 안내 문구("잠시 후 다시 시도" + 요청 ID) 추가 → 서버가 준비되면 `NEXT_PUBLIC_API_MOCK`을 비우고 실제 연결·재검증 → WU-115 비로그인 예시 | |
+| 6 | 기획/화면 | ~~서버 오류 `INTERNAL_ERROR` 안내 문구("잠시 후 다시 시도" + 요청 ID) 추가~~ ✅ 2026-09-29 → 서버가 준비되면 `NEXT_PUBLIC_API_MOCK`을 비우고 실제 연결·재검증 → WU-115 비로그인 예시 | |
 | 7 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·**AI 입력 가능 여부**), T6(12월 외 결산 샘플), 손 계산 정답표 | WU-304 전 필수 |
 
 ### 0.4 남은 확인·주의
@@ -301,7 +302,7 @@ git clone git@github.com:wilstein91/project_sleepyheads.git
 - `pnpm install` → `.env.example`을 `.env.local`로 복사해 키 입력 → `pnpm dev` → `http://localhost:3000`
 - pnpm이 없으면 먼저 `npm install -g pnpm`. 화면 테스트를 처음 돌릴 때는 `pnpm exec playwright install chromium`.
 - **키 점검**: `pnpm check:keys` — 키마다 실제로 한 번 불러 ✅/❌만 보여준다 (키 값은 출력하지 않음).
-- **서버 없이 화면 보기**: `.env.local`에 `NEXT_PUBLIC_API_MOCK=1`. 질문에 "날씨"(범위 밖 거절), "사도 돼"(투자 권유 거절), "반도체 회사"(되묻기), "2013년"(기간 밖), "직원 만족도"(지원 불가), "AI 장애", "DART 장애", "설명 실패"를 넣으면 해당 화면이 나온다 (`src/lib/api-client/mock-analysis.ts`).
+- **서버 없이 화면 보기**: `.env.local`에 `NEXT_PUBLIC_API_MOCK=1`. 질문에 "날씨"(범위 밖 거절), "사도 돼"(투자 권유 거절), "반도체 회사"(되묻기), "2013년"(기간 밖), "직원 만족도"(지원 불가), "AI 장애", "DART 장애", "설명 실패", "서버 오류"(요청 ID 안내)를 넣으면 해당 화면이 나온다 (`src/lib/api-client/mock-analysis.ts`).
 - 검사 한 번에: `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm test:e2e`
 
 ---
