@@ -89,12 +89,19 @@ from (values
 join sectors s on s.name = r.sector_name;
 
 -- ============================================================
--- sector_overrides (수동 지정 — SK하이닉스 포함)
--- ⚠️ corp_code는 companies 동기화(WU-103) 이후 채워지는 값이라 여기서는
---    실제 OpenDART 고유번호로 갱신해야 한다. 자리표시자로 비워둔다.
+-- sector_overrides (수동 지정, TECH §8 분류 순서 ①)
+-- corp_code는 WU-102에서 실제로 받은 OpenDART 샘플 응답(tests/fixtures/dart/company/)의
+-- 고유번호를 그대로 쓴다. companies 행 자체는 WU-103 동기화·WU-104 기업개황 조회로 채워진다
+-- (이 값들보다 먼저 시드가 적용돼도 문제없다 — sector_overrides는 companies를 FK로 참조하지 않는다).
 -- ============================================================
--- insert into sector_overrides (corp_code, sector_id)
--- select '<SK하이닉스_corp_code>', s.id from sectors s where s.name = '반도체';
+insert into sector_overrides (corp_code, sector_id)
+values
+  -- SK하이닉스: 업종코드(2612)로도 반도체로 분류되지만, "수동 지정이 규칙보다 우선"임을
+  -- 보여주는 완료조건 샘플이라 여기 둔다 (WU-104 완료조건 "SK하이닉스 → 반도체(직접 지정)").
+  ('00164779', (select id from sectors where name = '반도체')),
+  -- KB금융지주: 업종코드 64992가 sector_rules의 "64" 규칙(은행)에 걸려 은행으로 잘못
+  -- 분류되는 걸 막는다 — 지주회사는 은행과 다른 섹터다.
+  ('00688996', (select id from sectors where name = '금융지주'));
 
 -- ============================================================
 -- account_map (TECH §6.5 표준 계정 ID -> 계정명 대체 목록)
