@@ -6,7 +6,7 @@
 | 문서 종류 | TECH_SPEC (기술 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.6 |
+| 버전 | v0.6.1 |
 | 기준 PRD | [PRD.md](./PRD.md) v0.6 |
 | 관련 문서 | [API_SPEC.md](./API_SPEC.md) v0.3 — 서버 API 상세 명세 |
 
@@ -21,6 +21,7 @@
 | v0.5.1 | 2026-09-29 | YoY·QoQ 부호 전환 표시(흑자전환·적자전환·적자지속, §6.4), 금융업 영업수익 계정 확인 방법과 `기타금융` 섹터 추가(§7·§8), 섹터 첫 구축 시 기업개황 수집을 이틀로 분할(§8) |
 | v0.5.2 | 2026-09-29 | Next.js 16에서 `middleware.ts`가 `proxy.ts`로 이름이 바뀐 것을 저장소 구조(§18.1)에 반영 |
 | v0.6 | 2026-09-29 | **뉴스 수집을 Google 뉴스 RSS로 교체**(§3.3, §10, 한도 §13, 환경변수에서 `NAVER_*` 삭제). **분석 글을 투자 인사이트로 전환**: `insights`(투자 포인트) 추가, 분량 상한·근거 연결 검사(§11.3~11.5). 주가 API 주소가 **V2**(`GetStockSecuritiesInfoService_V2/getStockPriceInfo_V2`)로 바뀐 것을 반영(§3.2), 상장주식수 필드 확인(T5) |
+| v0.6.1 | 2026-09-29 | (WU-101, 원래 PR #7의 v0.5.1) WU-101 DB 스키마 작성 중 발견: `max_declines_per_day`(회원별 상한, F-U8)를 판정할 컬럼이 없었음 — `decline_stats_daily`는 전체 집계만, `usage_daily`엔 회원별 거절 횟수 컬럼이 없었다. §15.1 `usage_daily`에 `declines` 컬럼 추가. PR #7 합치면서 외부 호출 기록 `provider`의 `naver`를 `news`(Google 뉴스 RSS)로 바꾸는 마이그레이션 추가 |
 
 > 이 문서는 PRD의 "무엇을 만들지"를 "어떻게 만들지"로 옮긴 것이다. 기능 ID(F-xx)는 PRD v0.4의 요구사항 ID를 그대로 쓴다.
 
@@ -673,7 +674,7 @@ sequenceDiagram
 | 테이블 | 주요 컬럼 |
 |---|---|
 | `profiles` 🔒 | `id`, `nickname`, `email`, `agreed_terms_at`, `created_at` |
-| `usage_daily` 🔒(읽기만) | `user_id`, `day_kst`, `questions`, `dart_calls` |
+| `usage_daily` 🔒(읽기만) | `user_id`, `day_kst`, `questions`, `dart_calls`, `declines`(회원별 하루 거절 횟수, `max_declines_per_day` 판정용) |
 | `quota_config` 🗄️ | `key`, `value` |
 | `api_usage_daily` 🗄️ | `day_kst`, `provider`(dart/price/news/llm), `calls`, `input_tokens`, `output_tokens`, `cost_usd`, `blocked_at` |
 
