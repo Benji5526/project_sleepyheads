@@ -1,6 +1,15 @@
-import type { Chart, Explanation } from "@/contracts";
+import type { Chart, Explanation, InsightKind } from "@/contracts";
 
-/** 오른쪽 분석 글 (PRD F-V6): 결론 → 근거 → 뉴스 단서 → 주의사항, `AI 작성` 표시 */
+const KIND: Record<InsightKind, { label: string; className: string }> = {
+  positive: { label: "긍정 요인", className: "bg-accent-soft text-accent" },
+  risk: { label: "위험 요인", className: "bg-notice-bg text-notice-ink" },
+  watch: { label: "확인할 점", className: "border border-line text-muted" },
+};
+
+/**
+ * 오른쪽 분석 글 (PRD F-V6, F-V11~F-V13): 결론 → 투자 포인트 → 근거 숫자(접힘) → 뉴스 단서 → 주의사항.
+ * 결론 + 투자 포인트는 스마트폰 한 화면 안에 들어가야 한다 (data-testid="explanation-main").
+ */
 export function ExplanationPanel({
   explanation,
   charts,
@@ -37,52 +46,90 @@ export function ExplanationPanel({
     );
   }
 
-  const chartTitle = (id: string) => charts.find((c) => c.id === id)?.title ?? "차트";
+  const chartButton = (chartRef: string | null, label: string) =>
+    chartRef && (
+      <button
+        type="button"
+        onClick={() => onShowChart(chartRef)}
+        className="ml-1.5 whitespace-nowrap text-sm text-accent underline underline-offset-4"
+        aria-label={`${label}: ${charts.find((c) => c.id === chartRef)?.title ?? "차트"}`}
+      >
+        {label}
+      </button>
+    );
 
   return (
-    <article className="space-y-6">
-      {header}
+    <article className="space-y-5">
+      <div data-testid="explanation-main" className="space-y-4">
+        {header}
 
-      {explanation.status === "stale" && (
-        <p className="rounded-lg bg-notice-bg px-3 py-2 text-sm text-notice-ink">
-          원래 조건 기준 설명입니다.
-        </p>
-      )}
+        {explanation.status === "stale" && (
+          <p className="rounded-lg bg-notice-bg px-3 py-2 text-sm text-notice-ink">
+            원래 조건 기준 설명입니다.
+          </p>
+        )}
 
-      <section aria-labelledby="exp-conclusion">
-        <h3 id="exp-conclusion" className="sr-only">
-          결론
-        </h3>
-        <div className="space-y-2 text-lg leading-8">
-          {explanation.conclusion.map((sentence) => (
-            <p key={sentence}>{sentence}</p>
-          ))}
-        </div>
-      </section>
+        <section aria-labelledby="exp-conclusion">
+          <h3 id="exp-conclusion" className="sr-only">
+            결론
+          </h3>
+          <div className="space-y-1.5 text-[17px] font-medium leading-7 sm:text-lg sm:leading-8">
+            {explanation.conclusion.map((sentence) => (
+              <p key={sentence}>{sentence}</p>
+            ))}
+          </div>
+        </section>
+
+        {explanation.insights.length > 0 && (
+          <section aria-labelledby="exp-insights">
+            <h3 id="exp-insights" className="font-semibold">
+              투자 포인트
+            </h3>
+            <ul className="mt-2 space-y-2.5">
+              {explanation.insights.map((insight) => (
+                <li key={insight.text} className="leading-7">
+                  {/* 라벨을 문장 앞에 붙여 휴대폰 폭을 다 쓴다 (한 화면 분량, PRD F-V11) */}
+                  <p>
+                    <span
+                      className={`mr-1.5 inline-block rounded px-1.5 text-xs font-semibold leading-5 ${KIND[insight.kind].className}`}
+                    >
+                      {KIND[insight.kind].label}
+                    </span>
+                    {insight.text}
+                    {insight.inferred && (
+                      <span
+                        className="ml-1.5 whitespace-nowrap text-xs text-muted"
+                        title="숫자를 바탕으로 한 해석이 들어간 문장입니다"
+                      >
+                        (추정)
+                      </span>
+                    )}
+                    {chartButton(insight.chartRef, "차트 보기")}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
 
       {explanation.evidence.length > 0 && (
-        <section aria-labelledby="exp-evidence">
-          <h3 id="exp-evidence" className="font-semibold">
-            근거
-          </h3>
-          <ul className="mt-2 space-y-3">
+        <details className="group rounded-lg border border-line">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium">
+            근거 숫자 {explanation.evidence.length}개
+            <span aria-hidden="true" className="transition-transform group-open:rotate-180">
+              ▾
+            </span>
+          </summary>
+          <ul className="space-y-2 border-t border-line px-3 py-3 text-sm leading-6">
             {explanation.evidence.map((e) => (
-              <li key={e.text} className="border-l-2 border-line pl-3 leading-7">
+              <li key={e.text}>
                 {e.text}
-                {e.chartRef && (
-                  <button
-                    type="button"
-                    onClick={() => onShowChart(e.chartRef!)}
-                    className="ml-2 text-sm text-accent underline underline-offset-4"
-                    aria-label={`해당 차트 보기: ${chartTitle(e.chartRef)}`}
-                  >
-                    해당 차트 보기
-                  </button>
-                )}
+                {chartButton(e.chartRef, "해당 차트 보기")}
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       )}
 
       {explanation.newsClues.length > 0 && (
@@ -112,11 +159,11 @@ export function ExplanationPanel({
       )}
 
       {explanation.caveats.length > 0 && (
-        <section aria-labelledby="exp-caveats" className="rounded-xl bg-paper p-4">
-          <h3 id="exp-caveats" className="text-sm font-semibold">
+        <section aria-labelledby="exp-caveats">
+          <h3 id="exp-caveats" className="text-xs font-semibold text-muted">
             주의사항
           </h3>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted">
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs leading-5 text-muted">
             {explanation.caveats.map((c) => (
               <li key={c}>{c}</li>
             ))}

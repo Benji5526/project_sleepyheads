@@ -12,7 +12,7 @@ for (const path of PAGES) {
     await expect(footer).toContainText("DART");
     await expect(footer).toContainText("금융위원회_주식시세정보");
     await expect(footer).toContainText("출처표시·상업적 이용금지·변경금지");
-    await expect(footer).toContainText("네이버 뉴스");
+    await expect(footer).toContainText("Google 뉴스 RSS");
     await expect(footer).toContainText("저작권은 각 언론사");
 
     const overflow = await page.evaluate(

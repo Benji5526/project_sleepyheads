@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { EXPLANATION_LIMITS } from "../../src/contracts/explanation";
 
 // WU-113(대기화면·결과 화면)·WU-114(남은 질문 수 표시) 완료조건. 가짜 모드(tests/fixtures/mock)로 돈다.
 
@@ -117,11 +118,70 @@ test.describe("결과 화면 — 핵심 통과 테스트", () => {
     await expect(page.getByRole("region", { name: "주요 공시" })).toContainText("신규시설투자등");
   });
 
-  test("'해당 차트 보기'를 누르면 왼쪽 차트로 이동한다", async ({ page }) => {
+  test("투자 포인트의 '차트 보기'를 누르면 왼쪽 차트로 이동한다", async ({ page }) => {
     await askAndOpen(page, "삼성전자의 최근 5년 매출액 추이를 보여줘");
-    await page.getByRole("button", { name: /해당 차트 보기: 삼성전자 매출액 전년 대비/ }).click();
+    await page.getByRole("button", { name: /^차트 보기: 삼성전자 매출액 전년 대비/ }).click();
     await expect(page.locator("#chart-c3")).toBeFocused();
     await expect(page.locator("#chart-c3")).toBeInViewport();
+  });
+
+  test("분석 글: 결론 + 투자 포인트(긍정·위험·확인할 점, 추정 표시)가 스마트폰 한 화면 안", async ({
+    page,
+  }, testInfo) => {
+    await askAndOpen(page, "SK하이닉스 최근 실적 어때?");
+    const main = page.getByTestId("explanation-main");
+    await expect(main.getByRole("heading", { name: "투자 포인트" })).toBeVisible();
+    for (const label of ["긍정 요인", "위험 요인", "확인할 점"]) {
+      await expect(main.getByText(label, { exact: true })).toBeVisible();
+    }
+    await expect(main.getByText("(추정)")).toBeVisible();
+
+    // 근거 숫자는 접혀 있고, 주의사항은 숨기지 않는다
+    const evidence = page.locator("details", { hasText: "근거 숫자" });
+    await expect(evidence).not.toHaveAttribute("open");
+    await expect(page.getByRole("heading", { name: "주의사항" })).toBeVisible();
+
+    // PRD F-V11: 375px 화면에서 결론 + 투자 포인트가 한 화면(650px) 안
+    if (testInfo.project.name === "mobile") {
+      const box = (await main.boundingBox())!;
+      expect(box.height).toBeLessThanOrEqual(650);
+    }
+  });
+
+  test("분석 글을 글자 수 상한까지 채워도(투자 포인트 최대 개수) 375px 한 화면 안", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "휴대폰 화면 기준");
+    await askAndOpen(page, "SK하이닉스 최근 실적 어때?");
+    const main = page.getByTestId("explanation-main");
+    await expect(main).toBeVisible();
+
+    // 서버가 보낼 수 있는 가장 긴 글: 상한 글자 수를 결론 2문장과 투자 포인트 최대 개수에 나눠 채운다
+    const height = await page.evaluate((limits) => {
+      const el = document.querySelector('[data-testid="explanation-main"]')!;
+      const filler = "가".repeat(400);
+      const conclusion = [...el.querySelectorAll("section")][0].querySelectorAll("p");
+      const list = el.querySelector("ul")!;
+      while (list.children.length < limits.insightsMax) {
+        list.appendChild(list.lastElementChild!.cloneNode(true));
+      }
+      const insightChars = Math.min(
+        limits.insightMaxChars,
+        Math.floor((limits.mainMaxChars * 0.7) / limits.insightsMax),
+      );
+      const conclusionChars = Math.floor(
+        (limits.mainMaxChars - insightChars * limits.insightsMax) / conclusion.length,
+      );
+      conclusion.forEach((p) => (p.textContent = filler.slice(0, conclusionChars)));
+      list.querySelectorAll("p").forEach((p) => {
+        const label = p.querySelector("span")!.outerHTML;
+        const rest = [...p.querySelectorAll("span, button")].slice(1).map((n) => n.outerHTML);
+        p.innerHTML = label + filler.slice(0, insightChars) + rest.join("");
+      });
+      return el.getBoundingClientRect().height;
+    }, EXPLANATION_LIMITS);
+
+    expect(height).toBeLessThanOrEqual(650);
   });
 
   test("사용된 데이터에 행·열 수, 자료형, 기간이 보인다", async ({ page }) => {

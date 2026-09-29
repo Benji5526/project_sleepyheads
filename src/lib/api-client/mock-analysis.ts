@@ -67,6 +67,7 @@ function withResult(base: Analysis, company: CompanyRef): Analysis {
       ...analysis.explanation,
       status: "failed",
       conclusion: [],
+      insights: [],
       evidence: [],
       caveats: [],
       failureMessage: "설명 생성 실패",
