@@ -20,6 +20,10 @@ function makeBuilder(allRows: CompanyRow[]) {
       rows = rows.filter((row) => row[column] === value);
       return builder;
     },
+    in: (column: keyof CompanyRow, values: unknown[]) => {
+      rows = rows.filter((row) => values.includes(row[column]));
+      return builder;
+    },
     ilike: (column: keyof CompanyRow, pattern: string) => {
       const regex = ilikePatternToRegExp(pattern);
       rows = rows.filter((row) => regex.test(String(row[column] ?? "")));
