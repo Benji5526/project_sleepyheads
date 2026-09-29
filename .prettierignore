@@ -1,0 +1,9 @@
+.next
+node_modules
+pnpm-lock.yaml
+coverage
+test-results
+playwright-report
+next-env.d.ts
+# 문서는 사람이 직접 관리한다
+*.md
