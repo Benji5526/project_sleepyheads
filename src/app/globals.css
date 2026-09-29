@@ -1,26 +1,87 @@
 @import "tailwindcss";
 
+/*
+ * 색 토큰
+ * - 국내 증시 관습: 상승 = 빨강(up), 하락 = 파랑(down). 이 두 색은 증감 표시에만 쓴다.
+ * - 조작 요소(버튼·링크·선택)는 증감색과 겹치지 않는 청록(accent)을 쓴다.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #1c2330;
+  --muted: #5b6675;
+  --line: #dce1e7;
+  --accent: #0e6e5c;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3f1ee;
+  --up: #c9302c;
+  --down: #2360c4;
+  --notice-bg: #fff6e0;
+  --notice-ink: #6b4a00;
+  --danger: #b42318;
+  --series-1: #0e6e5c;
+  --series-2: #a67c1a;
+  --series-3: #6b5ca5;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #11161d;
+    --surface: #182029;
+    --ink: #e6eaf0;
+    --muted: #9aa5b4;
+    --line: #2a3441;
+    --accent: #4fc1a9;
+    --accent-ink: #0b1f1a;
+    --accent-soft: #16312b;
+    --up: #ff7a6b;
+    --down: #6fa0ff;
+    --notice-bg: #2e2612;
+    --notice-ink: #f1d48a;
+    --danger: #ff8a7a;
+    --series-1: #4fc1a9;
+    --series-2: #e0b04a;
+    --series-3: #a99bec;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-notice-bg: var(--notice-bg);
+  --color-notice-ink: var(--notice-ink);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-plex-kr), system-ui, sans-serif;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  /* 숫자 자릿수를 세로로 맞춘다 (재무 숫자 비교용) */
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

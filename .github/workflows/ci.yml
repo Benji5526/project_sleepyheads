@@ -11,14 +11,24 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # ubuntu = 실제 배포 환경(Vercel)과 같은 Linux, windows = 팀원 PC와 같은 환경.
+    # 한쪽이 실패해도 다른 쪽은 끝까지 돌려 결과를 비교한다.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        # 두 환경에서 같은 방식으로 명령을 실행한다 (Windows 기본값인 PowerShell 대신 bash)
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -41,6 +51,7 @@ jobs:
         run: pnpm build
 
       - name: 화면 테스트 (Playwright)
+        timeout-minutes: 12
         run: |
           pnpm exec playwright install --with-deps chromium
           pnpm test:e2e
