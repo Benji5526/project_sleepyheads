@@ -103,8 +103,17 @@ export default function PrivacyPage() {
 
       <section>
         <h2>6. 개인정보 보호 책임자</h2>
-        {/* TODO(기획/화면): 책임자 이름과 연락처(팀 공용 이메일 등)를 배포 전에 채운다 */}
-        <p>책임자: 졸린이즈 팀 (연락처는 서비스 공개 전에 안내합니다)</p>
+        {/* TODO(기획/화면): 임시 주소. 팀이 실제로 받을 수 있는 메일 주소로 배포 전에 바꾼다 */}
+        <dl className="mt-2 grid grid-cols-[4rem_1fr] gap-y-1">
+          <dt className="text-muted">책임자</dt>
+          <dd>성현준</dd>
+          <dt className="text-muted">이메일</dt>
+          <dd>
+            <a href="mailto:admin@sleepyheads.com" className="underline underline-offset-4">
+              admin@sleepyheads.com
+            </a>
+          </dd>
+        </dl>
       </section>
     </LegalDocument>
   );
