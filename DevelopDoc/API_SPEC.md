@@ -835,7 +835,7 @@ sequenceDiagram
 | 로그인 제공자 | **Google만** 켬 |
 | 이메일·비밀번호 가입 | **끔** |
 | Site URL | 운영 주소 (`https://<프로젝트명>.vercel.app`) |
-| Redirect URL 허용 목록 | `http://localhost:3000/**`, `https://projectsleepyheads.vercel.app/**`, Preview용 `https://*-<Vercel 계정·팀 이름>.vercel.app/**` (`**`는 어떤 글자든 허용 — `/auth/callback?next=…`의 뒷부분까지 맞춘다. Supabase 공식 문서 "Redirect URLs" 권장안). 설정 위치: Supabase 대시보드 → Authentication → URL Configuration |
+| Redirect URL 허용 목록 | `http://localhost:3000/**`, `https://projectsleepyheads.vercel.app/**`, Preview용 `https://*-project-agent2.vercel.app/**` (Vercel 팀 `project-agent2`) (`**`는 어떤 글자든 허용 — `/auth/callback?next=…`의 뒷부분까지 맞춘다. Supabase 공식 문서 "Redirect URLs" 권장안). 설정 위치: Supabase 대시보드 → Authentication → URL Configuration |
 | Google OAuth 앱 게시 상태 | Google Cloud Console에서 앱 이름·개인정보처리방침·이용약관 링크를 넣고, 공개 전에 **"프로덕션"으로 게시**한다. "테스트" 상태에서는 등록한 테스트 사용자만 로그인된다 |
 
 ### 7.6 마이그레이션
