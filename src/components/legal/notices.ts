@@ -20,6 +20,6 @@ export const DATA_SOURCES: { name: string; detail: string }[] = [
   },
   {
     name: "뉴스",
-    detail: "네이버 뉴스 검색 API. 기사의 저작권은 각 언론사에 있습니다.",
+    detail: "Google 뉴스 RSS로 찾은 기사 목록. 기사의 저작권은 각 언론사에 있습니다.",
   },
 ];
