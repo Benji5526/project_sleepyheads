@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: 검사 (ESLint)
+        run: pnpm lint
+
+      - name: 모양 검사 (Prettier)
+        run: pnpm format:check
+
+      - name: 타입 검사
+        run: pnpm typecheck
+
+      - name: 단위 테스트 (Vitest)
+        run: pnpm test
+
+      - name: 빌드
+        run: pnpm build
+
+      - name: 화면 테스트 (Playwright)
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
