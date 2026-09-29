@@ -14,13 +14,16 @@ alter table api_usage_daily
   add constraint api_usage_daily_provider_check
   check (provider in ('dart', 'price', 'news', 'llm'));
 
--- 2) 전체 상한 키 이름·값. 시드(seed.sql)가 이미 들어간 DB에서만 행이 있고,
---    새로 만드는 DB(db reset)에서는 이 뒤에 도는 seed.sql이 새 키로 넣는다.
-update quota_config
-  set key = 'news_rss_calls_per_day',
-      value = 1000,
-      description = 'Google 뉴스 RSS 전체 상한 (공개 한도가 없어 스스로 정한 값)'
-  where key = 'naver_calls_per_day';
+-- 2) 전체 상한 키. 세 경우 모두 안전하게:
+--    · 시드가 이미 들어간 DB(sleepyheads-dev): 옛 키가 있으므로 새 키를 넣고 옛 키를 지운다
+--    · 새로 만드는 DB(db reset): 아직 행이 없어 아무것도 안 하고, 뒤에 도는 seed.sql이 새 키로 넣는다
+--    · 새 키가 이미 있는 DB: 넣지 않고(on conflict) 옛 키만 지운다
+insert into quota_config (key, value, description)
+  select 'news_rss_calls_per_day', 1000, 'Google 뉴스 RSS 전체 상한 (공개 한도가 없어 스스로 정한 값)'
+  where exists (select 1 from quota_config where key = 'naver_calls_per_day')
+  on conflict (key) do nothing;
+
+delete from quota_config where key = 'naver_calls_per_day';
 
 -- 3) check_and_record_api_usage: 'news' → news_rss_calls_per_day 로만 바꾼 같은 함수.
 --    create or replace는 기존 소유자·실행 권한을 그대로 유지하지만, 권한 회수를 한 번 더 적어 둔다.
