@@ -13,11 +13,14 @@ export function BasisBar({ result, groupBy }: { result: ResultObject; groupBy?: 
       : `${periodLabel(period.from)} ~ ${periodLabel(period.to)}`;
 
   // 계산 방식이 달라지는 경우는 눈에 띄게 따로 표시한다 (WU-113 완료조건)
+  // 서버가 basis.flags에 같은 문구를 넣어 보내도 한 번만 보인다
   const badges = [
-    ...(target.fiscalMonth !== 12 ? [`${target.fiscalMonth}월 결산 — 달력 분기로 환산`] : []),
-    ...(fsDivs.has("OFS") ? ["별도 기준"] : []),
-    ...(period.clipped ? ["조회 가능 범위로 기간을 줄임"] : []),
-    ...basis.flags,
+    ...new Set([
+      ...(target.fiscalMonth !== 12 ? [`${target.fiscalMonth}월 결산 — 달력 분기로 환산`] : []),
+      ...(fsDivs.has("OFS") ? ["별도 기준"] : []),
+      ...(period.clipped ? ["조회 가능 범위로 기간을 줄임"] : []),
+      ...basis.flags,
+    ]),
   ];
 
   const items: { term: string; detail: React.ReactNode }[] = [
