@@ -4,15 +4,8 @@ import {
   type ApiErrorCode,
 } from "@/contracts";
 
-// API_SPEC §1.7 오류 코드(계약) + 서버 내부용 2개.
-// INTERNAL_ERROR·NOT_IMPLEMENTED는 뼈대 단계에서 추가한 것으로 §1.7 반영 필요.
-export const ERROR_STATUS = {
-  ...API_ERROR_HTTP_STATUS,
-  INTERNAL_ERROR: 500,
-  NOT_IMPLEMENTED: 501,
-} as const satisfies Record<ApiErrorCode | "INTERNAL_ERROR" | "NOT_IMPLEMENTED", number>;
-
-export type ErrorCode = keyof typeof ERROR_STATUS;
+// API_SPEC §1.7 오류 코드는 계약(src/contracts/api.ts)을 그대로 쓴다.
+export type ErrorCode = ApiErrorCode;
 
 const DEFAULT_MESSAGE: Record<ErrorCode, string> = {
   VALIDATION_ERROR: "요청 형식이 올바르지 않습니다.",
@@ -51,15 +44,15 @@ export class HttpError extends Error {
   }
 
   get status(): number {
-    return ERROR_STATUS[this.code];
+    return API_ERROR_HTTP_STATUS[this.code];
   }
 
-  // §1.4 오류 응답 본문. INTERNAL_ERROR·NOT_IMPLEMENTED는 계약 밖이라 형 변환한다.
+  // §1.4 오류 응답 본문
   toBody(): ApiErrorBody {
     const { details, resetAt } = this.extra;
     return {
       error: {
-        code: this.code as ApiErrorCode,
+        code: this.code,
         message: this.message,
         ...(details && { details }),
         ...(resetAt && { resetAt }),

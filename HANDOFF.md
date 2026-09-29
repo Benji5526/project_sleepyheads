@@ -5,7 +5,7 @@
 | 프로젝트 | project_sleepyheads — 질문형 기업 분석 서비스 (공시 숫자 + 뉴스 단서) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.5 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.5.1 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.2.1 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.2.2 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.2 |
+| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.5 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.5.2 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.2.2 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.2.3 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.2 |
 
 ### 변경 이력
 | 날짜 | 내용 |
@@ -13,6 +13,7 @@
 | 2026-09-28 | 최초 작성 (역할 4개, 첫 작업, 계약, 키 관리, 협업 규칙) |
 | 2026-09-28 | 백엔드 구성(Supabase + Vercel) 확정, **API_SPEC 추가**에 따라 역할별 첫 작업·계약·환경변수·첫 주 목표 갱신 |
 | 2026-09-29 | **서비스 범위 밖 질문 정중한 거절**(AI 오남용 방지) 추가에 따라 기획/화면 문구·데이터/서버 판정·검증/문서 회귀 질문 작업 갱신, FINAL_CHECKLIST 작성 완료 |
+| 2026-09-29 | WU-001 완료, 서버 API 뼈대 반영(API_SPEC v0.2.2), Next.js 16 `proxy.ts` 이름 반영 |
 
 > 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
@@ -22,11 +23,11 @@
 
 | 구분 | 상태 |
 |---|---|
-| 기획 문서 | ✅ PRD v0.5, TECH_SPEC v0.5.1, WORK_UNITS v0.2.2 작성 완료 |
-| **서버 API 명세** | ✅ **API_SPEC v0.2.1** — 엔드포인트 23개, 계약 타입, Supabase·Vercel 설정까지 확정 |
+| 기획 문서 | ✅ PRD v0.5, TECH_SPEC v0.5.2, WORK_UNITS v0.2.3 작성 완료 |
+| **서버 API 명세** | ✅ **API_SPEC v0.2.2** — 엔드포인트 23개, 계약 타입, Supabase·Vercel 설정까지 확정 |
 | 서비스 범위 정책 | ✅ 주식·상장 주식회사 경영사항 밖의 질문, 투자 권유 요청, AI 조작 시도는 **정해진 문구로 공손히 거절** (PRD §6.3.1, TECH §4.11) |
 | 백엔드 구성 | ✅ **Supabase(DB·로그인) + Vercel(서버 API·예약 실행·배포)**로 확정 |
-| 코드 | ⬜ **아직 없음** (첫 작업 WU-001에서 앱 뼈대 생성) |
+| 코드 | 🟨 **WU-001 앱 뼈대 완료**, 서버 API 23개 경로 뼈대와 공통 처리(권한·오류 형식·요청 속도·멱등키) 완료 — 내부 로직은 각 WU에서 |
 | 외부 서비스 계정·키 | ⬜ 아직 없음 (WU-002, WU-003) |
 | 배포 주소 | ⬜ 아직 없음 (WU-003에서 생성) |
 | README.md | ⬜ 비어 있음 (WU-506에서 작성) |
@@ -50,7 +51,7 @@
 |---|---|---|---|---|
 | **기획/화면** | 사용자가 보는 모든 화면과 문구 | (이름) | PRD, API_SPEC §2(공동) | `src/app/**/page.tsx`, `src/components/` |
 | **데이터/서버** | 데이터 수집·계산·AI 호출 등 서비스의 두뇌 | (이름) | TECH_SPEC §3~11, §15, API_SPEC §2(공동)·§7.3 | `src/lib/`, `supabase/migrations/`, `supabase/seed/` |
-| **통합/배포** | 뼈대·로그인·한도·API 연결·배포 등 서비스의 뼈와 혈관 | (이름) | TECH_SPEC §2, §13~14, §16~18, **API_SPEC** | `src/app/api/`, `src/app/auth/`, `src/middleware.ts`, `vercel.json`, `.github/`, 설정 파일 |
+| **통합/배포** | 뼈대·로그인·한도·API 연결·배포 등 서비스의 뼈와 혈관 | (이름) | TECH_SPEC §2, §13~14, §16~18, **API_SPEC** | `src/app/api/`, `src/app/auth/`, `src/proxy.ts`, `vercel.json`, `.github/`, 설정 파일 |
 | **검증/문서** | "정말 맞게 동작하는가"의 증거와 문서 관리 | (이름) | WORK_UNITS 진행표, FINAL_CHECKLIST, README | `tests/regression/`, `tests/accuracy/`, `tests/perf/`, `DevelopDoc/`, `README.md` |
 
 - 단위 테스트(`tests/unit/`)는 **그 코드를 만든 사람**이 함께 작성한다.
