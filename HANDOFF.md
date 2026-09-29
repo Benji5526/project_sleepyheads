@@ -5,7 +5,7 @@
 | 프로젝트 | project_sleepyheads — 질문형 기업 분석 서비스 (공시 숫자 + 뉴스 단서) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6.1 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3 |
+| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6.1 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3.1 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3.1 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3 |
 
 ### 변경 이력
 | 날짜 | 내용 |
@@ -17,7 +17,7 @@
 | 2026-09-29 | WU-112 완료·WU-113 화면(가짜 데이터 기준) 완료, **뉴스 출처 Google 뉴스 RSS로 교체**(네이버 키 불필요), **분석 글을 투자 인사이트(투자 포인트)로 전환**, 주가 API 주소 V2 반영 |
 | 2026-09-29 | **§0 이어서 시작하기 추가** (하루 마감 기준 진행 현황·결정·다음 할 일), 서버 작업 WU-101~107(PR #7·#8) main 반영, 외부 키 4개 시험 호출 성공, 배포 주소 동작 확인, 담당자 이름 기입, `pnpm check:keys` 추가 |
 | 2026-09-29 | 서버 오류(`INTERNAL_ERROR`) 안내 화면 추가 — "잠시 후 다시 시도" + 요청 ID 표시 (§0.3 6번 앞부분 완료), 가짜 모드 "서버 오류" 추가 |
-| 2026-09-29 | WU-108 구글 로그인 코드 연결 (§0.3 3번), 서버 작업은 WU-110 진행 중 |
+| 2026-09-29 | WU-108 구글 로그인 코드 연결 (§0.3 3번, PR #9·#10 합침 — 서버 쪽은 병준님 구현 기준, 열린 주소 이동 보안 수정 포함), 서버 작업은 WU-110 진행 중 |
 
 > 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
@@ -56,13 +56,15 @@
 |---|---|---|---|
 | 1 | 데이터/서버 | **새 마이그레이션 `20260929070000_news_provider.sql`을 `sleepyheads-dev`에 적용** (`git pull` → `supabase db push` → `supabase migration list`로 확인) | 이전 마이그레이션은 이미 적용됨. 이 파일은 여러 번 실행해도 안전 |
 | 2 | 데이터/서버 | WU-109 질문 해석·범위 판정 → **WU-110 분석 실행기 (진행 중)** → **WU-111 설명 작성 (투자 포인트 규칙 TECH §11.3·§11.5 적용)** | 화면은 `insights`를 이미 그린다 |
-| 3 | 통합/배포 | **WU-108 구글 로그인** 🟨 — OAuth 발급·Supabase Google 켜기 ✅, 코드 연결 ✅(2026-09-29: `/auth/callback`·로그아웃·`/api/me`·약관 동의 API·`src/proxy.ts`). **남은 것: 실제 구글 계정으로 로그인 확인**, Supabase URL Configuration의 Redirect URL(API_SPEC §7.5), 로컬 `.env.local` Supabase dev 키 3개 | 로그인 후 질문은 WU-109~110이 끝나야 실제로 된다 |
+| 3 | 통합/배포 | **WU-108 구글 로그인** 🟨 — OAuth 발급·Supabase Google 켜기 ✅, 코드 연결 ✅(2026-09-29: `/auth/callback`·로그아웃·`/api/me`·약관 동의 API·`src/proxy.ts`). Redirect URL 4개 등록 ✅, 로컬 `.env.local` Supabase 키 ✅. **남은 것: 실제 구글 계정으로 로그인 확인** | 로그인 후 질문은 WU-109~110이 끝나야 실제로 된다 |
 | 4 | 통합/배포 | WU-003 마무리 확인 (Vercel 환경변수 환경별 등록, Supabase GitHub 연결이 main 머지 때 운영 DB에 마이그레이션을 자동 적용하는지) → WORK_UNITS 상태 갱신 | 배포 주소는 동작 중 |
 | 5 | 데이터/서버 | WORK_UNITS 진행표 WU-102~107 상태를 완료조건 기준으로 갱신 (지금 ⬜) | |
 | 6 | 기획/화면 | ~~서버 오류 `INTERNAL_ERROR` 안내 문구("잠시 후 다시 시도" + 요청 ID) 추가~~ ✅ 2026-09-29 → 서버가 준비되면 `NEXT_PUBLIC_API_MOCK`을 비우고 실제 연결·재검증 → WU-115 비로그인 예시 | |
 | 7 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·**AI 입력 가능 여부**), T6(12월 외 결산 샘플), 손 계산 정답표 | WU-304 전 필수 |
 
 ### 0.4 남은 확인·주의
+- **Supabase 프로젝트는 실제로 `sleepyhead` 하나**(병준님 조직 "Benji chat bot")다. §2.1의 dev/prod 두 개 분리는 아직 안 됐다 — 로컬·Preview·운영이 같은 DB를 쓴다. 분리 여부는 통합/배포가 결정.
+- **[보안] `profiles_update_own` RLS 정책이 모든 컬럼 수정을 허용**한다 (`supabase/migrations/20260929020000_rls_policies.sql:14`) — 로그인한 사용자가 Data API로 자기 `agreed_terms_at`·`email`을 직접 바꿀 수 있다. 데이터/서버가 마이그레이션으로 고칠 것 (PR #10 병준님 지적). 고칠 때 A4(`/api/me/terms`)가 지금 회원 세션으로 `agreed_terms_at`을 쓰므로 **A4를 관리자 클라이언트로 바꾸는 것과 함께** 해야 한다.
 - `/privacy`의 연락처 `admin@sleepyheads.com`은 **임시** — `sleepyheads.com`은 다른 곳이 쓰는 도메인이라 메일이 팀에 오지 않는다. 공개 전 팀이 받을 수 있는 주소로 교체.
 - `TEAM_AGREEMENT.md`(저장소 밖에서 관리)는 아직 "계산 결과를 **설명하는** 분석 글" 표현 — 투자 인사이트 방향으로 맞출지 결정 필요.
 - WU-113은 🟨: "내 분석 목록에서 거절 질문 `답변 불가` 표시"는 목록 화면(WU-201, Step 2)이 생기면, 나머지는 **실제 서버 응답으로 재확인** 필요.
@@ -83,7 +85,7 @@
 | 구분 | 상태 |
 |---|---|
 | 기획 문서 | ✅ PRD v0.6, TECH_SPEC v0.6, WORK_UNITS v0.3 작성 완료 |
-| **서버 API 명세** | ✅ **API_SPEC v0.3** — 엔드포인트 23개, 계약 타입, Supabase·Vercel 설정까지 확정 |
+| **서버 API 명세** | ✅ **API_SPEC v0.3.1** — 엔드포인트 23개, 계약 타입, Supabase·Vercel 설정까지 확정 |
 | 서비스 범위 정책 | ✅ 주식·상장 주식회사 경영사항 밖의 질문, 투자 권유 요청, AI 조작 시도는 **정해진 문구로 공손히 거절** (PRD §6.3.1, TECH §4.11) |
 | 백엔드 구성 | ✅ **Supabase(DB·로그인) + Vercel(서버 API·예약 실행·배포)**로 확정 |
 | 코드 | 🟨 WU-001 ✅, WU-112 ✅, WU-113 🟨(가짜 데이터 기준 완료), 서버 API 23개 경로 뼈대·공통 처리 ✅, **WU-101~107 서버 작업 main 반영** — 남은 Step 1: WU-108~111, WU-114~115 (§0.3) |

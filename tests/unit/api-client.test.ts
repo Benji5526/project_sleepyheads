@@ -18,6 +18,11 @@ describe("safeNextPath (API_SPEC A1 — 외부 주소로 보내지 않기)", () 
     "//evil.example",
     "/\\evil.example",
     "p/abc",
+    // 브라우저가 탭·줄바꿈을 지우면 "//evil.example"이 되는 경우 (WU-108 보안 검토)
+    "/\t/evil.example",
+    "/\n/evil.example",
+    "/\r\n/evil.example",
+    "/p/abc\\..\\//evil.example",
   ])("%s 는 / 로 바꾼다", (input) => {
     expect(safeNextPath(input)).toBe("/");
   });
