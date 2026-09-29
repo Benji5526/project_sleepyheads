@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CompanyRef } from "@/contracts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { ensureCompanyProfile } from "./profile";
 import {
   COMPANY_SELECT_COLUMNS,
   type CompanyRow,
@@ -32,6 +33,8 @@ export interface ResolveCompanyOptions {
  * - 그 밖에는 이름이 정확히 일치하는 기업이 하나뿐이면 바로 확정한다(예: "삼성전자"가
  *   "삼성전자우"까지 후보로 걸리는 걸 막는다).
  * - 아니면 부분일치(`ILIKE %query%`)로 찾아, 결과가 하나면 확정, 여럿이면 후보 목록을 돌려준다.
+ * - 기업개황(시장·결산월·섹터)이 아직 없는 기업은 **여기서 처음 조회해 채운다** (TECH §3.1 "첫 조회 시",
+ *   WU-104). 기업 목록 동기화(WU-103)는 이름·코드만 넣기 때문이다. 조회는 기업당 30일에 한 번.
  */
 export async function resolveCompany(
   query: string,
@@ -59,7 +62,8 @@ async function resolveByStockCode(
     .maybeSingle();
 
   if (error) throw new Error(`기업 조회 실패: ${error.message}`);
-  const company = data ? toCompanyRef(data as unknown as CompanyRow) : null;
+  if (!data) return { type: "not_found" };
+  const [company] = await withProfiles(admin, [data as unknown as CompanyRow]);
   return company ? { type: "resolved", company } : { type: "not_found" };
 }
 
@@ -73,7 +77,7 @@ async function resolveByName(admin: SupabaseClient, name: string): Promise<Resol
 
   const exactRows = (exact.data ?? []) as unknown as CompanyRow[];
   if (exactRows.length === 1) {
-    const company = toCompanyRef(exactRows[0]);
+    const [company] = await withProfiles(admin, exactRows);
     if (company) return { type: "resolved", company };
   }
 
@@ -95,8 +99,44 @@ async function findCandidatesByName(admin: SupabaseClient, name: string): Promis
   if (error) throw new Error(`기업 조회 실패: ${error.message}`);
 
   const rows = (data ?? []) as unknown as CompanyRow[];
-  return rankCompanyRowsByRelevance(rows, name)
-    .map(toCompanyRef)
-    .filter((company): company is CompanyRef => company !== null)
-    .slice(0, MAX_CANDIDATES);
+  const ranked = rankCompanyRowsByRelevance(rows, name);
+  // 개황이 이미 있는 기업이 충분하면 전자공시를 부르지 않는다
+  const ready = ranked.map(toCompanyRef).filter((c): c is CompanyRef => c !== null);
+  if (ready.length >= MAX_CANDIDATES) return ready.slice(0, MAX_CANDIDATES);
+  return withProfiles(admin, ranked.slice(0, MAX_CANDIDATES));
+}
+
+/**
+ * 개황이 비어 있는 기업은 기업개황(company.json)을 불러 채운 뒤 다시 읽는다.
+ * 코스피·코스닥이 아닌 기업(코넥스 등)이나 조회에 실패한 기업은 결과에서 빠진다.
+ */
+async function withProfiles(admin: SupabaseClient, rows: CompanyRow[]): Promise<CompanyRef[]> {
+  const missing = rows.filter((row) => toCompanyRef(row) === null);
+  if (missing.length === 0) return rows.map(toCompanyRef).filter(isCompanyRef);
+
+  const settled = await Promise.allSettled(
+    missing.map((row) => ensureCompanyProfile(row.corp_code, { client: admin })),
+  );
+  for (const [i, result] of settled.entries()) {
+    if (result.status === "rejected") {
+      console.error(`[companies] 기업개황 조회 실패 ${missing[i].corp_code}`, result.reason);
+    }
+  }
+
+  const { data, error } = await admin
+    .from("companies")
+    .select(COMPANY_SELECT_COLUMNS)
+    .in(
+      "corp_code",
+      missing.map((row) => row.corp_code),
+    );
+  if (error) throw new Error(`기업 조회 실패: ${error.message}`);
+  const refreshed = new Map(
+    ((data ?? []) as unknown as CompanyRow[]).map((row) => [row.corp_code, row]),
+  );
+  return rows.map((row) => toCompanyRef(refreshed.get(row.corp_code) ?? row)).filter(isCompanyRef);
+}
+
+function isCompanyRef(company: CompanyRef | null): company is CompanyRef {
+  return company !== null;
 }
