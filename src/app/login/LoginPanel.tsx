@@ -13,9 +13,11 @@ export function LoginPanel() {
   const next = safeNextPath(searchParams.get("next"));
   const { status, refresh } = useSession();
   const [pending, setPending] = useState(false);
-  // /auth/callback이 로그인을 끝내지 못하고 돌려보낸 경우 (구글 화면에서 취소 포함)
+  // /auth/callback(A1)이 로그인을 마치지 못하면 ?error=callback 으로 돌려보낸다
   const [error, setError] = useState<string | null>(
-    searchParams.get("error") ? "로그인을 완료하지 못했습니다. 다시 시도해 주세요." : null,
+    searchParams.get("error") === "callback"
+      ? "구글 로그인을 마치지 못했습니다. 다시 시도해 주세요."
+      : null,
   );
 
   // 이미 로그인했으면 로그인 화면을 보여주지 않고 원래 가려던 곳으로 보낸다
