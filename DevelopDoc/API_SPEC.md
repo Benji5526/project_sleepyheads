@@ -6,14 +6,15 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.1 |
-| 기준 문서 | [PRD](./PRD.md) v0.4.1 · [TECH_SPEC](./TECH_SPEC.md) v0.4 |
+| 버전 | v0.2 |
+| 기준 문서 | [PRD](./PRD.md) v0.5 · [TECH_SPEC](./TECH_SPEC.md) v0.5 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |
 |---|---|---|
 | v0.1 | 2026-09-28 | 초안: 백엔드 구성, 공통 규칙, 계약 타입, 엔드포인트 23개, 상태 전이, Supabase·Vercel 설정 |
+| v0.2 | 2026-09-29 | 서비스 범위 밖 질문 거절: 분석 상태 `declined`, `Decline` 타입, Q1 응답·질문 차감 규칙, `DECLINE_LIMIT` 오류, 상태 전이 추가 |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -116,6 +117,7 @@ flowchart LR
 | `UNSUPPORTED_QUESTION` | 422 | 지원하지 않는 지표·연산·질문 | 가능한 질문 예시 |
 | `OUT_OF_RANGE` | 422 | 조회 가능 기간(2015Q1~) 밖 | 가능 범위 안내 |
 | `QUOTA_EXCEEDED` | 429 | 오늘 질문 수 소진 | `resetAt` 표시 |
+| `DECLINE_LIMIT` | 429 | 오늘 서비스 범위 밖 질문 거절이 10회를 넘음 | "서비스 목적에 맞는 질문만 가능합니다" + `resetAt` |
 | `RATE_LIMITED` | 429 | 분당 요청 초과 | `Retry-After`초 후 재시도 |
 | `UPSTREAM_ERROR` | 502 | 외부 API(OpenDART 등) 오류 | 잠시 후 재시도 |
 | `SERVICE_BUDGET` | 503 | 서비스 전체 한도 도달 | 내일 이용 안내 |
@@ -182,6 +184,7 @@ interface AnalysisRequestView {
 ### 2.3 분석 상태
 ```ts
 type AnalysisStatus =
+  | "declined"              // 서비스 범위 밖으로 거절 (끝난 상태)
   | "needs_clarification"   // 되묻기 대기
   | "awaiting_approval"     // 복합 질문 계획 승인 대기
   | "awaiting_preprocess"   // 전처리 확인 대기 (Step 2)
@@ -193,7 +196,18 @@ type AnalysisStatus =
   | "canceled";
 
 type StopReason = "STEP_LIMIT" | "TIMEOUT" | "COST_LIMIT" | "UPSTREAM_ERROR" | "LLM_UNAVAILABLE" | "USER_CANCELED";
+
+// 서비스 범위 밖 거절 (TECH §4.11)
+type DeclineCategory = "out_of_scope" | "advice_request";   // 조작 시도는 화면에 out_of_scope로만 보임
+interface Decline {
+  category: DeclineCategory;
+  message: string;            // 서버 고정 문구 (PRD §6.3.1) — AI가 만든 글이 아님
+  suggestions: string[];      // 대신 해볼 수 있는 질문 예시 1~3개
+  questionCharged: true;      // 거절도 질문 1회 차감
+}
 ```
+- `manipulation`(AI 조작 시도)은 서버 내부 기록에만 남고, API 응답에서는 `out_of_scope`로 내보낸다 (탐지 사실을 드러내지 않음).
+- 범위 안 질문에 범위 밖 요청이 섞였으면 `declined`가 아니라 정상 분석이며, `Explanation.caveats` 끝에 "섞인 질문" 안내 문구가 붙는다.
 
 ### 2.4 되묻기·계획·실행 기록
 ```ts
@@ -351,7 +365,8 @@ interface Analysis {
   question: string;
   status: AnalysisStatus;
   stopReason: StopReason | null;
-  request: AnalysisRequestView | null;     // 해석 전·실패 시 null
+  decline: Decline | null;                 // status = declined일 때만
+  request: AnalysisRequestView | null;     // 해석 전·실패·거절 시 null
   clarification: Clarification | null;
   plan: Plan | null;
   diagnoses: Diagnosis[];
@@ -468,22 +483,35 @@ interface Analysis {
 | `question` | 1~500자 |
 | `projectId` | 후속 질문이면 기존 프로젝트 ID (🛡️ 소유자 검사), 새 질문이면 `null` |
 
-응답 `201` — 상태에 따라 4가지
+응답 `201` — 상태에 따라 다음 중 하나
 ```json
 { "data": { "analysisId": "a1…", "projectId": "p1…", "status": "succeeded" } }
 ```
 | `status` | 화면이 할 일 |
 |---|---|
+| `declined` | 응답의 `decline`(아래)을 **거절 안내 카드**로 표시. 차트·분석 글 없음. 추가 호출 없음 |
 | `succeeded` / `partial` / `failed` | Q2로 결과 조회 후 표시 (단순 질문) |
 | `needs_clarification` | Q2의 `clarification`을 보여주고 Q3 호출 |
 | `awaiting_approval` | Q2의 `plan`을 계획 카드로 보여주고 Q7 호출 (Step 3) |
 | `awaiting_preprocess` | Q2의 `diagnoses`를 진단 카드로 보여주고 Q5 호출 (Step 2) |
 | `queued` | Q4를 반복 호출 (§6) |
 
-오류: `400`, `401`, `403`, `404`(projectId), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`, `429`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
+거절 응답 예시 (`status: "declined"`)
+```json
+{ "data": { "analysisId": "a9…", "projectId": "p1…", "status": "declined",
+  "decline": {
+    "category": "out_of_scope",
+    "message": "죄송합니다. 이 서비스는 국내 상장 주식회사의 실적·재무·공시·주가 지표 등 기업 분석에 관한 질문에만 답변드릴 수 있어요. 문의하신 내용은 서비스 범위를 벗어나 답변드리기 어렵습니다.",
+    "suggestions": ["SK하이닉스 최근 실적 어때?", "삼성전자 최근 주요 공시 알려줘"],
+    "questionCharged": true } } }
+```
+
+오류: `400`, `401`, `403`, `404`(projectId), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`, `429 QUOTA_EXCEEDED`, `429 DECLINE_LIMIT`, `429 RATE_LIMITED`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
 
 - 질문 해석이 AI 장애로 실패하면 `503 LLM_UNAVAILABLE`이며 **질문 수를 돌려준다**(차감 취소).
-- `422`(지원 불가·기간 밖)는 질문 수를 차감한다 (AI 해석 비용이 들었으므로). 화면에 이 사실을 안내한다.
+- `422`(지원 불가·기간 밖)와 **`declined`(범위 밖 거절)는 질문 수를 차감한다** (판정에 AI 비용이 들고, 반복 오남용을 막기 위함). 화면에 "질문 1회가 사용되었습니다"를 함께 안내한다.
+- 거절이 하루 `max_declines_per_day`(10회)를 넘으면 이후 질문은 판정 없이 `429 DECLINE_LIMIT`.
+- 후속 질문(`projectId` 있음)도 매번 새로 범위를 판정한다.
 
 ### Q2 `GET /api/analyses/:id` 🛡️
 응답 `200` → `{ "data": Analysis }` (§2.8)
@@ -667,7 +695,8 @@ interface Analysis {
 
 ```mermaid
 stateDiagram-v2
-    [*] --> needs_clarification: 기업 후보 여러 개
+    [*] --> declined: 서비스 범위 밖 · 투자 권유 · 조작 시도
+    [*] --> needs_clarification: 기업 후보 여러 개 · 기업 없는 주식 질문
     [*] --> awaiting_approval: 복합 질문
     [*] --> queued: 단순 질문
     needs_clarification --> awaiting_approval: clarify (복합)
@@ -684,6 +713,7 @@ stateDiagram-v2
     awaiting_preprocess --> canceled: cancel
     queued --> canceled: cancel
     running --> canceled: cancel
+    declined --> [*]
     succeeded --> [*]
     partial --> [*]
     failed --> [*]
