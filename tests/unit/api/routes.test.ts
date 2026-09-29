@@ -45,7 +45,7 @@ const ENDPOINTS: [string, string, string, number, number, number?][] = [
   ["Q1", "POST", "/api/ask", 401, 403, 60],
   ["Q2", "GET", "/api/analyses/[id]", 401, 403],
   ["Q3", "POST", "/api/analyses/[id]/clarify", 401, 403],
-  ["Q4", "POST", "/api/analyses/[id]/step", 401, 403, 60],
+  ["Q4", "POST", "/api/analyses/[id]/step", 401, 403, 300],
   ["Q5", "POST", "/api/analyses/[id]/preprocess", 401, 403],
   ["Q6", "POST", "/api/analyses/[id]/rerun", 401, 403, 60],
   ["Q7", "POST", "/api/analyses/[id]/approve", 401, 403],

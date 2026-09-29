@@ -1,4 +1,4 @@
-import type { ApiError } from "@/contracts";
+import { API_ERROR_HTTP_STATUS, type ApiError } from "@/contracts";
 import { ApiRequestError, codeFromHttpStatus } from "./errors";
 import type { WithRemaining } from "./types";
 
@@ -29,8 +29,14 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   if (!res.ok) {
     const error = (body as ApiError | null)?.error;
     const retryAfter = res.headers.get("Retry-After");
+    // 우리 서버가 아니라 Vercel이 직접 답한 오류(시간 초과 FUNCTION_INVOCATION_TIMEOUT 등)는
+    // 모르는 코드라 HTTP 상태로 판단한다
+    const code =
+      error?.code && error.code in API_ERROR_HTTP_STATUS
+        ? error.code
+        : codeFromHttpStatus(res.status);
     throw new ApiRequestError(
-      error?.code ?? codeFromHttpStatus(res.status),
+      code,
       error?.message ?? `요청이 실패했습니다 (HTTP ${res.status}).`,
       res.status,
       error?.resetAt ?? null,

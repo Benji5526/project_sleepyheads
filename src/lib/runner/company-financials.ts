@@ -10,11 +10,14 @@ import {
   type CalendarQuarterMetricsRow,
 } from "@/lib/metrics/persist";
 import { formatQuarter } from "@/lib/ask/quarter";
+import { createConcurrencyGate } from "@/lib/quota/concurrency";
 import {
   type FiscalRef,
   mapCalendarRangeToFiscalQuarters,
   reportsForCalendarRange,
 } from "./quarter-reports";
+
+const REPORT_FETCH_CONCURRENCY = 4;
 
 export interface CompanyFinancials {
   /** "2026Q2" → 그 분기의 계산된 지표 (요청 범위 밖의 인접 분기도 QoQ/YoY 계산용으로 더 들어 있을 수 있다). */
@@ -42,13 +45,20 @@ export async function ensureCompanyFinancials(
   const fiscalRefByQuarter = mapCalendarRangeToFiscalQuarters(company.fiscalMonth, from, to);
   const reports = reportsForCalendarRange(fiscalRefByQuarter);
 
-  for (const report of reports) {
-    await ensureReportValues(company.corpCode, report.bsnsYear, report.reprtCode, {
-      userId: options.userId ?? null,
-      analysisId: options.analysisId ?? null,
-      client: options.client,
-    });
-  }
+  // 처음 조회하는 기업은 보고서가 20개 넘게 필요하다(5년 추이 + 증감률용 앞 분기). 하나씩 받으면
+  // 60초를 넘겨 Vercel이 끊으므로 몇 개씩 동시에 받는다 (OpenDART 동시 호출 상한 5개 안쪽).
+  const gate = createConcurrencyGate(REPORT_FETCH_CONCURRENCY);
+  await Promise.all(
+    reports.map((report) =>
+      gate.run(() =>
+        ensureReportValues(company.corpCode, report.bsnsYear, report.reprtCode, {
+          userId: options.userId ?? null,
+          analysisId: options.analysisId ?? null,
+          client: options.client,
+        }),
+      ),
+    ),
+  );
 
   const rows = await computeCalendarQuarterMetrics(company.corpCode, { client: options.client });
   const metricsByQuarter = new Map<Quarter, CalendarQuarterMetricsRow>();
