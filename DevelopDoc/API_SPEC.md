@@ -6,8 +6,8 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.2 |
-| 기준 문서 | [PRD](./PRD.md) v0.5 · [TECH_SPEC](./TECH_SPEC.md) v0.5 |
+| 버전 | v0.2.1 |
+| 기준 문서 | [PRD](./PRD.md) v0.5 · [TECH_SPEC](./TECH_SPEC.md) v0.5.1 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
 ### 변경 이력
@@ -15,6 +15,7 @@
 |---|---|---|
 | v0.1 | 2026-09-28 | 초안: 백엔드 구성, 공통 규칙, 계약 타입, 엔드포인트 23개, 상태 전이, Supabase·Vercel 설정 |
 | v0.2 | 2026-09-29 | 서비스 범위 밖 질문 거절: 분석 상태 `declined`, `Decline` 타입, Q1 응답·질문 차감 규칙, `DECLINE_LIMIT` 오류, 상태 전이 추가 |
+| v0.2.1 | 2026-09-29 | Auth 설정(§7.5)에 Google OAuth 앱 "프로덕션" 게시 항목 추가 |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -805,6 +806,7 @@ sequenceDiagram
 | 이메일·비밀번호 가입 | **끔** |
 | Site URL | 운영 주소 (`https://<프로젝트명>.vercel.app`) |
 | Redirect URL 허용 목록 | `http://localhost:3000/auth/callback`, `https://<프로젝트명>.vercel.app/auth/callback`, Preview 주소용 항목(와일드카드 지원 여부는 WU-108에서 공식 문서로 확인) |
+| Google OAuth 앱 게시 상태 | Google Cloud Console에서 앱 이름·개인정보처리방침·이용약관 링크를 넣고, 공개 전에 **"프로덕션"으로 게시**한다. "테스트" 상태에서는 등록한 테스트 사용자만 로그인된다 |
 
 ### 7.6 마이그레이션
 - DB 변경은 모두 `supabase/migrations/`의 SQL 파일로만 한다 (대시보드에서 직접 표 수정 금지).
