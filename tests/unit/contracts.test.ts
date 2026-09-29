@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { API_ERROR_HTTP_STATUS } from "@/contracts";
 
 describe("API 오류 코드 (API_SPEC §1.7)", () => {
-  it("코드 14개가 표의 HTTP 상태와 같다", () => {
+  it("코드 16개가 표의 HTTP 상태와 같다", () => {
     expect(API_ERROR_HTTP_STATUS).toEqual({
       VALIDATION_ERROR: 400,
       UNAUTHORIZED: 401,
@@ -18,6 +18,8 @@ describe("API 오류 코드 (API_SPEC §1.7)", () => {
       UPSTREAM_ERROR: 502,
       SERVICE_BUDGET: 503,
       LLM_UNAVAILABLE: 503,
+      INTERNAL_ERROR: 500,
+      NOT_IMPLEMENTED: 501,
     });
   });
 });
