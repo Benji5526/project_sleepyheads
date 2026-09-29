@@ -25,7 +25,9 @@ export type ApiErrorCode =
   | "RATE_LIMITED"
   | "UPSTREAM_ERROR"
   | "SERVICE_BUDGET"
-  | "LLM_UNAVAILABLE";
+  | "LLM_UNAVAILABLE"
+  | "INTERNAL_ERROR"
+  | "NOT_IMPLEMENTED";
 
 /** 오류 코드별 HTTP 상태 (API_SPEC §1.7 표) */
 export const API_ERROR_HTTP_STATUS: Record<ApiErrorCode, number> = {
@@ -43,6 +45,8 @@ export const API_ERROR_HTTP_STATUS: Record<ApiErrorCode, number> = {
   UPSTREAM_ERROR: 502,
   SERVICE_BUDGET: 503,
   LLM_UNAVAILABLE: 503,
+  INTERNAL_ERROR: 500,
+  NOT_IMPLEMENTED: 501,
 };
 
 /** 오류 응답: { "error": { code, message, details, resetAt } } */

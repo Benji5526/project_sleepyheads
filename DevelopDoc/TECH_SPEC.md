@@ -6,9 +6,9 @@
 | 문서 종류 | TECH_SPEC (기술 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.5.1 |
+| 버전 | v0.5.2 |
 | 기준 PRD | [PRD.md](./PRD.md) v0.5 |
-| 관련 문서 | [API_SPEC.md](./API_SPEC.md) v0.2.1 — 서버 API 상세 명세 |
+| 관련 문서 | [API_SPEC.md](./API_SPEC.md) v0.2.2 — 서버 API 상세 명세 |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |
@@ -19,6 +19,7 @@
 | v0.4 | 2026-09-28 | 백엔드를 Supabase + Vercel로 확정하고 서버 API 상세를 [API_SPEC.md](./API_SPEC.md)로 분리. 기업 목록 동기화를 Vercel Cron(하루 1회)으로 확정, 요청 속도 제한을 질문 관련(분당 10회)·전체(분당 120회)로 분리, `CRON_SECRET` 추가 |
 | v0.5 | 2026-09-29 | **서비스 범위 판정·정중한 거절(§4.11) 추가**: 분석 요청 형식에 `scope`, 3중 판정(서버 1차 필터 → AI 판정 → 서버 후검사), 거절은 서버 고정 문구, 거절 통계·테스트 추가 |
 | v0.5.1 | 2026-09-29 | YoY·QoQ 부호 전환 표시(흑자전환·적자전환·적자지속, §6.4), 금융업 영업수익 계정 확인 방법과 `기타금융` 섹터 추가(§7·§8), 섹터 첫 구축 시 기업개황 수집을 이틀로 분할(§8) |
+| v0.5.2 | 2026-09-29 | Next.js 16에서 `middleware.ts`가 `proxy.ts`로 이름이 바뀐 것을 저장소 구조(§18.1)에 반영 |
 
 > 이 문서는 PRD의 "무엇을 만들지"를 "어떻게 만들지"로 옮긴 것이다. 기능 ID(F-xx)는 PRD v0.4의 요구사항 ID를 그대로 쓴다.
 
@@ -795,7 +796,7 @@ project_sleepyheads/
 │   │   ├── metrics/          # 계산 규칙, 달력 환산, 금융업 변환, 결합
 │   │   ├── preprocess/       # 전처리 진단
 │   │   ├── sector/ quota/ llm/ supabase/
-│   └── middleware.ts
+│   └── proxy.ts              # 세션 쿠키 갱신 (Next.js 16의 middleware.ts 새 이름)
 ├── supabase/migrations/, supabase/seed/
 └── tests/ unit/ fixtures/ regression/ perf/ e2e/
 ```
