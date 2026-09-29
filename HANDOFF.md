@@ -5,7 +5,7 @@
 | 프로젝트 | project_sleepyheads — 질문형 기업 분석 서비스 (공시 숫자 + 뉴스 단서) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6.1 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3.1 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3.1 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3 |
+| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6.1 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3.1 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3.4 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3 |
 
 ### 변경 이력
 | 날짜 | 내용 |
@@ -19,12 +19,13 @@
 | 2026-09-29 | 서버 오류(`INTERNAL_ERROR`) 안내 화면 추가 — "잠시 후 다시 시도" + 요청 ID 표시 (§0.3 6번 앞부분 완료), 가짜 모드 "서버 오류" 추가 |
 | 2026-09-29 | WU-108 구글 로그인 코드 연결 (§0.3 3번, PR #9·#10 합침 — 서버 쪽은 병준님 구현 기준, 열린 주소 이동 보안 수정 포함), 서버 작업은 WU-110 진행 중 |
 | 2026-09-29 | WU-109~111 서버 파이프라인(예림님 PR #11) main 반영 — 검토 수정 포함 (§0.3 2번, §0.4) |
+| 2026-09-29 | **§0 저녁 마감 기준으로 갱신**: PR #9~#13 반영, 운영 로그인 실패 원인(Vercel `NEXT_PUBLIC_SUPABASE_URL` 값 오류) 기록, 다음 할 일 재정렬 |
 
 > 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
 ---
 
-## 0. 이어서 시작하기 (2026-09-29 마감 기준)
+## 0. 이어서 시작하기 (2026-09-29 저녁 마감 기준)
 
 > 새 세션·새 팀원은 **이 절부터** 읽는다. 여기 적힌 상태가 가장 최신이다.
 
@@ -36,9 +37,13 @@
 | #5 | 서버 API 23개 경로 뼈대 + 공통 처리 `route()`(권한·약관·요청 속도·멱등키·오류 형식) | 병준 |
 | #6 | 뉴스 출처 **Google 뉴스 RSS**로 교체, 분석 글 **투자 포인트** 전환, 주가 API V2 반영 (문서 6개 + 화면) | 현준 |
 | #7 → #8 | **WU-101~107 서버 작업**(DB 스키마·RLS·DB 함수, 외부 호출기, 기업 목록·검색, 재무 수집, 계산 엔진, 공시 분류) + main과 충돌 해결, 뉴스 출처 맞춤 마이그레이션 | 예림 (충돌 해결: 현준) |
+| #9 | WU-108 구글 로그인 코드 1차 + WU-113 서버 오류 안내(요청 ID) | 현준 |
+| #10 → #12 | **WU-108 구글 로그인**(콜백·로그아웃·`/api/me`·약관 동의 API·`src/proxy.ts`) — #9와 같은 작업이라 서버 쪽은 병준님 구현으로 통일, **탭 문자를 끼운 외부 주소 이동 보안 수정** | 병준 (충돌 해결: 현준) |
+| #11 → #13 | **WU-109~111 질문 해석·분석 실행·설명 작성** + 검토 수정(질문 한도 초과 500→429, 연도별 "최근 N년" 진행 중인 올해 제외, 결론 길이 상한, 금지어 우회 차단 등) | 예림 (검토·수정: 현준) |
 
-- 테스트: 단위 297개, 화면 61개 (1280px·375px). CI는 Linux·Windows 두 환경에서 돈다.
-- 배포: **https://projectsleepyheads.vercel.app** 동작 (Vercel·Supabase가 GitHub에 연결됨)
+- 테스트: 단위 434개, 화면 63개 (1280px·375px). CI는 Linux·Windows 두 환경에서 돈다.
+- 배포: **https://projectsleepyheads.vercel.app** — 화면은 뜨지만 **로그인이 안 된다** (원인 §0.3 0번). 로그인·실제 질문은 아직 운영에서 한 번도 성공하지 못했다.
+- 합치는 방식: 포크 PR이 main과 충돌하면 `merge/pr-<번호>-…` 브랜치에서 그 PR 커밋을 그대로 합치고 충돌만 풀어 새 PR로 올린다 → 합쳐지면 원래 PR도 자동으로 Merged 표시 (#8·#12·#13).
 
 ### 0.2 오늘 결정한 것 (문서 반영 완료)
 | 결정 | 내용 | 근거 |
@@ -51,21 +56,23 @@
 | Next.js 16 | `middleware.ts` → **`proxy.ts`** | TECH §18.1 |
 
 ### 0.3 역할별 다음 할 일 (우선순위 순)
-**MVP(Step 1 핵심 통과 테스트: "삼성전자의 최근 5년 매출액 추이를 보여줘" → 실제 데이터로 좌 차트·우 분석 글)를 막는 것은 서버 부분(WU-109~111)과 로그인(WU-108)이다.**
+**MVP(Step 1 핵심 통과 테스트: "삼성전자의 최근 5년 매출액 추이를 보여줘" → 실제 데이터로 좌 차트·우 분석 글)에 필요한 코드는 모두 main에 들어갔다. 막는 것은 운영 설정(0번)뿐이다.**
 
 | 순서 | 담당 | 할 일 | 비고 |
 |---|---|---|---|
-| 1 | 데이터/서버 | **새 마이그레이션 `20260929070000_news_provider.sql`을 `sleepyheads-dev`에 적용** (`git pull` → `supabase db push` → `supabase migration list`로 확인) | 이전 마이그레이션은 이미 적용됨. 이 파일은 여러 번 실행해도 안전 |
-| 2 | 데이터/서버 | **WU-109~111 🟨 main 반영** (PR #11 → 통합 PR에서 검토 수정). 남은 것: 회귀 10문항·실제 OpenAI 응답 검증·입력 토큰 측정, 아래 §0.4 "PR #11 검토 남은 것" | 로그인 후 실제 질문이 처음으로 동작 — 배포 주소에서 핵심 통과 테스트 확인 필요 |
-| 3 | 통합/배포 | **WU-108 구글 로그인** 🟨 — OAuth 발급·Supabase Google 켜기 ✅, 코드 연결 ✅(2026-09-29: `/auth/callback`·로그아웃·`/api/me`·약관 동의 API·`src/proxy.ts`). Redirect URL 4개 등록 ✅, 로컬 `.env.local` Supabase 키 ✅. **남은 것: 실제 구글 계정으로 로그인 확인** | 로그인 후 질문은 WU-109~110이 끝나야 실제로 된다 |
-| 4 | 통합/배포 | WU-003 마무리 확인 (Vercel 환경변수 환경별 등록, Supabase GitHub 연결이 main 머지 때 운영 DB에 마이그레이션을 자동 적용하는지) → WORK_UNITS 상태 갱신 | 배포 주소는 동작 중 |
-| 5 | 데이터/서버 | WORK_UNITS 진행표 WU-102~107 상태를 완료조건 기준으로 갱신 (지금 ⬜) | |
-| 6 | 기획/화면 | ~~서버 오류 `INTERNAL_ERROR` 안내 문구("잠시 후 다시 시도" + 요청 ID) 추가~~ ✅ 2026-09-29 → 서버가 준비되면 `NEXT_PUBLIC_API_MOCK`을 비우고 실제 연결·재검증 → WU-115 비로그인 예시 | |
-| 7 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·**AI 입력 가능 여부**), T6(12월 외 결산 샘플), 손 계산 정답표 | WU-304 전 필수 |
+| **0** | 통합/배포 (Vercel 접근 가능한 사람) | **Vercel 환경변수 `NEXT_PUBLIC_SUPABASE_URL`을 `https://yaonpdxrlsigdnqfdujf.supabase.co`로 고친 뒤 재배포**. 지금 값은 Supabase *대시보드 화면 주소*(`https://supabase.com/dashboard/project/yaonpdxrlsigdnqfdujf`)로 보여, 로그인 버튼이 Supabase 404 화면으로 간다 (2026-09-29 확인). 같은 화면에서 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`(`sb_publishable_…`)·`SUPABASE_SECRET_KEY`(`sb_secret_…`)도 Supabase → Settings → API Keys 값과 같은지 확인. Production·Preview 둘 다 | Vercel 프로젝트 → **Settings → Environment Variables** → 변수 오른쪽 **⋯ → Edit**. `NEXT_PUBLIC_` 값은 빌드 때 박히므로 **저장 후 재배포해야 반영**된다 |
+| 1 | 검증/문서 (현준) | 0번 뒤 운영에서 **구글 로그인 → 약관 동의 → 대기화면**, 이어서 **Step 1 핵심 통과 테스트 질문** 실행 | WU-108·WU-199. 실패하면 화면의 요청 ID로 Vercel 로그 확인 |
+| 2 | 데이터/서버 | WU-109~111 🟨 마무리: 회귀 10문항·실제 OpenAI 응답 검증·입력 토큰 측정, §0.4 "PR #11 검토 남은 것" 4개, `profiles` RLS 보안 수정 | 마이그레이션 `20260929070000`~`110000`은 Supabase에 적용됨 |
+| 3 | 통합/배포 | WU-114 질문 수 한도(`/api/me/usage`, `X-Questions-Remaining`) — 지금은 화면 오른쪽 위 "남은 질문"이 안 보인다 | 한도 차감 자체는 `/api/ask`가 이미 한다 |
+| 4 | 통합/배포 | WU-003 마무리 (Supabase 프로젝트 dev/prod 분리 여부 결정, Supabase GitHub 연결이 main 머지 때 마이그레이션을 자동 적용하는지) → WORK_UNITS 상태 갱신 | 지금은 로컬·Preview·운영이 **같은 DB** |
+| 5 | 기획/화면 (현준) | 1번 성공 뒤 실제 서버 응답으로 WU-113 화면 재확인 → WU-115 비로그인 예시 | 로컬에서 실제 연결로 보려면 `.env.local`의 `NEXT_PUBLIC_API_MOCK`을 비운다 |
+| 6 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·**AI 입력 가능 여부**), T6(12월 외 결산 샘플), 손 계산 정답표 | WU-304 전 필수 |
 
 ### 0.4 남은 확인·주의
 - **PR #11 검토 남은 것 (데이터/서버)**: ① 연도별(`groupBy=year`)일 때 증감률(YoY·QoQ)이 안내 없이 빠진다 (`series-builders.ts`) ② 원인 추정 검사가 AI가 `inferred:true`를 붙일 때만 돈다 — `false`로 "때문에"를 쓰면 통과 (`build-explanation.ts`) ③ YoY 기준 지표 주석(매출 우선)과 코드(영업이익 우선)가 다르다 ④ 연도별 부채비율에 금융업 ※ 표시가 빠진다. 통합 PR에서 고친 것: 질문 한도 초과가 500 → 429, 빈 프로젝트 생성, 연도별 "최근 N년"이 진행 중인 올해 포함, 결론 길이 상한, "계산 불가"가 문장에 들어감, 금지어 띄어쓰기 우회, 전각 숫자, 배지·※ 중복, % 소수점.
 - PR #11 마이그레이션 4개(`20260929080000`~`110000`)는 예림님이 이미 Supabase(`sleepyhead`, 유일한 프로젝트)에 적용했다.
+- 로컬 `.env.local`: Supabase 키 3개 채움(2026-09-29, `pnpm check:keys` 6개 모두 ✅). Supabase Redirect URL 4개 등록: `http://localhost:3000/**`, `https://projectsleepyheads.vercel.app/**`, `https://*-project-agent2.vercel.app/**`, `https://*-williamus91.vercel.app/**`.
+- 앞으로 로그인하면 **실제 서비스 DB에 회원이 생긴다** (DB가 하나뿐이라 로컬 시험도 마찬가지).
 - **Supabase 프로젝트는 실제로 `sleepyhead` 하나**(병준님 조직 "Benji chat bot")다. §2.1의 dev/prod 두 개 분리는 아직 안 됐다 — 로컬·Preview·운영이 같은 DB를 쓴다. 분리 여부는 통합/배포가 결정.
 - **[보안] `profiles_update_own` RLS 정책이 모든 컬럼 수정을 허용**한다 (`supabase/migrations/20260929020000_rls_policies.sql:14`) — 로그인한 사용자가 Data API로 자기 `agreed_terms_at`·`email`을 직접 바꿀 수 있다. 데이터/서버가 마이그레이션으로 고칠 것 (PR #10 병준님 지적). 고칠 때 A4(`/api/me/terms`)가 지금 회원 세션으로 `agreed_terms_at`을 쓰므로 **A4를 관리자 클라이언트로 바꾸는 것과 함께** 해야 한다.
 - `/privacy`의 연락처 `admin@sleepyheads.com`은 **임시** — `sleepyheads.com`은 다른 곳이 쓰는 도메인이라 메일이 팀에 오지 않는다. 공개 전 팀이 받을 수 있는 주소로 교체.
@@ -91,9 +98,9 @@
 | **서버 API 명세** | ✅ **API_SPEC v0.3.1** — 엔드포인트 23개, 계약 타입, Supabase·Vercel 설정까지 확정 |
 | 서비스 범위 정책 | ✅ 주식·상장 주식회사 경영사항 밖의 질문, 투자 권유 요청, AI 조작 시도는 **정해진 문구로 공손히 거절** (PRD §6.3.1, TECH §4.11) |
 | 백엔드 구성 | ✅ **Supabase(DB·로그인) + Vercel(서버 API·예약 실행·배포)**로 확정 |
-| 코드 | 🟨 WU-001 ✅, WU-112 ✅, WU-113 🟨(가짜 데이터 기준 완료), 서버 API 23개 경로 뼈대·공통 처리 ✅, **WU-101~107 서버 작업 main 반영** — 남은 Step 1: WU-108~111, WU-114~115 (§0.3) |
+| 코드 | 🟨 WU-001 ✅, WU-101~107 ✅, WU-112 ✅, WU-108·WU-109~111·WU-113 🟨 (코드는 main에, 운영 확인 남음), 남은 Step 1: WU-114~115, WU-199 (§0.3) |
 | 외부 서비스 계정·키 | ✅ OpenDART·OpenAI·주가(금융위 V2)·뉴스(Google RSS, 키 없음) 시험 호출 성공 (`pnpm check:keys`). Supabase 키는 통합/배포 담당 |
-| 배포 주소 | ✅ https://projectsleepyheads.vercel.app (main 머지 시 자동 배포) |
+| 배포 주소 | 🟨 https://projectsleepyheads.vercel.app (main 머지 시 자동 배포) — 로그인 안 됨, Vercel 환경변수 수정 필요 (§0.3 0번) |
 | README.md | ⬜ 비어 있음 (WU-506에서 작성) |
 | FINAL_CHECKLIST.md | ✅ v0.3 작성 완료 (점검은 개발 막바지에 검증/문서 담당이 진행) |
 
