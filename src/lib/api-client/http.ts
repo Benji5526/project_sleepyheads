@@ -36,6 +36,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       error?.resetAt ?? null,
       retryAfter === null ? null : Number(retryAfter),
       error?.details ?? null,
+      res.headers.get("X-Request-Id"),
     );
   }
 

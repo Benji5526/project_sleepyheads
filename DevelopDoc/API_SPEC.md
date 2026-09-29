@@ -6,7 +6,7 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3 |
+| 버전 | v0.3.1 |
 | 기준 문서 | [PRD](./PRD.md) v0.6 · [TECH_SPEC](./TECH_SPEC.md) v0.6 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
@@ -18,6 +18,7 @@
 | v0.2.1 | 2026-09-29 | Auth 설정(§7.5)에 Google OAuth 앱 "프로덕션" 게시 항목 추가 |
 | v0.2.2 | 2026-09-29 | 서버 API 뼈대 반영: 오류 코드 `INTERNAL_ERROR`(500)·`NOT_IMPLEMENTED`(501) 추가(§1.7), A2 로그아웃을 약관 동의 전에도 허용(🔑*) |
 | v0.3 | 2026-09-29 | **분석 글에 투자 포인트 `insights` 추가**(§2.6, 필드 추가만 — 기존 필드 그대로), 분량 상한 `EXPLANATION_LIMITS`. 뉴스 출처를 Google 뉴스 RSS로 교체해 환경변수 `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` 삭제(§8.3), 개발 전용 `NEXT_PUBLIC_API_MOCK` 추가(§8.3) |
+| v0.3.1 | 2026-09-29 | WU-108 구현 반영: A1 실패 시 `/login?error=callback&next=…`로 이동·이동은 `303`, 회원 정보(`profiles`)는 첫 로그인 때 서버가 만든다, §7.5 Redirect URL은 `/**` 와일드카드로 확정(공식 문서 확인) |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -447,6 +448,8 @@ interface Analysis {
   - 약관 미동의 → `/onboarding?next=<next>`
   - 동의 완료 → `next` (없으면 `/`)
 - `next`는 **우리 사이트 안의 경로(`/`로 시작, `//` 금지)만** 허용. 아니면 `/`로 (외부 주소로 보내는 공격 방지).
+- 첫 로그인이면 `profiles` 한 줄을 서버(관리자 키)가 만든다 (회원 본인의 직접 insert는 RLS로 막힘).
+- `code`가 없거나(구글 화면에서 취소) 세션 교환에 실패하면 → `/login?error=callback&next=<next>` (로그인 화면에 "로그인을 완료하지 못했습니다" 표시). 이동은 모두 `303`.
 
 ### A2 `POST /auth/signout` 🔑*
 - 세션 쿠키 삭제 후 `303` → `/`
@@ -832,7 +835,7 @@ sequenceDiagram
 | 로그인 제공자 | **Google만** 켬 |
 | 이메일·비밀번호 가입 | **끔** |
 | Site URL | 운영 주소 (`https://<프로젝트명>.vercel.app`) |
-| Redirect URL 허용 목록 | `http://localhost:3000/auth/callback`, `https://<프로젝트명>.vercel.app/auth/callback`, Preview 주소용 항목(와일드카드 지원 여부는 WU-108에서 공식 문서로 확인) |
+| Redirect URL 허용 목록 | `http://localhost:3000/**`, `https://projectsleepyheads.vercel.app/**`, Preview용 `https://*-project-agent2.vercel.app/**` (Vercel 팀 `project-agent2`) (`**`는 어떤 글자든 허용 — `/auth/callback?next=…`의 뒷부분까지 맞춘다. Supabase 공식 문서 "Redirect URLs" 권장안). 설정 위치: Supabase 대시보드 → Authentication → URL Configuration |
 | Google OAuth 앱 게시 상태 | Google Cloud Console에서 앱 이름·개인정보처리방침·이용약관 링크를 넣고, 공개 전에 **"프로덕션"으로 게시**한다. "테스트" 상태에서는 등록한 테스트 사용자만 로그인된다 |
 
 ### 7.6 마이그레이션

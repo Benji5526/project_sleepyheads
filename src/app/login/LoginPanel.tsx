@@ -9,10 +9,14 @@ import { signInWithGoogle } from "@/lib/api-client/session";
 
 export function LoginPanel() {
   const router = useRouter();
-  const next = safeNextPath(useSearchParams().get("next"));
+  const searchParams = useSearchParams();
+  const next = safeNextPath(searchParams.get("next"));
   const { status, refresh } = useSession();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // /auth/callback이 로그인을 끝내지 못하고 돌려보낸 경우 (구글 화면에서 취소 포함)
+  const [error, setError] = useState<string | null>(
+    searchParams.get("error") ? "로그인을 완료하지 못했습니다. 다시 시도해 주세요." : null,
+  );
 
   // 이미 로그인했으면 로그인 화면을 보여주지 않고 원래 가려던 곳으로 보낸다
   useEffect(() => {

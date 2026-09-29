@@ -252,6 +252,17 @@ test.describe("거절·되묻기·오류 화면이 각각 구분된다", () => {
     await expect(page.getByTestId("questions-remaining")).toContainText("20/20");
   });
 
+  test("예상 못 한 서버 오류: '잠시 후 다시 시도' + 요청 ID, 결과 화면으로 가지 않음", async ({
+    page,
+  }) => {
+    await ask(page, "삼성전자 매출 알려줘 서버 오류");
+    const alert = page.getByRole("main").getByRole("alert");
+    await expect(alert).toContainText("일시적인 서버 오류가 발생했습니다");
+    await expect(alert).toContainText("잠시 후 다시 시도");
+    await expect(alert.getByTestId("request-id")).toHaveText(/^[0-9a-f-]{36}$/);
+    await expect(page).toHaveURL(/\/$/);
+  });
+
   test("공시 조회 실패: 가짜 숫자 없이 실패 안내만", async ({ page }) => {
     await askAndOpen(page, "삼성전자 매출 알려줘 DART 장애");
     await expect(page.getByRole("main").getByRole("status")).toContainText(
