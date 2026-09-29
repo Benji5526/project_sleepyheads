@@ -9,8 +9,6 @@ const EXPECTED = [
   "SUPABASE_SECRET_KEY",
   "OPENDART_API_KEY",
   "DATA_GO_KR_SERVICE_KEY",
-  "NAVER_CLIENT_ID",
-  "NAVER_CLIENT_SECRET",
   "OPENAI_API_KEY",
   "OPENAI_MODEL",
   "CRON_SECRET",
@@ -33,7 +31,7 @@ function readEnvExample(): Map<string, string> {
 describe(".env.example", () => {
   const entries = readEnvExample();
 
-  it("API_SPEC §8.3의 변수 10개 + 가짜 모드 스위치를 모두, 그리고 그것만 담는다", () => {
+  it("API_SPEC §8.3의 변수를 모두, 그리고 그것만 담는다", () => {
     expect([...entries.keys()].sort()).toEqual([...EXPECTED].sort());
   });
 

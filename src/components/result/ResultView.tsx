@@ -45,7 +45,7 @@ export function ResultView({ analysis, result }: { analysis: Analysis; result: R
           <UsedDataPanel usedData={result.usedData} />
         </div>
 
-        <div className="min-w-0 rounded-xl border border-line bg-surface p-5 sm:p-6 lg:sticky lg:top-6">
+        <div className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-6 lg:sticky lg:top-6">
           <ExplanationPanel
             explanation={analysis.explanation}
             charts={result.charts}

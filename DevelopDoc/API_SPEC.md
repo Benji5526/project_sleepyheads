@@ -6,8 +6,8 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.2.2 |
-| 기준 문서 | [PRD](./PRD.md) v0.5 · [TECH_SPEC](./TECH_SPEC.md) v0.5.2 |
+| 버전 | v0.3 |
+| 기준 문서 | [PRD](./PRD.md) v0.6 · [TECH_SPEC](./TECH_SPEC.md) v0.6 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
 ### 변경 이력
@@ -17,6 +17,7 @@
 | v0.2 | 2026-09-29 | 서비스 범위 밖 질문 거절: 분석 상태 `declined`, `Decline` 타입, Q1 응답·질문 차감 규칙, `DECLINE_LIMIT` 오류, 상태 전이 추가 |
 | v0.2.1 | 2026-09-29 | Auth 설정(§7.5)에 Google OAuth 앱 "프로덕션" 게시 항목 추가 |
 | v0.2.2 | 2026-09-29 | 서버 API 뼈대 반영: 오류 코드 `INTERNAL_ERROR`(500)·`NOT_IMPLEMENTED`(501) 추가(§1.7), A2 로그아웃을 약관 동의 전에도 허용(🔑*) |
+| v0.3 | 2026-09-29 | **분석 글에 투자 포인트 `insights` 추가**(§2.6, 필드 추가만 — 기존 필드 그대로), 분량 상한 `EXPLANATION_LIMITS`. 뉴스 출처를 Google 뉴스 RSS로 교체해 환경변수 `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` 삭제(§8.3), 개발 전용 `NEXT_PUBLIC_API_MOCK` 추가(§8.3) |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -39,7 +40,7 @@ flowchart LR
     C -->|CRON_SECRET| R
     R -->|사용자 세션 클라이언트| DB
     R -->|secret key 관리자 클라이언트| DB
-    R --> EXT[OpenDART · 주가 · 네이버 · OpenAI]
+    R --> EXT[OpenDART · 주가 · Google 뉴스 RSS · OpenAI]
 ```
 
 | 구성 요소 | 맡는 일 |
@@ -321,13 +322,34 @@ interface NewsClue {
   title: string;
   press: string;
   publishedAt: string;
-  url: string;                     // 검색 API가 준 주소만
+  url: string;                     // Google 뉴스 RSS가 준 주소만 (Google 경유, 누르면 원문으로 이동)
   gist: string;                    // 우리가 만든 1~2문장 요지 (본문 아님)
 }
 
+// 투자 포인트 (PRD F-V6, F-V11~F-V13, TECH §11.3) — 숫자 해설이 아니라 투자 판단에 참고할 해석
+type InsightKind = "positive" | "risk" | "watch";   // 긍정 요인 / 위험 요인 / 다음에 확인할 점
+interface Insight {
+  kind: InsightKind;
+  text: string;                    // 서버가 숫자를 채운 완성 문장 (80자 이내)
+  figureIds: string[];             // 근거 숫자 ID — figureIds·newsIds 중 하나 이상 필수
+  newsIds: string[];               // 근거 뉴스 ID (Step 3부터)
+  chartRef: string | null;         // 근거 차트 ("해당 차트 보기")
+  inferred: boolean;               // 추정이 들어간 문장 → 화면에 "추정" 표시
+}
+
+// 분량 상한 — 스마트폰(너비 375px) 한 화면 (PRD F-V11). 서버 검사와 화면 테스트가 같은 값을 쓴다
+const EXPLANATION_LIMITS = {
+  conclusionSentences: 2,
+  insightsMin: 2,
+  insightsMax: 4,
+  insightMaxChars: 80,
+  mainMaxChars: 320,               // 결론 + 투자 포인트 합계 (공백 포함)
+};
+
 interface Explanation {
   status: "ready" | "failed" | "stale";   // stale = 필터 변경으로 원래 조건 기준
-  conclusion: string[];            // 서버가 {{f3}}을 실제 값으로 채운 완성 문장
+  conclusion: string[];            // 서버가 {{f3}}을 실제 값으로 채운 완성 문장 (2문장)
+  insights: Insight[];             // 투자 포인트 2~4개 (근거 연결 검사를 통과한 것만)
   evidence: { text: string; chartRef: string | null }[];
   newsClues: NewsClue[];
   caveats: string[];
@@ -551,6 +573,8 @@ interface Analysis {
   },
   "explanation": { "status": "ready", "label": "AI 작성",
                    "conclusion": ["영업이익이 직전 분기 대비 +12.3% 늘었습니다."],
+                   "insights": [ { "kind": "watch", "text": "다음 분기에도 이익 증가가 이어지는지가 개선 흐름을 판단할 기준입니다.",
+                                   "figureIds": ["f3"], "newsIds": [], "chartRef": "c1", "inferred": true } ],
                    "evidence": [ { "text": "2026Q2 영업이익은 9조 원입니다.", "chartRef": "c1" } ],
                    "newsClues": [], "caveats": ["본 분석은 투자 권유가 아닙니다."] }
 } }
@@ -853,10 +877,12 @@ sequenceDiagram
 | `SUPABASE_SECRET_KEY` 🔒 | dev | dev | prod |
 | `OPENDART_API_KEY` 🔒 | 본인 키 | 팀 키 | 팀 키 |
 | `DATA_GO_KR_SERVICE_KEY` 🔒 | 본인 키 | 팀 키 | 팀 키 |
-| `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` 🔒 | 본인 키 | 팀 키 | 팀 키 |
 | `OPENAI_API_KEY` 🔒 | 팀 키 | 팀 키 | 팀 키 |
 | `OPENAI_MODEL` | `gpt-6-luna` | `gpt-6-luna` | `gpt-6-luna` |
 | `CRON_SECRET` 🔒 | 임의 값 | — | 운영 값 |
+| `NEXT_PUBLIC_API_MOCK` | 개발 전용: `1`이면 화면이 서버 대신 `tests/fixtures/mock/`의 가짜 데이터를 씀 | — (넣지 않음) | — (넣어도 꺼짐) |
+
+- 뉴스(Google 뉴스 RSS)는 키가 필요 없어 환경변수가 없다.
 
 - Preview는 운영 DB(`prod`)에 절대 연결하지 않는다.
 

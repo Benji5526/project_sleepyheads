@@ -241,8 +241,34 @@ export const skhynixRecent: Analysis = {
     status: "ready",
     label: "AI 작성",
     conclusion: [
-      "최근 분기(2026Q2) 영업이익은 13조 9,000억 원으로 직전 분기보다 +20.9% 늘었습니다.",
-      "영업이익률은 49.6%로, 최근 4개 분기 중 가장 높습니다.",
+      "2026년 2분기 영업이익이 직전 분기보다 +20.9% 늘며 최근 4개 분기 중 가장 좋은 실적을 냈습니다.",
+      "매출보다 이익이 더 빠르게 늘어, 수익성이 한 단계 올라선 흐름입니다.",
+    ],
+    insights: [
+      {
+        kind: "positive",
+        text: "영업이익률 49.6%로 매출의 절반 가까이를 이익으로 남기는, 수익성이 매우 높은 구간입니다.",
+        figureIds: ["om2026Q2"],
+        newsIds: [],
+        chartRef: "c3",
+        inferred: false,
+      },
+      {
+        kind: "risk",
+        text: "2026년 1분기에는 매출과 이익이 함께 줄었던 만큼, 분기마다 실적이 크게 흔들릴 수 있습니다.",
+        figureIds: ["rev2026Q1", "oi2026Q1"],
+        newsIds: [],
+        chartRef: "c2",
+        inferred: true,
+      },
+      {
+        kind: "watch",
+        text: "다음 분기에도 영업이익률이 이번 분기 수준을 지키는지가 개선 흐름이 이어지는지 판단할 기준입니다.",
+        figureIds: ["om2026Q2"],
+        newsIds: [],
+        chartRef: "c3",
+        inferred: false,
+      },
     ],
     evidence: [
       { text: "2026Q2 매출액은 28조 원으로 전년 동기 대비 +18.6%입니다.", chartRef: "c1" },

@@ -165,8 +165,34 @@ export const samsungRevenueTrend: Analysis = {
     status: "ready",
     label: "AI 작성",
     conclusion: [
-      "삼성전자 매출액은 2021년 280조 원에서 2025년 315조 원으로 늘었습니다.",
-      "2023년에 -14.1% 줄었다가 2024년 +15.8%로 회복했습니다.",
+      "5년 사이 매출은 280조 원에서 315조 원으로 커졌지만, 2023년 -14.1% 급감처럼 해마다 흐름이 크게 흔들렸습니다.",
+      "2025년 증가율이 +5.0%로 낮아져, 2024년의 빠른 회복세는 한풀 꺾인 모습입니다.",
+    ],
+    insights: [
+      {
+        kind: "positive",
+        text: "2025년 매출이 2022년 고점(301조 5,000억 원)을 넘어, 2023년에 줄었던 몫을 모두 되찾았습니다.",
+        figureIds: ["rev2025", "rev2022"],
+        newsIds: [],
+        chartRef: "c2",
+        inferred: false,
+      },
+      {
+        kind: "risk",
+        text: "증감률이 -14.1%에서 +15.8%까지 오가, 한 해 실적만으로 추세를 판단하기 어려운 기업으로 보입니다.",
+        figureIds: ["yoy2023", "yoy2024"],
+        newsIds: [],
+        chartRef: "c3",
+        inferred: true,
+      },
+      {
+        kind: "watch",
+        text: "매출만으로는 수익성을 알 수 없어, 같은 기간 영업이익률이 함께 좋아졌는지 확인해 볼 만합니다.",
+        figureIds: ["rev2025"],
+        newsIds: [],
+        chartRef: "c2",
+        inferred: false,
+      },
     ],
     evidence: [
       { text: "2025년 매출액은 315조 원으로, 전년 대비 +5.0%입니다.", chartRef: "c2" },
