@@ -6,9 +6,9 @@
 | 문서 종류 | TECH_SPEC (기술 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.5 |
+| 버전 | v0.5.2 |
 | 기준 PRD | [PRD.md](./PRD.md) v0.5 |
-| 관련 문서 | [API_SPEC.md](./API_SPEC.md) v0.2 — 서버 API 상세 명세 |
+| 관련 문서 | [API_SPEC.md](./API_SPEC.md) v0.2.2 — 서버 API 상세 명세 |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |
@@ -18,6 +18,8 @@
 | **v0.3** | 2026-09-28 | **질문형 분석 구조로 전환: 분석 요청 형식·허용 도구·서버 검사(§4), 데이터 버전(§5), 전처리 진단(§9), 네이버 뉴스 수집(§10), AI 역할 확대·숫자 자리표시자 방식(§11), 좌 차트/우 분석 글 화면(§12), 질문 단위 한도(§13), 실행 기록·취소·작업 큐(§4.8~4.9), 재무+주가 결합 검증(§6.6), 회귀·대용량 테스트(§20)** |
 | v0.4 | 2026-09-28 | 백엔드를 Supabase + Vercel로 확정하고 서버 API 상세를 [API_SPEC.md](./API_SPEC.md)로 분리. 기업 목록 동기화를 Vercel Cron(하루 1회)으로 확정, 요청 속도 제한을 질문 관련(분당 10회)·전체(분당 120회)로 분리, `CRON_SECRET` 추가 |
 | v0.5 | 2026-09-29 | **서비스 범위 판정·정중한 거절(§4.11) 추가**: 분석 요청 형식에 `scope`, 3중 판정(서버 1차 필터 → AI 판정 → 서버 후검사), 거절은 서버 고정 문구, 거절 통계·테스트 추가 |
+| v0.5.1 | 2026-09-29 | YoY·QoQ 부호 전환 표시(흑자전환·적자전환·적자지속, §6.4), 금융업 영업수익 계정 확인 방법과 `기타금융` 섹터 추가(§7·§8), 섹터 첫 구축 시 기업개황 수집을 이틀로 분할(§8) |
+| v0.5.2 | 2026-09-29 | Next.js 16에서 `middleware.ts`가 `proxy.ts`로 이름이 바뀐 것을 저장소 구조(§18.1)에 반영 |
 
 > 이 문서는 PRD의 "무엇을 만들지"를 "어떻게 만들지"로 옮긴 것이다. 기능 ID(F-xx)는 PRD v0.4의 요구사항 ID를 그대로 쓴다.
 
@@ -398,6 +400,7 @@ sequenceDiagram
 
 - 표시: 비율 소수점 첫째 자리, 배수(PER·PBR) 둘째 자리. 지표 옆 ⓘ에 계산식 표시.
 - **계산 불가**는 `null` + 사유 코드(`NO_PREV_PERIOD`, `ZERO_DENOMINATOR`, `MISSING_ACCOUNT`)로 반환하고, 화면·분석 글에 사유를 쓴다 (F-T6).
+- **부호가 바뀐 경우** (`yoy`·`qoq`): 비율 대신 글자로 표시한다. 이전 ≤ 0 → 이번 > 0 이면 `흑자전환`, 이전 > 0 → 이번 ≤ 0 이면 `적자전환`, 둘 다 < 0 이면 `적자지속`. 분모에 절댓값을 써도 적자에서 흑자로 바뀐 변화가 퍼센트로는 잘못 읽히기 때문이다.
 
 ### 6.5 계정 식별
 - 표준 계정 ID(`ifrs-full_Revenue`, `dart_OperatingIncomeLoss`, `ifrs-full_ProfitLoss`, `ifrs-full_ProfitLossAttributableToOwnersOfParent`, `ifrs-full_Equity`, `ifrs-full_EquityAttributableToOwnersOfParent`, `ifrs-full_Liabilities`, `ifrs-full_Assets`) → `account_map` 계정명 대체 목록 → 못 찾으면 `MISSING_ACCOUNT` + `data_issues` 기록 (추측 금지).
@@ -430,7 +433,8 @@ sequenceDiagram
 **표 아래 주석 문구 (글자 그대로)**
 > ※ 금융회사는 고객 예금·보험계약 등이 부채로 잡히는 구조라 일반 기업보다 부채비율이 높게 나타날 수 있습니다.
 
-- 금융업 판정: `sectors.is_financial` (`은행`, `증권`, `보험`, `금융지주`).
+- 금융업 판정: `sectors.is_financial` (`은행`, `증권`, `보험`, `금융지주`, `기타금융`).
+- 금융업의 `revenue`는 `account_map`에서 `account_nm = '영업수익'`을 먼저 찾는다. 은행·증권·보험은 계정명이 다를 수 있으므로 업종별 샘플 1곳씩(예: KB금융, 미래에셋증권, 삼성생명)으로 확인한 뒤 확정한다.
 
 ---
 
@@ -444,10 +448,12 @@ sequenceDiagram
 | 소재·에너지 | 화학, 철강/비철금속, 정유/에너지, 전력/유틸리티 |
 | 헬스케어 | 제약, 바이오, 의료기기 |
 | 소비재 | 음식료, 화장품, 유통, 의류/생활, 여행/레저 |
-| 금융 | 은행, 증권, 보험, 금융지주 |
+| 금융 | 은행, 증권, 보험, 금융지주, 기타금융(카드·캐피탈) |
 | 기타 | 지주회사, 기타 |
 
 분류 순서: ① 수동 지정표(`sector_overrides`, 예: SK하이닉스 → 반도체) ② 업종코드(KSIC) 앞자리 규칙(`sector_rules`, 예: `261` → 반도체, `21` → 제약, `30` → 자동차/부품, `311` → 조선, `64` → 은행/금융지주, `65` → 보험) ③ `기타`. 시드 파일 `supabase/seed/sectors.csv`, 버전 `sector_version`. 화면에 분류 근거 표시.
+
+- 업종코드 규칙을 적용하려면 상장사 전체(약 2,700곳)의 기업개황이 필요하다 (기업당 1회 호출). 첫 구축 때는 OpenDART 일일 한도(§13)를 넘지 않도록 **이틀에 나눠** 받는다.
 
 ---
 
@@ -790,7 +796,7 @@ project_sleepyheads/
 │   │   ├── metrics/          # 계산 규칙, 달력 환산, 금융업 변환, 결합
 │   │   ├── preprocess/       # 전처리 진단
 │   │   ├── sector/ quota/ llm/ supabase/
-│   └── middleware.ts
+│   └── proxy.ts              # 세션 쿠키 갱신 (Next.js 16의 middleware.ts 새 이름)
 ├── supabase/migrations/, supabase/seed/
 └── tests/ unit/ fixtures/ regression/ perf/ e2e/
 ```

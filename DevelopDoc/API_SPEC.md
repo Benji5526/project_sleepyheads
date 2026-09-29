@@ -6,8 +6,8 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.2 |
-| 기준 문서 | [PRD](./PRD.md) v0.5 · [TECH_SPEC](./TECH_SPEC.md) v0.5 |
+| 버전 | v0.2.2 |
+| 기준 문서 | [PRD](./PRD.md) v0.5 · [TECH_SPEC](./TECH_SPEC.md) v0.5.2 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
 ### 변경 이력
@@ -15,6 +15,8 @@
 |---|---|---|
 | v0.1 | 2026-09-28 | 초안: 백엔드 구성, 공통 규칙, 계약 타입, 엔드포인트 23개, 상태 전이, Supabase·Vercel 설정 |
 | v0.2 | 2026-09-29 | 서비스 범위 밖 질문 거절: 분석 상태 `declined`, `Decline` 타입, Q1 응답·질문 차감 규칙, `DECLINE_LIMIT` 오류, 상태 전이 추가 |
+| v0.2.1 | 2026-09-29 | Auth 설정(§7.5)에 Google OAuth 앱 "프로덕션" 게시 항목 추가 |
+| v0.2.2 | 2026-09-29 | 서버 API 뼈대 반영: 오류 코드 `INTERNAL_ERROR`(500)·`NOT_IMPLEMENTED`(501) 추가(§1.7), A2 로그아웃을 약관 동의 전에도 허용(🔑*) |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -122,6 +124,8 @@ flowchart LR
 | `UPSTREAM_ERROR` | 502 | 외부 API(OpenDART 등) 오류 | 잠시 후 재시도 |
 | `SERVICE_BUDGET` | 503 | 서비스 전체 한도 도달 | 내일 이용 안내 |
 | `LLM_UNAVAILABLE` | 503 | AI 장애 | **가짜 결과 없이** 실패 안내 |
+| `INTERNAL_ERROR` | 500 | 예상하지 못한 서버 오류 (내용은 응답에 넣지 않고 `X-Request-Id`로 서버 로그에 남김) | "잠시 후 다시 시도" + 요청 ID 안내 |
+| `NOT_IMPLEMENTED` | 501 | 아직 구현되지 않은 API (개발 중에만. 메시지에 담당 WU 표시) | 화면에서 쓰지 않음 |
 
 - 질문당 상한 도달(`STEP_LIMIT`, `TIMEOUT`, `COST_LIMIT`)은 HTTP 오류가 아니라 분석의 `status: "partial" | "failed"`와 `stopReason`으로 알린다 (§2.3).
 
@@ -387,7 +391,7 @@ interface Analysis {
 | # | 메서드·경로 | 권한 | 설명 | 질문 차감 | Step |
 |---|---|---|---|---|---|
 | A1 | `GET /auth/callback` | 🔓 | 구글 로그인 후 돌아오는 주소 (세션 생성) | — | 1 |
-| A2 | `POST /auth/signout` | 🔑 | 로그아웃 | — | 1 |
+| A2 | `POST /auth/signout` | 🔑* | 로그아웃 (*약관 미동의도 허용) | — | 1 |
 | A3 | `GET /api/me` | 🔑* | 내 정보·약관 동의 여부 (*약관 미동의도 허용) | — | 1 |
 | A4 | `POST /api/me/terms` | 🔑* | 약관 동의 (*약관 미동의 상태에서 호출) | — | 1 |
 | A5 | `GET /api/me/usage` | 🔑 | 오늘 남은 질문 수 | — | 1 |
@@ -422,7 +426,7 @@ interface Analysis {
   - 동의 완료 → `next` (없으면 `/`)
 - `next`는 **우리 사이트 안의 경로(`/`로 시작, `//` 금지)만** 허용. 아니면 `/`로 (외부 주소로 보내는 공격 방지).
 
-### A2 `POST /auth/signout` 🔑
+### A2 `POST /auth/signout` 🔑*
 - 세션 쿠키 삭제 후 `303` → `/`
 
 ### A3 `GET /api/me` 🔑*
@@ -805,6 +809,7 @@ sequenceDiagram
 | 이메일·비밀번호 가입 | **끔** |
 | Site URL | 운영 주소 (`https://<프로젝트명>.vercel.app`) |
 | Redirect URL 허용 목록 | `http://localhost:3000/auth/callback`, `https://<프로젝트명>.vercel.app/auth/callback`, Preview 주소용 항목(와일드카드 지원 여부는 WU-108에서 공식 문서로 확인) |
+| Google OAuth 앱 게시 상태 | Google Cloud Console에서 앱 이름·개인정보처리방침·이용약관 링크를 넣고, 공개 전에 **"프로덕션"으로 게시**한다. "테스트" 상태에서는 등록한 테스트 사용자만 로그인된다 |
 
 ### 7.6 마이그레이션
 - DB 변경은 모두 `supabase/migrations/`의 SQL 파일로만 한다 (대시보드에서 직접 표 수정 금지).

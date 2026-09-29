@@ -6,8 +6,8 @@
 | 문서 종류 | WORK_UNITS (단위 작업 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.2.2 |
-| 기준 문서 | [PRD.md](./PRD.md) v0.5, [TECH_SPEC.md](./TECH_SPEC.md) v0.5, [API_SPEC.md](./API_SPEC.md) v0.2 |
+| 버전 | v0.2.3 |
+| 기준 문서 | [PRD.md](./PRD.md) v0.5, [TECH_SPEC.md](./TECH_SPEC.md) v0.5.2, [API_SPEC.md](./API_SPEC.md) v0.2.2 |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |
@@ -16,6 +16,7 @@
 | **v0.2** | 2026-09-28 | **질문형 분석 구조 + 수업 워크플로우 Step 1~5 순서로 전면 재편. Step마다 통과 테스트·배포 시연 작업 단위 추가** |
 | v0.2.1 | 2026-09-28 | API_SPEC 반영: WU-001 계약 타입 폴더·환경변수 10개, WU-101 DB 함수·한도 키, WU-103 Vercel Cron 확정, WU-114 요청 속도 제한 구분 |
 | v0.2.2 | 2026-09-29 | 서비스 범위 밖 질문 정중한 거절 반영: WU-101 시드·표·한도 키, WU-109 범위 판정, WU-113 거절 안내 카드, WU-114 거절 한도, WU-199·WU-503 검증 항목 |
+| v0.2.3 | 2026-09-29 | WU-001 완료 표시 |
 
 ---
 
@@ -41,7 +42,7 @@
 ### Step 0 — 준비
 | WU | 이름 | 담당 | 규모 | 선행 | 상태 |
 |---|---|---|---|---|---|
-| WU-001 | 프로젝트 뼈대·개발 환경 | 🤖 | S | — | ⬜ |
+| WU-001 | 프로젝트 뼈대·개발 환경 | 🤖 | S | — | ✅ |
 | WU-002 | 외부 API 키 발급 (DART·주가·네이버·OpenAI) | 👤🤖 | S | — | ⬜ |
 | WU-003 | Supabase·Vercel 연결과 첫 배포 | 👤🤖 | M | WU-001 | ⬜ |
 
@@ -172,12 +173,12 @@ flowchart LR
 - GitHub Actions(공개 저장소 무료)로 푸시마다 검사·테스트
 
 **완료조건**
-- [ ] `pnpm dev` 후 `http://localhost:3000`에서 기본 페이지가 뜬다
-- [ ] `pnpm lint`, `pnpm test`, `pnpm build`가 오류 없이 끝난다
-- [ ] `.env.example`에 API_SPEC §8.3의 변수 10개가 **값 없이** 있다
-- [ ] `src/contracts/`에 API_SPEC §2의 타입이 옮겨져 있고 빌드가 통과한다
-- [ ] `.env.local`을 만들어도 `git status`에 나타나지 않는다
-- [ ] GitHub 푸시 시 Actions 검사가 통과한다
+- [x] `pnpm dev` 후 `http://localhost:3000`에서 기본 페이지가 뜬다
+- [x] `pnpm lint`, `pnpm test`, `pnpm build`가 오류 없이 끝난다
+- [x] `.env.example`에 API_SPEC §8.3의 변수 10개가 **값 없이** 있다
+- [x] `src/contracts/`에 API_SPEC §2의 타입이 옮겨져 있고 빌드가 통과한다
+- [x] `.env.local`을 만들어도 `git status`에 나타나지 않는다
+- [x] GitHub 푸시 시 Actions 검사가 통과한다
 
 ---
 
