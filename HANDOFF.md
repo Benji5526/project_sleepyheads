@@ -5,7 +5,7 @@
 | 프로젝트 | project_sleepyheads — 질문형 기업 분석 서비스 (공시 숫자 + 뉴스 단서) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3 |
+| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6.1 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3 |
 
 ### 변경 이력
 | 날짜 | 내용 |
@@ -15,12 +15,68 @@
 | 2026-09-29 | **서비스 범위 밖 질문 정중한 거절**(AI 오남용 방지) 추가에 따라 기획/화면 문구·데이터/서버 판정·검증/문서 회귀 질문 작업 갱신, FINAL_CHECKLIST 작성 완료 |
 | 2026-09-29 | WU-001 완료, 서버 API 뼈대 반영(API_SPEC v0.2.2), Next.js 16 `proxy.ts` 이름 반영 |
 | 2026-09-29 | WU-112 완료·WU-113 화면(가짜 데이터 기준) 완료, **뉴스 출처 Google 뉴스 RSS로 교체**(네이버 키 불필요), **분석 글을 투자 인사이트(투자 포인트)로 전환**, 주가 API 주소 V2 반영 |
+| 2026-09-29 | **§0 이어서 시작하기 추가** (하루 마감 기준 진행 현황·결정·다음 할 일), 서버 작업 WU-101~107(PR #7·#8) main 반영, 외부 키 4개 시험 호출 성공, 배포 주소 동작 확인, 담당자 이름 기입, `pnpm check:keys` 추가 |
 
 > 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
 ---
 
-## 1. 지금 상태 (2026-09-28)
+## 0. 이어서 시작하기 (2026-09-29 마감 기준)
+
+> 새 세션·새 팀원은 **이 절부터** 읽는다. 여기 적힌 상태가 가장 최신이다.
+
+### 0.1 오늘 main에 들어간 것
+| PR | 내용 | 작성 |
+|---|---|---|
+| #2 | WU-001 앱 뼈대 (Next.js 16·TypeScript·Tailwind, 계약 타입, 테스트·CI) | 현준 |
+| #4 | WU-112 공통 레이아웃·약관·로그인/동의 화면, WU-113 대기화면·결과 화면(좌 차트/우 분석 글)·상태별 안내, **가짜 모드** | 현준 |
+| #5 | 서버 API 23개 경로 뼈대 + 공통 처리 `route()`(권한·약관·요청 속도·멱등키·오류 형식) | 병준 |
+| #6 | 뉴스 출처 **Google 뉴스 RSS**로 교체, 분석 글 **투자 포인트** 전환, 주가 API V2 반영 (문서 6개 + 화면) | 현준 |
+| #7 → #8 | **WU-101~107 서버 작업**(DB 스키마·RLS·DB 함수, 외부 호출기, 기업 목록·검색, 재무 수집, 계산 엔진, 공시 분류) + main과 충돌 해결, 뉴스 출처 맞춤 마이그레이션 | 예림 (충돌 해결: 현준) |
+
+- 테스트: 단위 297개, 화면 61개 (1280px·375px). CI는 Linux·Windows 두 환경에서 돈다.
+- 배포: **https://projectsleepyheads.vercel.app** 동작 (Vercel·Supabase가 GitHub에 연결됨)
+
+### 0.2 오늘 결정한 것 (문서 반영 완료)
+| 결정 | 내용 | 근거 |
+|---|---|---|
+| 뉴스 출처 | 네이버 검색 API → **Google 뉴스 RSS** (키 없음, `after:`/`before:`로 기간 지정) | PRD D10, TECH §3.3 — 네이버는 신규 신청 중단·검색 결과 AI 활용 금지 |
+| 분석 글 | 숫자 해설 → **투자 포인트**(긍정 요인·위험 요인·확인할 점 2~4개). **스마트폰 한 화면**: 결론 + 투자 포인트 320자 이내. 추론은 숫자·뉴스 근거 연결 필수, 뉴스 없이 원인 단정 금지, 매수·매도·보유 의견·목표주가·주가 예상 금지 | PRD F-V6·F-V11~13·D11, TECH §11.3·§11.5, 계약 `Explanation.insights`·`EXPLANATION_LIMITS` |
+| 주가 API 주소 | `…/1160100/GetStockSecuritiesInfoService_V2/getStockPriceInfo_V2`, 상장주식수 `lstgStCnt` 있음 | TECH §3.2, T5 |
+| 가짜 모드 | `.env.local`에 `NEXT_PUBLIC_API_MOCK=1`이면 화면이 `tests/fixtures/mock/` 가짜 데이터로 동작. **운영 배포에서는 넣어도 꺼짐**, 켜지면 화면 맨 위에 안내 줄 | API_SPEC §8.3, `src/lib/api-client/mode.ts` |
+| 합치는 방식 | 팀원은 **포크에서 PR** → main에 Merge (협업자 초대는 하지 않음). 포크 PR의 CI는 저장소 주인이 PR의 Files changed → **Awaiting approval → Approve workflows to run**을 눌러야 돈다 | 2026-09-29 현준 결정 |
+| Next.js 16 | `middleware.ts` → **`proxy.ts`** | TECH §18.1 |
+
+### 0.3 역할별 다음 할 일 (우선순위 순)
+**MVP(Step 1 핵심 통과 테스트: "삼성전자의 최근 5년 매출액 추이를 보여줘" → 실제 데이터로 좌 차트·우 분석 글)를 막는 것은 서버 부분(WU-109~111)과 로그인(WU-108)이다.**
+
+| 순서 | 담당 | 할 일 | 비고 |
+|---|---|---|---|
+| 1 | 데이터/서버 | **새 마이그레이션 `20260929070000_news_provider.sql`을 `sleepyheads-dev`에 적용** (`git pull` → `supabase db push` → `supabase migration list`로 확인) | 이전 마이그레이션은 이미 적용됨. 이 파일은 여러 번 실행해도 안전 |
+| 2 | 데이터/서버 | WU-109 질문 해석·범위 판정 → WU-110 분석 실행기 → **WU-111 설명 작성 (투자 포인트 규칙 TECH §11.3·§11.5 적용)** | 화면은 `insights`를 이미 그린다 |
+| 3 | 통합/배포 | **WU-108 구글 로그인** — 구글 OAuth 클라이언트는 현준님 계정으로 발급(👤), Supabase Authentication → Providers → Google에 등록 | 화면(`/login`, `/onboarding`)은 완료, `signInWithGoogle()`의 TODO만 채우면 됨 |
+| 4 | 통합/배포 | WU-003 마무리 확인 (Vercel 환경변수 환경별 등록, Supabase GitHub 연결이 main 머지 때 운영 DB에 마이그레이션을 자동 적용하는지) → WORK_UNITS 상태 갱신 | 배포 주소는 동작 중 |
+| 5 | 데이터/서버 | WORK_UNITS 진행표 WU-102~107 상태를 완료조건 기준으로 갱신 (지금 ⬜) | |
+| 6 | 기획/화면 | 서버 오류 `INTERNAL_ERROR` 안내 문구("잠시 후 다시 시도" + 요청 ID) 추가 → 서버가 준비되면 `NEXT_PUBLIC_API_MOCK`을 비우고 실제 연결·재검증 → WU-115 비로그인 예시 | |
+| 7 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·**AI 입력 가능 여부**), T6(12월 외 결산 샘플), 손 계산 정답표 | WU-304 전 필수 |
+
+### 0.4 남은 확인·주의
+- `/privacy`의 연락처 `admin@sleepyheads.com`은 **임시** — `sleepyheads.com`은 다른 곳이 쓰는 도메인이라 메일이 팀에 오지 않는다. 공개 전 팀이 받을 수 있는 주소로 교체.
+- `TEAM_AGREEMENT.md`(저장소 밖에서 관리)는 아직 "계산 결과를 **설명하는** 분석 글" 표현 — 투자 인사이트 방향으로 맞출지 결정 필요.
+- WU-113은 🟨: "내 분석 목록에서 거절 질문 `답변 불가` 표시"는 목록 화면(WU-201, Step 2)이 생기면, 나머지는 **실제 서버 응답으로 재확인** 필요.
+- `gpt-6-luna`가 투자 포인트(추론)를 잘 쓰는지 품질 확인 필요 (T4). 부족하면 설명 작성만 `gpt-6-sol`로 올리는 안 — 현준님 결정.
+- 공공데이터포털 키는 계정당 하나지만 **API마다 활용신청**해야 한다 (기업기본정보·주식시세정보 둘 다 승인됨).
+
+### 0.5 GitHub 계정 (PR·커밋 작성자 구분용)
+| 계정 | 사람 |
+|---|---|
+| `wilstein91`, `DriftKing86` | 성현준 (둘 다 본인) |
+| `borigunbbang` | 데이터/서버 (PR #1·#3·#7 작성) |
+| `Benji5526` | 통합/배포 (PR #5 작성) |
+
+---
+
+## 1. 지금 상태 (2026-09-29)
 
 | 구분 | 상태 |
 |---|---|
@@ -28,9 +84,9 @@
 | **서버 API 명세** | ✅ **API_SPEC v0.3** — 엔드포인트 23개, 계약 타입, Supabase·Vercel 설정까지 확정 |
 | 서비스 범위 정책 | ✅ 주식·상장 주식회사 경영사항 밖의 질문, 투자 권유 요청, AI 조작 시도는 **정해진 문구로 공손히 거절** (PRD §6.3.1, TECH §4.11) |
 | 백엔드 구성 | ✅ **Supabase(DB·로그인) + Vercel(서버 API·예약 실행·배포)**로 확정 |
-| 코드 | 🟨 **WU-001 앱 뼈대 완료**, 서버 API 23개 경로 뼈대와 공통 처리(권한·오류 형식·요청 속도·멱등키) 완료 — 내부 로직은 각 WU에서 |
-| 외부 서비스 계정·키 | 🟨 OpenDART·OpenAI 시험 호출 성공, 주가 키는 V2 서비스 연결 확인 중, 뉴스는 키 없음(Google 뉴스 RSS), Supabase·Vercel은 WU-003 |
-| 배포 주소 | ⬜ 아직 없음 (WU-003에서 생성) |
+| 코드 | 🟨 WU-001 ✅, WU-112 ✅, WU-113 🟨(가짜 데이터 기준 완료), 서버 API 23개 경로 뼈대·공통 처리 ✅, **WU-101~107 서버 작업 main 반영** — 남은 Step 1: WU-108~111, WU-114~115 (§0.3) |
+| 외부 서비스 계정·키 | ✅ OpenDART·OpenAI·주가(금융위 V2)·뉴스(Google RSS, 키 없음) 시험 호출 성공 (`pnpm check:keys`). Supabase 키는 통합/배포 담당 |
+| 배포 주소 | ✅ https://projectsleepyheads.vercel.app (main 머지 시 자동 배포) |
 | README.md | ⬜ 비어 있음 (WU-506에서 작성) |
 | FINAL_CHECKLIST.md | ✅ v0.3 작성 완료 (점검은 개발 막바지에 검증/문서 담당이 진행) |
 
@@ -50,10 +106,10 @@
 
 | 역할 | 한 줄 책임 | 담당자 | 소유 문서 | 소유 폴더 (작업 후 생성) |
 |---|---|---|---|---|
-| **기획/화면** | 사용자가 보는 모든 화면과 문구 | (이름) | PRD, API_SPEC §2(공동) | `src/app/**/page.tsx`, `src/components/` |
-| **데이터/서버** | 데이터 수집·계산·AI 호출 등 서비스의 두뇌 | (이름) | TECH_SPEC §3~11, §15, API_SPEC §2(공동)·§7.3 | `src/lib/`, `supabase/migrations/`, `supabase/seed/` |
-| **통합/배포** | 뼈대·로그인·한도·API 연결·배포 등 서비스의 뼈와 혈관 | (이름) | TECH_SPEC §2, §13~14, §16~18, **API_SPEC** | `src/app/api/`, `src/app/auth/`, `src/proxy.ts`, `vercel.json`, `.github/`, 설정 파일 |
-| **검증/문서** | "정말 맞게 동작하는가"의 증거와 문서 관리 | (이름) | WORK_UNITS 진행표, FINAL_CHECKLIST, README | `tests/regression/`, `tests/accuracy/`, `tests/perf/`, `DevelopDoc/`, `README.md` |
+| **기획/화면** | 사용자가 보는 모든 화면과 문구 | 성현준 (PM 겸임) | PRD, API_SPEC §2(공동) | `src/app/**/page.tsx`, `src/components/` |
+| **데이터/서버** | 데이터 수집·계산·AI 호출 등 서비스의 두뇌 | 이예림 | TECH_SPEC §3~11, §15, API_SPEC §2(공동)·§7.3 | `src/lib/`, `supabase/migrations/`, `supabase/seed/` |
+| **통합/배포** | 뼈대·로그인·한도·API 연결·배포 등 서비스의 뼈와 혈관 | 민병준 | TECH_SPEC §2, §13~14, §16~18, **API_SPEC** | `src/app/api/`, `src/app/auth/`, `src/proxy.ts`, `vercel.json`, `.github/`, 설정 파일 |
+| **검증/문서** | "정말 맞게 동작하는가"의 증거와 문서 관리 | 성현준·민병준·이예림 공동 | WORK_UNITS 진행표, FINAL_CHECKLIST, README | `tests/regression/`, `tests/accuracy/`, `tests/perf/`, `DevelopDoc/`, `README.md` |
 
 - 단위 테스트(`tests/unit/`)는 **그 코드를 만든 사람**이 함께 작성한다.
 - 공통 약속 폴더 `src/contracts/`는 **데이터/서버 + 기획/화면이 공동 소유**한다 (§5).
@@ -87,6 +143,8 @@
 | 3 | WU-305 뉴스 단서 화면 | WU-301(계획 카드), WU-302(진행 상태·취소 버튼·실행 기록), WU-303(비교표 `※` 주석·비교 그래프) |
 | 4 | WU-402 차트 규격 완성·표 보기·용어 설명 | WU-401(필터 화면·설명 다시 쓰기 버튼) |
 | 5 | — | WU-506(README 화면 캡처), WU-599(사용자 테스트 과제 설계) |
+
+**진행 상황 (2026-09-29)**: 아래 2~5번은 완료 — 문구(하단 안내·약관·처리방침·거절 카드·오류 안내 14종), 예시 질문 6개(`src/components/ask/examples.ts`), 가짜 결과 데이터(`tests/fixtures/mock/`), WU-112 ✅·WU-113 화면. 다음 할 일은 §0.3.
 
 **지금 바로 시작할 일 (코드 없이 가능)**
 1. **화면 설계도(와이어프레임)** 5장: ① 빈 대기화면 ② 결과 화면(좌/우, 1280px·375px) ③ 분석 계획 카드·진행 상태 ④ 전처리 진단 카드 ⑤ 비로그인 화면. 기준: [TECH_SPEC §12.2](DevelopDoc/TECH_SPEC.md) 배치도.
@@ -240,7 +298,11 @@ flowchart LR
 ```bash
 git clone git@github.com:wilstein91/project_sleepyheads.git
 ```
-- WU-001 완료 후에는 `pnpm install` → `.env.example`을 `.env.local`로 복사해 키 입력 → `pnpm dev`.
+- `pnpm install` → `.env.example`을 `.env.local`로 복사해 키 입력 → `pnpm dev` → `http://localhost:3000`
+- pnpm이 없으면 먼저 `npm install -g pnpm`. 화면 테스트를 처음 돌릴 때는 `pnpm exec playwright install chromium`.
+- **키 점검**: `pnpm check:keys` — 키마다 실제로 한 번 불러 ✅/❌만 보여준다 (키 값은 출력하지 않음).
+- **서버 없이 화면 보기**: `.env.local`에 `NEXT_PUBLIC_API_MOCK=1`. 질문에 "날씨"(범위 밖 거절), "사도 돼"(투자 권유 거절), "반도체 회사"(되묻기), "2013년"(기간 밖), "직원 만족도"(지원 불가), "AI 장애", "DART 장애", "설명 실패"를 넣으면 해당 화면이 나온다 (`src/lib/api-client/mock-analysis.ts`).
+- 검사 한 번에: `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm test:e2e`
 
 ---
 
@@ -282,10 +344,10 @@ git clone git@github.com:wilstein91/project_sleepyheads.git
 | T1 | OpenDART 일일 한도 정확한 값 | 통합/배포 | WU-002 |
 | T3 | Vercel 무료 플랜 실행 시간·CPU 안에 드는지 | 통합/배포 | WU-110 이후 측정 |
 | T4 | `gpt-6-luna` 품질 (모델 상향은 현준님 결정) | 검증/문서 | WU-109, WU-503 |
-| T5 | 주가 API 필드(상장주식수 여부)·보통주 구분 | 데이터/서버 | WU-002 |
+| T5 | ~~주가 API 필드(상장주식수 여부)~~ ✅ `lstgStCnt` 실제 응답으로 확인 (2026-09-29). 보통주 구분은 남음 | 데이터/서버 | WU-502 |
 | T6 | 12월 외 결산 샘플 기업 | 검증/문서 | **지금 바로** |
 | T7 | Google 뉴스 RSS 이용 조건(AI 입력 가능 여부)·언론사 robots.txt | 검증/문서 | **지금 바로** (WU-304 전 필수) |
-| T8 | 기사 본문 추출 라이브러리의 Vercel 동작 | 데이터/서버 | WU-304 |
+| T8 | RSS 링크(Google 경유)를 원문 주소로 풀 수 있는지, 본문 추출·RSS 호출의 Vercel 동작 | 데이터/서버 | WU-304 |
 
 ---
 

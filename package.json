@@ -12,7 +12,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:keys": "node scripts/check-keys.mjs .env.local"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
