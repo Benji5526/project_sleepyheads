@@ -1,7 +1,8 @@
 import type { Chart } from "@/contracts";
-import { cellText, periodLabel, type ChartRow } from "./chartData";
+import { TermText } from "@/components/glossary/Term";
+import { cellText, periodLabel, xAxisTitle, type ChartRow } from "./chartData";
 
-/** "표로 보기" — 차트와 같은 행(ChartRow)에서 그린다 */
+/** "표로 보기" — 차트와 같은 행(ChartRow)에서 그린다. 열 이름의 재무 용어는 눌러서 설명을 본다 */
 export function ChartTable({ chart, rows }: { chart: Chart; rows: ChartRow[] }) {
   return (
     <div className="overflow-x-auto">
@@ -10,11 +11,11 @@ export function ChartTable({ chart, rows }: { chart: Chart; rows: ChartRow[] }) 
         <thead>
           <tr className="border-b border-line text-left text-muted">
             <th scope="col" className="py-2 pr-4 font-medium">
-              {chart.xAxisLabel ?? "구분"}
+              {xAxisTitle(chart)}
             </th>
             {chart.series.map((s) => (
               <th key={s.key} scope="col" className="py-2 pr-4 text-right font-medium">
-                {s.label}
+                <TermText text={s.label} />
                 {s.footnoteMark}
               </th>
             ))}

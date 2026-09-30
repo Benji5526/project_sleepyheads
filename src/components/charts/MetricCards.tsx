@@ -1,4 +1,5 @@
 import type { Chart, Figure } from "@/contracts";
+import { TermText } from "@/components/glossary/Term";
 import { buildChartRows, isChangeSeries } from "./chartData";
 
 /** 지표 카드 (PRD F-E1): 계열마다 카드 한 장, 증감은 국내 관습대로 ▲빨강 ▼파랑 */
@@ -17,7 +18,9 @@ export function MetricCards({ chart, figures }: { chart: Chart; figures: Record<
         const mark = !change || value === null || value === 0 ? "" : value > 0 ? "▲ " : "▼ ";
         return (
           <div key={series.key} className="bg-surface p-4">
-            <dt className="text-sm text-muted">{series.label}</dt>
+            <dt className="text-sm text-muted">
+              <TermText text={series.label} />
+            </dt>
             <dd className={`mt-1 text-xl font-semibold sm:text-2xl ${tone}`}>
               <span aria-hidden="true">{mark}</span>
               {cell?.display ?? "값 없음"}

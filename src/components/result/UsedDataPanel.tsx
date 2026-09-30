@@ -1,5 +1,6 @@
 import type { UsedData } from "@/contracts";
 import { periodLabel } from "@/components/charts/chartData";
+import { TermText } from "@/components/glossary/Term";
 
 const TYPE_LABEL: Record<UsedData["columns"][number]["type"], string> = {
   quarter: "분기",
@@ -44,7 +45,9 @@ export function UsedDataPanel({ usedData }: { usedData: UsedData }) {
         <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           {usedData.columns.map((c) => (
             <div key={c.name}>
-              <dt className="inline font-medium">{c.name}</dt>{" "}
+              <dt className="inline font-medium">
+                <TermText text={c.name} />
+              </dt>{" "}
               <dd className="inline text-muted">{TYPE_LABEL[c.type]}</dd>
             </div>
           ))}
@@ -56,7 +59,7 @@ export function UsedDataPanel({ usedData }: { usedData: UsedData }) {
               <tr className="border-b border-line text-left text-muted">
                 {usedData.columns.map((c) => (
                   <th key={c.name} scope="col" className="py-2 pr-4 font-medium">
-                    {c.name}
+                    <TermText text={c.name} />
                   </th>
                 ))}
               </tr>

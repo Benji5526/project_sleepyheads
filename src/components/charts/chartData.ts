@@ -86,3 +86,57 @@ export function periodLabel(x: string): string {
   if (/^\d{4}$/.test(x)) return `${x}년`;
   return x;
 }
+
+/** 선 표시점 모양 — 색을 못 구분해도 계열을 알아보게 (TECH §12.3 "색상 + 선 모양/무늬") */
+export type MarkerShape = "circle" | "square" | "triangle" | "diamond";
+/** 막대 무늬 — 첫 계열은 채움, 다음부터 빗금·점·격자 */
+export type BarPattern = "solid" | "hatch" | "dots" | "grid";
+
+export interface SeriesStyle {
+  color: string;
+  /** SVG stroke-dasharray (실선이면 undefined) */
+  dash: string | undefined;
+  marker: MarkerShape;
+  pattern: BarPattern;
+}
+
+const SERIES_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
+const DASHES = [undefined, "6 4", "2 3", "10 3 2 3"];
+const MARKERS: MarkerShape[] = ["circle", "square", "triangle", "diamond"];
+const PATTERNS: BarPattern[] = ["solid", "hatch", "dots", "grid"];
+
+/**
+ * 계열 순서별 모양. 선 모양·표시점·무늬가 계열마다 달라서(4계열까지), 흑백으로 보거나 색을 구분하기
+ * 어려운 사람도 범례와 차트를 맞춰 볼 수 있다. 색은 globals.css 토큰이라 밝은·어두운 화면 둘 다 맞는다.
+ */
+export function seriesStyle(index: number): SeriesStyle {
+  return {
+    color: SERIES_COLORS[index % SERIES_COLORS.length],
+    dash: DASHES[index % DASHES.length],
+    marker: MARKERS[index % MARKERS.length],
+    pattern: PATTERNS[index % PATTERNS.length],
+  };
+}
+
+/** X축 제목: 서버가 안 줬으면 x 값 모양으로 정한다 (분기 / 연도 / 구분) */
+export function xAxisTitle(chart: Chart): string {
+  if (chart.xAxisLabel) return chart.xAxisLabel;
+  const xs = chart.series.flatMap((s) => s.points.map((p) => p.x));
+  if (xs.length > 0 && xs.every((x) => /^\d{4}Q[1-4]$/.test(x))) return "분기";
+  if (xs.length > 0 && xs.every((x) => /^\d{4}$/.test(x))) return "연도";
+  return "구분";
+}
+
+const UNIT_AXIS: Record<Unit, string> = { KRW: "원", PERCENT: "%", TIMES: "배", COUNT: "개" };
+
+/** Y축 단위: 서버가 안 줬으면 첫 계열 단위로 ("%", "배", "원") */
+export function yAxisTitle(chart: Chart): string {
+  return chart.yAxisLabel ?? (chart.series[0] ? UNIT_AXIS[chart.series[0].unit] : "");
+}
+
+/** 출처 줄: 비어 있으면 "출처: DART", "출처"로 시작하지 않으면 붙인다 */
+export function sourceText(chart: Chart): string {
+  const source = chart.source.trim();
+  if (!source) return "출처: DART";
+  return source.startsWith("출처") ? source : `출처: ${source}`;
+}
