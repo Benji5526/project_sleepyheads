@@ -40,19 +40,30 @@ async function opendart() {
 async function openai() {
   if (empty("OPENAI_API_KEY")) return report("OpenAI", null, "키 없음 (건너뜀)");
   const model = env.OPENAI_MODEL || "gpt-6-luna";
-  const res = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, input: "Reply with the single word: ok", max_output_tokens: 16 }),
-  });
-  const body = await res.json().catch(() => ({}));
-  report(
-    "OpenAI",
-    res.ok,
-    res.ok
-      ? `모델 ${model} 응답함`
-      : `HTTP ${res.status} ${hide(body.error?.message?.slice(0, 120) ?? "")}`,
-  );
+  // 쉼표로 여러 키를 넣을 수 있다 (앞 키 잔액이 떨어지면 다음 키 — src/lib/llm/client.ts). 키마다 확인, 키 값은 출력하지 않는다
+  const keys = env.OPENAI_API_KEY.split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+  for (const [i, key] of keys.entries()) {
+    const res = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        input: "Reply with the single word: ok",
+        max_output_tokens: 16,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    const name = keys.length > 1 ? `OpenAI 키 ${i + 1}번` : "OpenAI";
+    report(
+      name,
+      res.ok,
+      res.ok
+        ? `모델 ${model} 응답함`
+        : `HTTP ${res.status} ${body.error?.code ?? ""} ${hide(body.error?.message?.slice(0, 120) ?? "")}`,
+    );
+  }
 }
 
 // 주가 — 금융위원회_주식시세정보 V2 (TECH §3.2). 공공데이터포털에서 이 API를 따로 활용신청해야 한다

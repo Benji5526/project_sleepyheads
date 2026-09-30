@@ -13,6 +13,45 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 1;
 const DEFAULT_MODEL = "gpt-6-luna";
 
+/**
+ * 잔액·지출 한도 오류 (429) — 이 키로는 다시 해도 안 되므로 **다음 키로** 넘어간다. 속도 제한(429 `rate_limit_error`)은
+ * 키를 바꾸지 않는다. 코드 이름은 OpenAI 공식 문서 Error codes(developers.openai.com/api/docs/guides/error-codes,
+ * 2026-09-30 확인): `error.code`에 아래 값, 넓은 분류 `error.type`은 `insufficient_quota`일 수 있다.
+ */
+const KEY_EXHAUSTED_CODES = new Set([
+  "credit_balance_exhausted",
+  "organization_spend_limit_exceeded",
+  "project_spend_limit_exceeded",
+  "organization_usage_limit_exceeded",
+  "insufficient_quota",
+]);
+
+/** 이 키로는 더 부를 수 없다 (잔액·지출 한도) */
+class KeyExhaustedError extends UpstreamApiError {
+  constructor(code: string) {
+    super("llm", `OpenAI 키 잔액·한도 소진 (${code})`, false);
+  }
+}
+
+/**
+ * `OPENAI_API_KEY`는 쉼표로 여러 개 넣을 수 있다 (팀원 키를 순서대로 — 2026-09-30 현준님 요청).
+ * 앞 키가 잔액 부족이면 다음 키로 같은 요청을 한 번 더 한다. 로그에는 **몇 번째 키인지만** 남긴다(키 값 없음).
+ */
+export function parseApiKeys(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+}
+
+// 같은 서버 인스턴스 안에서는 잔액이 떨어진 키를 다시 부르지 않는다 (키 목록이 바뀌면 처음부터)
+let exhausted: { keys: string; from: number } = { keys: "", from: 0 };
+
+/** 테스트용 — 기억해 둔 "떨어진 키"를 비운다 */
+export function resetExhaustedKeysForTest(): void {
+  exhausted = { keys: "", from: 0 };
+}
+
 export interface LlmJsonSchema {
   name: string;
   schema: Record<string, unknown>;
@@ -60,14 +99,33 @@ export async function llmCall<T = unknown>(request: LlmCallRequest): Promise<Llm
 
   await checkAndRecordApiUsage({ provider: "llm", userId, calls: 1 }, client);
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY가 설정되지 않았습니다.");
+  const raw = process.env.OPENAI_API_KEY;
+  const apiKeys = parseApiKeys(raw);
+  if (apiKeys.length === 0) throw new Error("OPENAI_API_KEY가 설정되지 않았습니다.");
+  if (exhausted.keys !== raw) exhausted = { keys: raw ?? "", from: 0 };
 
   try {
-    const body = await withRetry(() => requestOnce(model, apiKey, request, timeoutMs), {
-      retries: MAX_RETRIES,
-      isRetryable: (error) => error instanceof UpstreamApiError && error.retryable,
-    });
+    let body: OpenAiResponsesBody | null = null;
+    for (let i = exhausted.from; i < apiKeys.length && body === null; i += 1) {
+      try {
+        body = await withRetry(() => requestOnce(model, apiKeys[i], request, timeoutMs), {
+          retries: MAX_RETRIES,
+          isRetryable: (error) => error instanceof UpstreamApiError && error.retryable,
+        });
+      } catch (error) {
+        if (!(error instanceof KeyExhaustedError)) throw error;
+        exhausted = { keys: raw ?? "", from: i + 1 };
+        console.warn(
+          `[llm] OpenAI 키 ${i + 1}번 잔액·한도 소진 — ${
+            i + 1 < apiKeys.length ? `${i + 2}번 키로` : "남은 키 없음"
+          } (${error.message})`,
+        );
+        if (i + 1 >= apiKeys.length) throw error;
+      }
+    }
+    if (body === null) {
+      throw new UpstreamApiError("llm", "OpenAI 키가 모두 잔액·한도 소진 상태입니다", false);
+    }
 
     const inputTokens = body.usage?.input_tokens ?? 0;
     const outputTokens = body.usage?.output_tokens ?? 0;
@@ -143,7 +201,25 @@ async function requestOnce(
   }
 
   if (!res.ok) {
+    if (res.status === 429) {
+      const code = await billingErrorCode(res);
+      if (code) throw new KeyExhaustedError(code);
+    }
     throw new UpstreamApiError("llm", `OpenAI HTTP 오류 (${res.status})`, res.status >= 500);
   }
   return (await res.json()) as OpenAiResponsesBody;
+}
+
+/** 429 본문에서 잔액·한도 코드를 찾는다 (속도 제한이면 null). 본문을 못 읽으면 null — 키를 바꾸지 않는다 */
+async function billingErrorCode(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { error?: { code?: string | null; type?: string | null } };
+    const code = body.error?.code ?? "";
+    const type = body.error?.type ?? "";
+    if (KEY_EXHAUSTED_CODES.has(code)) return code;
+    if (type === "insufficient_quota") return code || type;
+    return null;
+  } catch {
+    return null;
+  }
 }
