@@ -74,6 +74,8 @@ export function ExplanationPanel({
 
   // 투자 포인트가 근거로 단 뉴스 → 아래 "뉴스 단서"의 몇 번째 기사인지 (화면 번호 1부터)
   const newsOrder = new Map(explanation.newsClues.map((n, i) => [n.newsId, i + 1]));
+  // 투자 포인트가 근거로 단 기사 — 나머지는 찾기만 한 참고용 기사 (서버가 근거 기사를 앞에 둔다)
+  const citedNews = new Set(explanation.insights.flatMap((i) => i.newsIds));
   const showNews = (newsId: string) => {
     const item = document.getElementById(`news-clue-${newsId}`);
     item?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -183,6 +185,8 @@ export function ExplanationPanel({
           <p className="mt-1 text-xs leading-5 text-muted">
             뉴스는 참고용 단서입니다. 기사 속 숫자·의견은 언론사 보도를 옮긴 것이고, 분석 숫자는
             차트(공시 자료)만 씁니다.
+            {citedNews.size === 0 &&
+              " 이번 분석 글은 기사를 근거로 쓰지 않았습니다 — 찾은 기사 목록입니다."}
           </p>
           <ul className="mt-2 space-y-3">
             {explanation.newsClues.map((n, i) => (
@@ -194,6 +198,14 @@ export function ExplanationPanel({
                 className="scroll-mt-4 rounded-md outline-offset-4 focus:outline-2 focus:outline-accent"
               >
                 <span className="sr-only">{i + 1}번 뉴스. </span>
+                {citedNews.has(n.newsId) && (
+                  <span
+                    data-testid="news-cited"
+                    className="mr-1.5 inline-block rounded bg-accent-soft px-1.5 text-xs font-semibold leading-5 text-accent"
+                  >
+                    분석 글 근거
+                  </span>
+                )}
                 {/* 링크는 RSS가 준 주소 그대로 (TECH §10.2). http(s)가 아니면 링크로 만들지 않는다 */}
                 {isWebUrl(n.url) ? (
                   <a

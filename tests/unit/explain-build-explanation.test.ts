@@ -397,7 +397,7 @@ describe("buildExplanation — 뉴스 근거 (WU-305)", () => {
     expect(mixed.conclusion).toHaveLength(1);
   });
 
-  it("AI가 인용한 뉴스가 있으면 결론의 배경 문장이 남고, 그 뉴스가 뉴스 단서에 보인다", () => {
+  it("AI가 인용한 뉴스가 있으면 결론의 배경 문장이 남고, 그 뉴스가 뉴스 단서 맨 앞에 온다", () => {
     const result = buildExplanation({
       ai: baseAi({
         conclusion: [
@@ -413,7 +413,7 @@ describe("buildExplanation — 뉴스 근거 (WU-305)", () => {
       mixedScope: false,
     });
     expect(result.conclusion).toHaveLength(2);
-    expect(result.newsClues.map((n) => n.newsId)).toEqual(["n1"]);
+    expect(result.newsClues.map((n) => n.newsId)).toEqual(["n1", "n2"]);
   });
 
   it("없는 뉴스 ID를 인용했다고 해도 결론의 원인 문장은 버린다", () => {
@@ -429,10 +429,11 @@ describe("buildExplanation — 뉴스 근거 (WU-305)", () => {
       mixedScope: false,
     });
     expect(result.conclusion).toEqual(["영업이익이 +12.3% 늘었습니다."]);
-    expect(result.newsClues).toEqual([]);
+    // 찾은 기사는 참고용으로 모두 보인다 — 근거로 쓴 것이 없으니 순서는 그대로
+    expect(result.newsClues.map((n) => n.newsId)).toEqual(["n1", "n2"]);
   });
 
-  it("뉴스 근거를 단 원인 투자 포인트는 남고, 인용하지 않은 뉴스는 뉴스 단서에 보이지 않는다", () => {
+  it("뉴스 근거를 단 원인 투자 포인트는 남고, 근거로 쓴 기사가 앞·나머지는 참고용으로 뒤에 (2026-09-30 WU-399)", () => {
     const result = buildExplanation({
       ai: baseAi({
         insights: [
@@ -456,6 +457,29 @@ describe("buildExplanation — 뉴스 근거 (WU-305)", () => {
     });
     expect(result.insights).toHaveLength(1);
     expect(result.insights[0].newsIds).toEqual(["n1"]);
-    expect(result.newsClues.map((n) => n.newsId)).toEqual(["n1"]);
+    expect(result.newsClues.map((n) => n.newsId)).toEqual(["n1", "n2"]);
+  });
+
+  it("근거로 쓴 기사가 뒤에 있어도 맨 앞으로 — 인용 안 한 기사는 원래 순서로 뒤에", () => {
+    const result = buildExplanation({
+      ai: baseAi({
+        insights: [
+          {
+            kind: "watch",
+            text: "연합뉴스 보도처럼 증설이 이어지는지 확인할 점입니다.",
+            figure_ids: [],
+            news_ids: ["n2"],
+            chart_ref: null,
+            inferred: false,
+          },
+        ],
+      }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: NEWS,
+      hasNews: true,
+      mixedScope: false,
+    });
+    expect(result.newsClues.map((n) => n.newsId)).toEqual(["n2", "n1"]);
   });
 });

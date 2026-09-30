@@ -105,6 +105,16 @@ test.describe("뉴스 단서 (WU-305)", () => {
     await expect(first).toContainText(MOCK_NEWS_CLUES[0].title);
   });
 
+  test("투자 포인트가 근거로 쓴 기사에만 '분석 글 근거' 표시 — 나머지는 참고용 목록 (2026-09-30 WU-399)", async ({
+    page,
+  }) => {
+    const section = await openNewsResult(page);
+    const cited = section.getByTestId("news-cited");
+    await expect(cited).toHaveCount(1);
+    await expect(section.getByTestId("news-clue").nth(0)).toContainText("분석 글 근거");
+    await expect(section.getByTestId("news-clue").nth(1)).not.toContainText("분석 글 근거");
+  });
+
   test("뉴스가 없는 결과에는 뉴스 단서 영역이 없다", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("questions-remaining")).toBeVisible();

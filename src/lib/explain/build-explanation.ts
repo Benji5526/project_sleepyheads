@@ -126,12 +126,17 @@ export function buildExplanation(input: BuildExplanationInput): Explanation {
     })
     .filter((e): e is { text: string; chartRef: string | null } => e !== null);
 
-  // 화면의 뉴스 단서 = 남은 투자 포인트가 근거로 단 뉴스 (+ 결론이 뉴스로 배경을 말했으면 AI가 인용한 뉴스)
+  // 화면의 뉴스 단서 = 찾은 기사 **전부**, 분석 글이 근거로 쓴 것을 앞에 (2026-09-30 WU-399: 기사가 모두 실적 전망이라
+  // AI가 하나도 인용하지 않으면 뉴스 칸이 통째로 사라져 "뉴스가 안 된다"로 보였다). 근거로 쓴 기사는 화면이
+  // 투자 포인트의 newsIds로 "분석 글 근거" 표시를 한다 — 인용하지 않은 기사는 참고용 목록일 뿐이다
   const referencedNewsIds = new Set([
     ...keptInsights.flatMap((i) => i.newsIds),
     ...(conclusionUsesNews ? citedNewsIds : []),
   ]);
-  const newsClues = input.newsClues.filter((n) => referencedNewsIds.has(n.newsId));
+  const newsClues = [
+    ...input.newsClues.filter((n) => referencedNewsIds.has(n.newsId)),
+    ...input.newsClues.filter((n) => !referencedNewsIds.has(n.newsId)),
+  ];
 
   const caveats = [
     FIXED_DISCLAIMER,
