@@ -25,6 +25,7 @@
 | 2026-09-29 | **하루 마감**: 운영 로그인 성공 확인, 첫 질문 시간 초과 수정(PR #17), §0.0 "내일 시작하기" 추가 |
 | 2026-09-30 | **운영 핵심 통과 테스트 성공**(§0.3 1번 ✅), WU-113 실제 응답 재확인 ✅, **WU-115 비로그인 예시 완료**(G1·C2·로그인 안내 창) |
 | 2026-09-30 | **Phase 1 병합**: PR #30(트랙 A)·#31(트랙 C)·트랙 B(WU-202·203 서버)를 한 번에 main에 합침, 마이그레이션 `20260930160000` 운영 적용 (§0.1). 남은 후속: 정정 공시 재수집 경로 없음, 최신 데이터 재분석은 원래 기간 그대로, 결측 분기 제외가 비교·합계에서 전 기업에 적용 |
+| 2026-09-30 | **Phase 2 계획**: [PHASE2_PLAN](DevelopDoc/PHASE2_PLAN.md)·지시문 4개·`scripts/phase2-start.*`, 도구 계약 `src/lib/runner/tools/` 고정(단순 질문 도구 첫 버전 포함). PR 없이 브랜치 → 한 번에 통합 방식 (§0.3) |
 | 2026-09-30 | WU-003: Supabase 프로젝트 하나(`sleepyhead`) 유지 결정, 마이그레이션 자동 적용 안 됨 확인 — §0.3 4번·§0.4·§2.1·§3.3·§6.2 반영 |
 | 2026-09-30 | **Step 1 마감**: 완료조건 전수 점검·버그 수정(PR #25), DB 변경 3개 운영 적용, §0.0·§0.3을 Step 2 기준으로 |
 | 2026-09-30 | **Phase 1 병렬 개발 계획**: `DevelopDoc/PHASE1_PLAN.md`, 지시문 3개+병합 지시문(`DevelopDoc/prompts/`), 시작 스크립트(`scripts/phase1-start.sh`·`.ps1`), §0.3을 Phase 1 기준으로 |
@@ -81,7 +82,21 @@
 | 합치는 방식 | 팀원은 **포크에서 PR** → main에 Merge (협업자 초대는 하지 않음). 포크 PR의 CI는 저장소 주인이 PR의 Files changed → **Awaiting approval → Approve workflows to run**을 눌러야 돈다 | 2026-09-29 현준 결정 |
 | Next.js 16 | `middleware.ts` → **`proxy.ts`** | TECH §18.1 |
 
-### 0.3 역할별 다음 할 일 — Phase 1 (Step 2 병렬 개발)
+### 0.3 역할별 다음 할 일 — Phase 2 (Step 3 병렬 개발)
+**Phase 1(Step 2)은 main에 합쳐졌다(2026-09-30, `bd4b222`).** 이번에는 **PR을 건마다 만들지 않는다** — 각자 Claude Code로 끝까지 만들고 자체 검토를 마친 브랜치를 원본 저장소에 올리면, 통합 담당이 한 세션에서 한꺼번에 검토·수정·병합한다. 규칙·파일 소유·도구 계약·통합 절차는 [PHASE2_PLAN](DevelopDoc/PHASE2_PLAN.md)이 기준이다.
+
+| 담당 | 맡는 일 | 시작 | 지시문 |
+|---|---|---|---|
+| 병준 (통합/배포) | WU-301 복합 판별·계획 카드·승인 · WU-302 단계 실행 엔진·진행·취소·재시도·상한·실행 기록 | `bash scripts/phase2-start.sh 병준` | [phase2-byeongjun](DevelopDoc/prompts/phase2-byeongjun.md) |
+| 예림 (데이터/서버) | WU-303 경쟁사·비교·금융업 · 섹터 규칙 보강 · 계산 불가 사유 · Phase 1 후속 4건 | `bash scripts/phase2-start.sh 예림` | [phase2-yerim](DevelopDoc/prompts/phase2-yerim.md) |
+| 현준 (기획/화면·검증) | **WU-299 Step 2 통과 테스트(먼저)** · WU-304 뉴스 실행기 연결(`news_clues`) · WU-305 분석 글 품질(T4) · WU-399 준비 | `bash scripts/phase2-start.sh 현준` | [phase2-hyunjoon](DevelopDoc/prompts/phase2-hyunjoon.md) |
+| 통합 담당 (예림, 누구든) | 세 브랜치가 모이면 한 번에 합치기·교차 검토·마이그레이션(배포 **전**)·main | — | [phase2-merge](DevelopDoc/prompts/phase2-merge.md) |
+
+- 도구 계약(`src/lib/runner/tools/types.ts`·`registry.ts`)은 미리 고정했고, 단순 질문 도구(`get_financials`·`get_disclosures`·`build_result`·`write_explanation`)는 동작하는 첫 버전이 들어 있다 — 엔진을 처음부터 끝까지 돌려 볼 수 있다.
+- 각자 보고서는 `DevelopDoc/phase2/<이름>.md` (PR 본문 대신).
+
+<details><summary>지난 Phase 1 표 (기록용)</summary>
+
 **Step 1은 끝났다(2026-09-30, PR #25).** 지금부터는 세 사람이 **각자 끝까지 만들고, 각자 검토를 마친 뒤** PR을 올린다. 규칙·파일 소유·고정 계약·병합 절차는 [PHASE1_PLAN](DevelopDoc/PHASE1_PLAN.md)이 기준이다.
 
 | 담당 | 맡는 일 | 시작 | 지시문 |
@@ -93,12 +108,15 @@
 - 결과 화면에 붙일 자리(`ProjectPanel`·`DiagnosisPanel`·`VersionBar`)와 Step 2 계약(`src/contracts/project.ts`)은 미리 만들어 두었다 — 서로 같은 파일을 고치지 않는다.
 - Phase 1이 끝나면(세 PR 병합) 현준이 WU-299 → Phase 2(Step 3) 계획을 같은 방식으로 만든다 (PLAN §7).
 
-**Phase 1과 따로 남은 것** (급하지 않음)
+</details>
+
+**따로 남아 있던 것** — 모두 Phase 2 지시문에 넣었다
+
 | 담당 | 할 일 | 비고 |
 |---|---|---|
-| 통합/배포 | PR #19·#26 검토 후속: 2분 지난 끊긴 질문을 두 요청이 동시에 이어받음, 422 뒤 같은 키 재전송 시 재차감 | 드문 경우(연결 끊김+재전송) |
-| 데이터/서버 | 섹터 규칙 보강 (`seed.sql` TODO): 삼성전자(264)·삼성전기·리노공업 → `기타`, 삼성카드(64913) → `은행` 오분류 — 섹터별 합계에 영향 | Phase 2 WU-303에서 |
-| 검증/문서 | T7(Google 뉴스 RSS 이용 조건·AI 입력 가능 여부) | Phase 1 현준 트랙에 포함 |
+| 통합/배포 | PR #19·#26 검토 후속: 2분 지난 끊긴 질문을 두 요청이 동시에 이어받음, 422 뒤 같은 키 재전송 시 재차감 | Phase 2 병준 지시문 "Phase 1 후속" |
+| 데이터/서버 | 섹터 규칙 보강 (`seed.sql` TODO): 삼성전자(264)·삼성전기·리노공업 → `기타`, 삼성카드(64913) → `은행` 오분류 — 섹터별 합계에 영향 | Phase 2 예림 트랙 (WU-303) |
+| 검증/문서 | T7(Google 뉴스 RSS 이용 조건·AI 입력 가능 여부) | ✅ Phase 1에서 완료 (TECH §21 T7) |
 
 ### 0.4 남은 확인·주의
 - **계산식 v2 (2026-09-30)**: 12월 외 결산 기업 분기가 1년 어긋나던 버그를 고쳤다. 그 전에 저장된 분석(계산식 v1)의 12월 외 결산 숫자는 틀릴 수 있다 — 다시 질문하면 맞는 값이 나온다.
