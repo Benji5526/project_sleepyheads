@@ -145,6 +145,29 @@ describe("buildExplanation", () => {
     expect(result.insights).toHaveLength(0);
   });
 
+  it("inferred:false로 표시해도 원인 주장 문장은 뉴스 없이 폐기된다 (자가 신고 우회 방지)", () => {
+    const result = buildExplanation({
+      ai: baseAi({
+        insights: [
+          {
+            kind: "risk",
+            text: "메모리 가격 하락 때문에 이익이 줄어든 것으로 보입니다.",
+            figure_ids: ["f1"],
+            news_ids: [],
+            chart_ref: null,
+            inferred: false,
+          },
+        ],
+      }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: [],
+      hasNews: false,
+      mixedScope: false,
+    });
+    expect(result.insights).toHaveLength(0);
+  });
+
   it("숫자 사이의 관계 해석(원인 주장 아님)은 뉴스 없이도 통과한다", () => {
     const result = buildExplanation({
       ai: baseAi({

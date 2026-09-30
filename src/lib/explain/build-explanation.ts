@@ -73,7 +73,7 @@ export function buildExplanation(input: BuildExplanationInput): Explanation {
     const figureIds = raw.figure_ids.filter((id) => id in input.figures);
     const newsIds = input.hasNews ? raw.news_ids.filter((id) => newsClueById.has(id)) : [];
     if (figureIds.length === 0 && newsIds.length === 0) continue; // 근거 연결 검사
-    if (raw.inferred && newsIds.length === 0 && looksLikeCausalClaim(text)) continue; // 원인 추정엔 뉴스 근거 필수
+    if (newsIds.length === 0 && looksLikeCausalClaim(text)) continue; // 원인 추정엔 뉴스 근거 필수 — `inferred` 자가 신고 여부와 무관하게 문장 자체를 검사(우회 방지)
 
     insights.push({
       kind: raw.kind,
