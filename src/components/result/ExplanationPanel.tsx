@@ -1,4 +1,5 @@
 import type { Chart, Explanation, InsightKind } from "@/contracts";
+import { RewriteSlot } from "@/components/board/rewrite-context";
 import { isWebUrl } from "@/lib/news/web-url";
 
 const KIND: Record<InsightKind, { label: string; className: string }> = {
@@ -103,9 +104,14 @@ export function ExplanationPanel({
         {header}
 
         {explanation.status === "stale" && (
-          <p className="rounded-lg bg-notice-bg px-3 py-2 text-sm text-notice-ink">
-            원래 조건 기준 설명입니다.
-          </p>
+          <div
+            className="rounded-lg bg-notice-bg px-3 py-2 text-sm text-notice-ink"
+            data-testid="explanation-stale"
+          >
+            <p>원래 조건 기준 설명입니다.</p>
+            {/* 보드 화면에서만 [설명 다시 쓰기]가 붙는다 (WU-401, BoardPanel이 context로 넘김) */}
+            <RewriteSlot />
+          </div>
         )}
 
         <section aria-labelledby="exp-conclusion">
