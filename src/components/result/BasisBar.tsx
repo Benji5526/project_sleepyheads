@@ -1,5 +1,6 @@
 import type { ResultObject } from "@/contracts";
 import { periodLabel } from "@/components/charts/chartData";
+import { TermText } from "@/components/glossary/Term";
 
 /** 분석 기준 바 (PRD F-V2): 기업, 기간(선정 이유), 기준 보고서, 재무제표, 계산식 버전, 주가 기준일 */
 export function BasisBar({ result, groupBy }: { result: ResultObject; groupBy?: string }) {
@@ -50,7 +51,8 @@ export function BasisBar({ result, groupBy }: { result: ResultObject; groupBy?: 
           ? `${basis.reports[0]} 외 ${basis.reports.length - 1}건`
           : basis.reports.join(", "),
     },
-    { term: "재무제표", detail: fsLabel },
+    // "연결"·"별도"는 눌러서 뜻을 본다 (PRD F-Z5)
+    { term: "재무제표", detail: <TermText text={fsLabel} /> },
     { term: "계산식", detail: basis.calcVersion },
     ...(basis.priceDate ? [{ term: "주가 기준일", detail: `${basis.priceDate} 종가` }] : []),
   ];
@@ -74,7 +76,7 @@ export function BasisBar({ result, groupBy }: { result: ResultObject; groupBy?: 
         <ul className="flex flex-wrap gap-2 border-t border-line px-4 py-3">
           {badges.map((b) => (
             <li key={b} className="rounded-md bg-notice-bg px-2 py-0.5 text-sm text-notice-ink">
-              {b}
+              <TermText text={b} />
             </li>
           ))}
         </ul>
