@@ -6,6 +6,11 @@ import { skhynixRecent } from "../fixtures/mock/skhynix-recent";
 // 어느 경우도 임시·가짜 문장이 나오지 않는다 (TECH §11.5). generateExplanation은 절대 던지지 않는다.
 const { llmCallMock } = vi.hoisted(() => ({ llmCallMock: vi.fn() }));
 vi.mock("@/lib/llm/client", () => ({ llmCall: llmCallMock }));
+// 모델 고르기(오늘 AI 비용 조회)는 explain-model.test.ts에서 — 여기서는 DB를 부르지 않게 고정
+const { chooseModelMock } = vi.hoisted(() => ({
+  chooseModelMock: vi.fn(async () => ({ model: "gpt-6-sol" }) as { model: string | undefined }),
+}));
+vi.mock("@/lib/explain/model", () => ({ chooseExplainModel: chooseModelMock }));
 
 const { generateExplanation, generateExplanationWithUsage } =
   await import("@/lib/explain/generate");
@@ -127,6 +132,31 @@ describe("generateExplanationWithUsage — 뉴스 입력·비용 (WU-305)", () =
       explanation: { status: "failed" },
       llmCostUsd: 0,
     });
+    log.mockRestore();
+  });
+});
+
+describe("분석 글 모델 (T4)", () => {
+  const AI_OK = {
+    conclusion: ["영업이익이 늘었습니다.", "수익성이 좋아지는 흐름입니다."],
+    insights: [],
+    evidence: [],
+    news_clues: [],
+    caveats: [],
+  };
+
+  it("고른 상위 모델로 부르고, 예산을 넘겨 기본 모델이면 model을 넘기지 않는다", async () => {
+    llmCallMock.mockResolvedValue({
+      output: AI_OK,
+      usage: { inputTokens: 1, outputTokens: 1, costUsd: 0 },
+    });
+    await generateExplanationWithUsage(input);
+    expect(llmCallMock.mock.calls[0][0].model).toBe("gpt-6-sol");
+
+    chooseModelMock.mockResolvedValueOnce({ model: undefined });
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    await generateExplanationWithUsage(input);
+    expect(llmCallMock.mock.calls[1][0]).not.toHaveProperty("model");
     log.mockRestore();
   });
 });

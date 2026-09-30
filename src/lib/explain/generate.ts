@@ -6,6 +6,7 @@ import type { Explanation, NewsClue, ResultObject } from "@/contracts";
 import { llmCall, type LlmUsage } from "@/lib/llm/client";
 import { AI_EXPLANATION_JSON_SCHEMA, aiExplanationSchema } from "./ai-explanation";
 import { buildExplanation, failedExplanation } from "./build-explanation";
+import { chooseExplainModel } from "./model";
 import { buildExplainPrompt, summarizeCharts, summarizeFigures } from "./prompt";
 
 export interface GenerateExplanationInput {
@@ -37,7 +38,15 @@ export async function generateExplanationWithUsage(
   let llmCostUsd = 0;
 
   try {
+    // T4: 분석 글만 상위 모델 — 오늘 AI 예산을 넘었으면 기본 모델 (시연용 토큰 보호, ./model.ts)
+    const choice = await chooseExplainModel();
+    if (choice.fallbackReason && choice.fallbackReason !== "disabled") {
+      console.info(
+        `[explain:${input.analysisId ?? "unknown"}] 기본 모델로 작성 (${choice.fallbackReason})`,
+      );
+    }
     const { output, usage } = await llmCall<unknown>({
+      ...(choice.model ? { model: choice.model } : {}),
       userId: input.userId ?? null,
       analysisId: input.analysisId ?? null,
       input: buildExplainPrompt({

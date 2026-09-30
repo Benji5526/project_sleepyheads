@@ -511,7 +511,7 @@ sequenceDiagram
 | 모델 | **`gpt-6-luna`** (공식 문서가 비용에 민감한 대량 작업용으로 권장하는 최저가 최신 모델) — `OPENAI_MODEL` 환경변수로 교체 가능 |
 | 가격 | 입력 $0.10 / 출력 $0.50 (100만 토큰당, 2026-09-28 공식 가격표) |
 | 호출 방식 | Responses API + **Structured Outputs**(JSON 스키마 강제) |
-| 상향 옵션 | 질문 해석 품질이 부족하면 `gpt-6-sol`(입력 $2 / 출력 $10) — **현준님 결정 사항** (T4) |
+| 분석 글 모델 (T4 ✅) | **분석 글(③)만 `gpt-6-sol`**(입력 $2 / 출력 $10), 질문 해석·뉴스 요지는 `gpt-6-luna` — 2026-09-30 현준님 결정. `OPENAI_EXPLAIN_MODEL`(기본 `gpt-6-sol`)·`OPENAI_EXPLAIN_DAILY_BUDGET_USD`(기본 $1): **오늘 전체 AI 비용이 예산 이상이면 그날은 분석 글도 `gpt-6-luna`**(시연용 토큰 보호), 비용을 못 읽어도 `gpt-6-luna`. 로컬 `.env.local`은 `OPENAI_EXPLAIN_MODEL=gpt-6-luna`. 코드 `src/lib/explain/model.ts` |
 
 ### 11.2 AI 호출 종류 (질문 1개당)
 | 호출 | 입력 | 출력 | 토큰(추정) |
@@ -873,7 +873,7 @@ project_sleepyheads/
 |---|---|---|
 | T1 | OpenDART 일일 한도 정확한 값·초기화 시각 | 키 발급 후 확인 |
 | T3 | 단계 실행 방식이 Vercel Hobby 한도(300초, Active CPU 월 4시간) 안에 드는지 | 구현 후 측정 |
-| T4 | `gpt-6-luna`의 질문 해석·설명 품질. **투자 포인트(추론)는 저가 모델에 어려울 수 있다** | 회귀 세트로 평가, 부족하면 ③ 설명 작성만 `gpt-6-sol`로 올리는 안 검토 — 모델 상향은 현준님 결정 |
+| T4 | `gpt-6-luna`의 질문 해석·설명 품질. **투자 포인트(추론)는 저가 모델에 어려울 수 있다** | ✅ **2026-09-30 현준님 결정: 분석 글만 `gpt-6-sol`** (§11.1). 근거(실제 질문 6개 × 두 모델, 뉴스 포함): 분석 글 평균 시간 luna 약 10초 / sol 약 15초, 1건 비용 luna $0.0005~0.001 / sol $0.009~0.017. 품질 부족의 대부분은 모델이 아니라 **검사 규칙 버그**였다("2025Q2" 문장 폐기 — §11.4). 고친 뒤 luna도 6개 모두 정상이지만 sol이 더 신중하다(질문 회사와 계산 회사가 다른 것을 알아챔). 현준님: 비상업이라 품질·속도 우선, 키 3개(각 5천 원) — **시연용 토큰은 반드시 남긴다** → 하루 예산 장치. 질문당 AI 비용 상한 `max_llm_cost_usd_per_question`을 $0.01 → **$0.03**으로 올려야 한다(통합 담당, quota_config 데이터). OpenAI 키 여러 개 순차 사용(잔액 부족 `insufficient_quota` 때 다음 키)은 `src/lib/llm/client.ts`(공용) 변경 — 통합 뒤 |
 | T5 | 금융위 주가 API 필드·보통주 구분 | 공식 명세(V2)에 **상장주식수 `lstgStCnt` 있음** 확인(2026-09-29). 실제 응답 샘플로 재확인 필요 (키 등록 확인 후) |
 | T6 | 12월 외 결산 샘플 기업 선정 | ✅ 2026-09-30: **동원모빌리티(00118008, 3월 결산)·세원정공(00134316, 6월 결산)**, `company.json`의 `acc_mt`로 확인. 실제 공시 값 손 계산은 `tests/accuracy/ANSWER_KEY.md` |
 | **T7** | Google 뉴스 RSS 이용 조건(비상업 용도, **AI 입력 사용 가능 여부**), 언론사 robots.txt | ✅ **2026-09-30 확인, 현준님 결정: 원래 계획(제목·언론사·발행일로 AI 요지)**. 확인 결과(원문·실제 응답): ① 피드 `<copyright>` "made available solely for … a personal feed reader for personal, non-commercial use. Any other use of the feed is expressly prohibited" — AI 입력 여부를 따로 적지 않았지만 여러 사람이 보는 사이트·AI 입력 모두 문구상 범위 밖 ② `news.google.com/robots.txt`: `User-agent: *`에 `Disallow: /` 후 `/`·`/home`·`/topics/` 등만 Allow — **`/rss/`는 막힘**, GPTBot·ChatGPT-User·ClaudeBot 등은 전부 막힘 ③ Google 서비스 약관(2026-07-30 시행)은 robots.txt를 어긴 자동 접근과 허락 없는 Google News 기사 사용을 금지 행위로 든다. News 전용 추가 약관·RSS 공식 문서는 없다 ④ 언론사 robots.txt(한경·매경·조선·연합·이데일리·조선비즈·머니투데이·연합인포맥스·전자신문·서울경제): 모두 `*`에게 기사 경로 허용, 다수가 AI 학습용 크롤러(GPTBot 등)만 따로 막음. 조선비즈는 `Content-Signal: ai-input=yes, ai-train=no`, 매경 `llms.txt`는 출처·원문 링크 표시 조건으로 최소한의 요약 허용(수치 변형 금지). **조건**: 비상업 수업 프로젝트 범위, 하루 1,000회·질문당 2회·하루 캐시로 호출 최소화, 기사 본문 저장·표시 없음, 요지의 숫자·의견은 출처를 밝힌 기사 인용만, 링크는 RSS 주소 그대로. **일반 공개(WU-599) 전 재검토** — 공식 조건이 있는 뉴스 출처로 바꾸거나 스위치로 끈다 |
