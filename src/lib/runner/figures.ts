@@ -8,6 +8,8 @@ export interface AddFigureInput {
   /** KRW면 bigint, 그 밖은 number. null이면 계산 불가(`reason` 필수). */
   value: bigint | number | null;
   reason?: NullReason;
+  /** 숫자 대신 보여 줄 글자 (증감률 부호 전환 "흑자전환" 등, TECH §6.4). value는 null, reason은 없다 */
+  displayText?: string;
   basis: Figure["basis"];
 }
 
@@ -30,7 +32,7 @@ export function createFigureAllocator(): FigureAllocator {
         label: input.label,
         value: input.value === null ? null : Number(input.value),
         unit: input.unit,
-        display: formatDisplay(input.unit, input.value, input.reason),
+        display: input.displayText ?? formatDisplay(input.unit, input.value, input.reason),
         basis: input.basis,
         ...(input.reason ? { reason: input.reason } : {}),
       };

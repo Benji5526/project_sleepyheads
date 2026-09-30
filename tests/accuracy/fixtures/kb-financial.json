@@ -1,0 +1,212 @@
+{
+  "_source": "OpenDART fnlttSinglAcntAll.json 원문에서 매출·영업이익·순이익 행만 옮김 (2026-09-30 조회). 원본 응답 전체는 저장하지 않는다.",
+  "corp_code": "00688996",
+  "corp_name": "KB금융",
+  "stock_code": "105560",
+  "market": "KOSPI",
+  "acc_mt": 12,
+  "induty_code": "64992",
+  "is_financial": true,
+  "reports": [
+    {
+      "bsns_year": "2024",
+      "reprt_code": "11014",
+      "fs_div": "CFS",
+      "rcept_no": "20241114002984",
+      "report_nm": "3분기보고서 (2024.09)",
+      "thstrm_nm": "제 17 기 3분기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "1596039000000",
+          "thstrm_add_amount": "4369918000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossFromOperatingActivities",
+          "account_nm": "영업이익",
+          "thstrm_amount": "2357551000000",
+          "thstrm_add_amount": "7015248000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2024",
+      "reprt_code": "11011",
+      "fs_div": "CFS",
+      "rcept_no": "20260324000822",
+      "report_nm": "사업보고서 (2024.12)",
+      "thstrm_nm": "제 17 기",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "당기순이익",
+          "thstrm_amount": "5028606000000",
+          "thstrm_add_amount": ""
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossFromOperatingActivities",
+          "account_nm": "영업이익",
+          "thstrm_amount": "8045261000000",
+          "thstrm_add_amount": ""
+        }
+      ]
+    },
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11013",
+      "fs_div": "CFS",
+      "rcept_no": "20250526000374",
+      "report_nm": "1분기보고서 (2025.03)",
+      "thstrm_nm": "제 18 기 1분기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "1699122000000",
+          "thstrm_add_amount": "1699122000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossFromOperatingActivities",
+          "account_nm": "영업이익",
+          "thstrm_amount": "2293028000000",
+          "thstrm_add_amount": "2293028000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11012",
+      "fs_div": "CFS",
+      "rcept_no": "20260324000827",
+      "report_nm": "반기보고서 (2025.06)",
+      "thstrm_nm": "제 18 기 반기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "반기순이익",
+          "thstrm_amount": "1747580000000",
+          "thstrm_add_amount": "3446702000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossFromOperatingActivities",
+          "account_nm": "영업이익",
+          "thstrm_amount": "2132971000000",
+          "thstrm_add_amount": "4425999000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11014",
+      "fs_div": "CFS",
+      "rcept_no": "20251114003011",
+      "report_nm": "3분기보고서 (2025.09)",
+      "thstrm_nm": "제 18 기 3분기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "1655228000000",
+          "thstrm_add_amount": "5101930000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossFromOperatingActivities",
+          "account_nm": "영업이익",
+          "thstrm_amount": "2334990000000",
+          "thstrm_add_amount": "6760989000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11011",
+      "fs_div": "CFS",
+      "rcept_no": "20260619000667",
+      "report_nm": "사업보고서 (2025.12)",
+      "thstrm_nm": "제 18 기",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "당기순이익",
+          "thstrm_amount": "5840715000000",
+          "thstrm_add_amount": ""
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossFromOperatingActivities",
+          "account_nm": "영업이익",
+          "thstrm_amount": "8517711000000",
+          "thstrm_add_amount": ""
+        }
+      ]
+    },
+    {
+      "bsns_year": "2026",
+      "reprt_code": "11013",
+      "fs_div": "CFS",
+      "rcept_no": "20260515002888",
+      "report_nm": "1분기보고서 (2026.03)",
+      "thstrm_nm": "제 19 기 1분기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "1916469000000",
+          "thstrm_add_amount": "1916469000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossFromOperatingActivities",
+          "account_nm": "영업이익",
+          "thstrm_amount": "2727566000000",
+          "thstrm_add_amount": "2727566000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2026",
+      "reprt_code": "11012",
+      "fs_div": "CFS",
+      "rcept_no": "20260814004200",
+      "report_nm": "반기보고서 (2026.06)",
+      "thstrm_nm": "제 19 기 반기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "반기순이익",
+          "thstrm_amount": "2010508000000",
+          "thstrm_add_amount": "3926977000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossFromOperatingActivities",
+          "account_nm": "영업이익",
+          "thstrm_amount": "2712548000000",
+          "thstrm_add_amount": "5440114000000"
+        }
+      ]
+    }
+  ]
+}

@@ -90,10 +90,13 @@ export function describeError(error: unknown): ErrorNotice {
         ...none,
       };
     case "TOO_LARGE":
+      // 질문(/api/ask)에서는 AI가 질문을 읽은 뒤라 422처럼 질문 1회가 사용된다 (API_SPEC Q1).
+      // Step 4 보드 필터(B2)의 TOO_LARGE는 차감이 없으니, 그 화면을 만들 때 charged를 따로 정한다
       return {
         title: "한 번에 처리할 수 있는 양을 넘었습니다",
-        body: "기간을 줄이거나 비교할 기업 수를 줄여서 다시 물어봐 주세요.",
-        ...none,
+        body: e.message || "기간을 줄이거나 비교할 기업 수를 줄여서 다시 물어봐 주세요.",
+        charged: true,
+        suggestions: ["삼성전자와 SK하이닉스 영업이익 비교해줘"],
       };
     case "VALIDATION_ERROR":
       return { title: "질문을 확인해 주세요", body: "질문은 1~500자로 입력해 주세요.", ...none };

@@ -28,7 +28,7 @@ export const AI_METRICS = [
 export const AI_GROUP_BY = ["quarter", "year", "company", "sector"] as const;
 export const AI_CHART_TYPES = ["bar", "line", "card", "table"] as const;
 export const AI_COMPANY_ROLES = ["target", "peer"] as const;
-export const AI_OPERATIONS = ["change", "compare"] as const;
+export const AI_OPERATIONS = ["change", "compare", "sum"] as const;
 export const AI_CHANGE_BASES = ["QoQ", "YoY"] as const;
 
 const aiCompanySchema = z.object({
@@ -60,7 +60,9 @@ export const aiAnalysisRequestSchema = z.object({
   scope: z.enum(AI_SCOPES),
   has_out_of_scope_part: z.boolean(),
   intent: z.enum(AI_INTENTS),
-  companies: z.array(aiCompanySchema).max(6),
+  // 개수 상한은 두지 않는다 — 7곳 이상을 물으면 여기서 막혀 "AI 장애"로 보이지 않게, 서버 검사(validate)가
+  // "기업 수 초과"로 안내한다 (TECH §4.5)
+  companies: z.array(aiCompanySchema),
   metrics: z.array(z.enum(AI_METRICS)),
   // metrics가 비어 있는 이유가 "지정 안 함(기본 지표 추론)"인지 "목록에 없는 지표를 콕 집어 물음"인지
   // metrics 배열만으로는 구분할 수 없어 따로 둔다 — 서버가 후자를 UNSUPPORTED_QUESTION으로 거절한다.

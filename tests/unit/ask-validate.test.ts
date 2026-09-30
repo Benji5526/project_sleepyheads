@@ -138,6 +138,101 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
     expect(result.type === "unsupported_question" && result.message).not.toContain("revenue");
   });
 
+  it("비교 기업이 5곳을 넘으면 조용히 자르지 않고 기업 수 초과로 안내한다 (TECH §4.5)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const peers = ["삼성전자", "LG전자", "현대차", "기아", "NAVER", "카카오"].map((query) => ({
+      query,
+      role: "peer" as const,
+    }));
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ companies: [{ query: "SK하이닉스", role: "target" }, ...peers] }),
+      { client },
+    );
+    expect(result.type).toBe("too_large");
+  });
+
+  it("'합계'를 물으면 기업이 2곳 이상일 때 aggregate: sum (PRD F-N3)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX, HYUNDAI_MOTOR]);
+    const sumOp = { op: "sum" as const, metric: "revenue" as const, base: null, peers: null };
+    const two = await validateAnalysisRequest(
+      baseAiRequest({
+        companies: [
+          { query: "SK하이닉스", role: "target" },
+          { query: "현대차", role: "peer" },
+        ],
+        operations: [sumOp],
+      }),
+      { client },
+    );
+    expect(two.type === "resolved" && two.request.aggregate).toBe("sum");
+
+    const one = await validateAnalysisRequest(baseAiRequest({ operations: [sumOp] }), { client });
+    expect(one.type === "resolved" && one.request.aggregate).toBeUndefined();
+  });
+
+  it("대상 표시 없는 'A와 B 합계'에서 같은 기업을 두 번 더하지 않는다", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX, HYUNDAI_MOTOR]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({
+        companies: [
+          { query: "SK하이닉스", role: "peer" },
+          { query: "현대차", role: "peer" },
+        ],
+        operations: [{ op: "sum", metric: "revenue", base: null, peers: null }],
+      }),
+      { client },
+    );
+    expect(result.type).toBe("resolved");
+    if (result.type !== "resolved") return;
+    expect(result.request.target.name).toBe("SK하이닉스");
+    expect(result.request.peers.map((p) => p.name)).toEqual(["현대차"]);
+    expect(result.request.aggregate).toBe("sum");
+  });
+
+  it("AI가 두 기업을 모두 대상(target)으로 내도 두 번째 기업을 빠뜨리지 않는다 (합계 실측)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX, HYUNDAI_MOTOR]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({
+        companies: [
+          { query: "SK하이닉스", role: "target" },
+          { query: "현대차", role: "target" },
+        ],
+        operations: [{ op: "sum", metric: "revenue", base: null, peers: null }],
+      }),
+      { client },
+    );
+    expect(result.type === "resolved" && result.request.peers.map((p) => p.name)).toEqual([
+      "현대차",
+    ]);
+    expect(result.type === "resolved" && result.request.aggregate).toBe("sum");
+  });
+
+  it("대상 표시 없이 6곳을 물으면 초과가 아니다 (첫 기업이 대상, 나머지 5곳이 비교)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const names = ["SK하이닉스", "A", "B", "C", "D", "E"];
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ companies: names.map((query) => ({ query, role: "peer" as const })) }),
+      { client },
+    );
+    expect(result.type).not.toBe("too_large");
+  });
+
+  it("합계에 넣을 기업을 못 찾으면 빼고 더하지 않고 다시 물어 달라고 안내한다", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({
+        companies: [
+          { query: "SK하이닉스", role: "target" },
+          { query: "없는회사", role: "peer" },
+        ],
+        operations: [{ op: "sum", metric: "revenue", base: null, peers: null }],
+      }),
+      { client },
+    );
+    expect(result.type).toBe("unsupported_question");
+    if (result.type === "unsupported_question") expect(result.message).toContain("없는회사");
+  });
+
   it("'2013년 매출'은 기간 밖", async () => {
     const { client } = createFakeCompaniesClient([SK_HYNIX]);
     const result = await validateAnalysisRequest(

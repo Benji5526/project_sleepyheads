@@ -9,4 +9,6 @@ export type ComputedWithFootnote<T> = Computed<T> & { footnoteMark?: "※" };
 export type FiscalQuarter = 1 | 2 | 3 | 4;
 export type CalendarQuarterNumber = 1 | 2 | 3 | 4;
 
-export const CALC_VERSION = "v1";
+// v2 (2026-09-30): 12월 외 결산 기업의 OpenDART 연도 해석 수정, 이익 증감률 부호 전환 표시.
+// 저장된 옛 분석(v1)과 구분하려고 올렸다 — 계산 방식이 바뀌면 함께 올린다.
+export const CALC_VERSION = "v2";

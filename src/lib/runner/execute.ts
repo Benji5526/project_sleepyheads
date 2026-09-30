@@ -10,11 +10,13 @@ import { addQuarters, parseQuarter } from "@/lib/ask/quarter";
 import { ensureCompanyFinancials, type CompanyFinancials } from "./company-financials";
 import { fetchEventDisclosures } from "./disclosures-tool";
 import { createFigureAllocator } from "./figures";
-import { buildCharts, buildDataBasis, buildUsedData } from "./present";
+import { buildCharts, buildDataBasis, buildUsedData, sumChartOptions } from "./present";
 import {
   buildAnnualSeries,
   buildCompanyComparisonSeries,
   buildQuarterlySeries,
+  buildSumSeries,
+  sumPeriods,
   quartersInRange,
   type CompanyMetricSample,
 } from "./series-builders";
@@ -62,38 +64,49 @@ export async function executeAnalysis(
   const targetFsDiv = fsDivByCorp.get(request.target.corpCode)!;
   const allocator = createFigureAllocator();
 
-  const isComparison = request.groupBy === "company" || request.groupBy === "sector";
+  const isSum = request.aggregate === "sum";
+  const isComparison = !isSum && (request.groupBy === "company" || request.groupBy === "sector");
+  const samples = companies.map((company): CompanyMetricSample => ({
+    company,
+    financials: financialsByCorp.get(company.corpCode)!,
+    fsDiv: fsDivByCorp.get(company.corpCode)!,
+  }));
+  // 연도별 합계면 1~4분기가 다 있는 해마다, 아니면 분기마다 한 칸
+  const periods = isSum ? sumPeriods(requestedQuarters, request.groupBy === "year") : [];
+  const sumByYear = periods.length > 0 && periods[0].quarters.length === 4;
+  const sumResult = isSum
+    ? buildSumSeries(samples, periods, request.metrics, request.groupBy === "sector", allocator)
+    : null;
   const latestRequestedQuarter =
     requestedQuarters[requestedQuarters.length - 1] ?? request.period.to;
 
-  const { series, reportsUsed } = isComparison
-    ? buildCompanyComparisonSeries(
-        companies.map((company): CompanyMetricSample => ({
-          company,
-          financials: financialsByCorp.get(company.corpCode)!,
-          fsDiv: fsDivByCorp.get(company.corpCode)!,
-        })),
-        latestRequestedQuarter,
-        request.metrics,
-        allocator,
-      )
-    : request.groupBy === "year"
-      ? buildAnnualSeries(
-          targetFinancials,
-          targetFsDiv,
-          requestedQuarters,
-          request.metrics,
-          allocator,
-        )
-      : buildQuarterlySeries(
-          targetFinancials,
-          targetFsDiv,
-          requestedQuarters,
-          request.metrics,
-          allocator,
-        );
+  const { series, reportsUsed } = sumResult
+    ? sumResult
+    : isComparison
+      ? buildCompanyComparisonSeries(samples, latestRequestedQuarter, request.metrics, allocator)
+      : request.groupBy === "year"
+        ? buildAnnualSeries(
+            targetFinancials,
+            targetFsDiv,
+            requestedQuarters,
+            request.metrics,
+            allocator,
+          )
+        : buildQuarterlySeries(
+            targetFinancials,
+            targetFsDiv,
+            requestedQuarters,
+            request.metrics,
+            allocator,
+          );
 
-  const charts = buildCharts(request, series, allocator.figures, reportsUsed);
+  const charts = buildCharts(
+    request,
+    series,
+    allocator.figures,
+    reportsUsed,
+    sumResult ? sumChartOptions(request, companies, periods.length, sumResult.excluded) : undefined,
+  );
 
   const disclosures =
     request.intent === "event"
@@ -101,18 +114,26 @@ export async function executeAnalysis(
       : [];
 
   const basis = buildDataBasis(request, reportsUsed, targetFsDiv);
+  if (isSum)
+    basis.flags.push(`합계: ${companies.map((c) => c.name).join("·")} ${companies.length}곳`);
 
-  const rowKeys = isComparison
-    ? companies.map((c) => c.name)
-    : request.groupBy === "year"
-      ? [...new Set(requestedQuarters.map((q) => `${parseQuarter(q).year}`))]
-      : requestedQuarters;
+  const rowKeys = isSum
+    ? periods.map((p) => p.x)
+    : isComparison
+      ? companies.map((c) => c.name)
+      : request.groupBy === "year"
+        ? [...new Set(requestedQuarters.map((q) => `${parseQuarter(q).year}`))]
+        : requestedQuarters;
 
-  const rowLabelColumn = isComparison
-    ? ({ name: "기업", type: "text" } as const)
-    : request.groupBy === "year"
+  const rowLabelColumn = isSum
+    ? sumByYear
       ? ({ name: "연도", type: "text" } as const)
-      : ({ name: "분기", type: "quarter" } as const);
+      : ({ name: "분기", type: "quarter" } as const)
+    : isComparison
+      ? ({ name: "기업", type: "text" } as const)
+      : request.groupBy === "year"
+        ? ({ name: "연도", type: "text" } as const)
+        : ({ name: "분기", type: "quarter" } as const);
 
   const usedData = buildUsedData({
     rowLabelColumn,

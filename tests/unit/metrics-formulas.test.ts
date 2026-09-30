@@ -85,6 +85,30 @@ describe("yoy / qoq (TECH §6.4)", () => {
     expect(qoq(ok(BigInt(50)), ok(BigInt(-100)))).toEqual({ value: 150 });
   });
 
+  it("이익 지표는 부호가 바뀌면 비율 대신 글자 (TECH §6.4) — 흑자전환·적자전환·적자지속", () => {
+    expect(qoq(ok(BigInt(50)), ok(BigInt(-100)), true)).toEqual({
+      value: null,
+      signChange: "흑자전환",
+    });
+    expect(yoy(ok(BigInt(120)), ok(BigInt(0)), true)).toEqual({
+      value: null,
+      signChange: "흑자전환",
+    });
+    expect(yoy(ok(BigInt(-5)), ok(BigInt(80)), true)).toEqual({
+      value: null,
+      signChange: "적자전환",
+    });
+    expect(yoy(ok(BigInt(0)), ok(BigInt(80)), true)).toEqual({
+      value: null,
+      signChange: "적자전환",
+    });
+    expect(yoy(ok(BigInt(-5)), ok(BigInt(-80)), true)).toEqual({
+      value: null,
+      signChange: "적자지속",
+    });
+    expect(yoy(ok(BigInt(120)), ok(BigInt(100)), true)).toEqual({ value: 20 });
+  });
+
   it("직전 분기가 없으면 NO_PREV_PERIOD", () => {
     expect(qoq(ok(BigInt(50)), undefined)).toEqual({ value: null, reason: "NO_PREV_PERIOD" });
   });

@@ -57,9 +57,12 @@ export function AskHome() {
         return;
       }
       const code = error instanceof ApiRequestError ? error.code : null;
-      // 연결 끊김·"같은 질문 처리 중"(409)이면 다음에 누를 때도 같은 키를 보낸다 — 새 키면 질문 수가 또 차감된다
-      retryKey.current =
-        code === "NETWORK_ERROR" || code === "INVALID_STATE" ? { question: trimmed, key } : null;
+      const status = error instanceof ApiRequestError ? error.httpStatus : null;
+      // 연결 끊김·"같은 질문 처리 중"(409)·서버 오류(5xx, Vercel 시간 초과 504 포함)면 다음에 누를 때도
+      // 같은 키를 보낸다 — 새 키면 질문 수가 또 차감되고, 서버가 끊긴 질문을 이어받을 수 없다 (PR #26)
+      const keepKey =
+        code === "NETWORK_ERROR" || code === "INVALID_STATE" || (status !== null && status >= 500);
+      retryKey.current = keepKey ? { question: trimmed, key } : null;
       setNotice(
         code === "INVALID_STATE"
           ? {
@@ -92,7 +95,7 @@ export function AskHome() {
             aria-hidden="true"
             className="size-4 animate-spin rounded-full border-2 border-line border-t-accent"
           />
-          질문을 해석하고 공시 데이터로 계산하는 중입니다. 보통 10초 안에 끝납니다.
+          질문을 해석하고 공시 데이터로 계산하는 중입니다. 보통 20~30초 걸립니다.
         </p>
       ) : (
         // 칩은 입력창만 채운다. 바로 보내면 누를 때마다 질문 수가 차감되기 때문
@@ -127,7 +130,7 @@ export function AskHome() {
       {guestPossible && (
         // 비로그인: 입력창 아래로 예시 분석을 펼친다
         <div hidden={!anonymous} className="border-t border-line pt-10 pb-16">
-          <GuestExampleSection onBlocked={promptLogin} />
+          <GuestExampleSection visible={anonymous} onBlocked={promptLogin} />
         </div>
       )}
       {anonymous && <LoginPromptDialog open={loginPrompt} onClose={() => setLoginPrompt(false)} />}

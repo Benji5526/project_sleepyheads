@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { reportsForFiscalQuarter, reportsNeededForFiscalQuarters } from "@/lib/financials/period";
+import {
+  dartBsnsYear,
+  fiscalYearOfReport,
+  reportsForFiscalQuarter,
+  reportsNeededForFiscalQuarters,
+} from "@/lib/financials/period";
 
 describe("reportsForFiscalQuarter (WU-105, TECH §6.2)", () => {
   it("1~3분기는 보고서 하나면 된다", () => {
@@ -44,5 +49,34 @@ describe("reportsNeededForFiscalQuarters — 최근 4개 분기 호출 수 측�
       { bsnsYear: 2024, quarter: 4 },
     ]);
     expect(reports).toHaveLength(2); // 사업보고서 + 3분기 보고서
+  });
+});
+
+describe("OpenDART 연도 ↔ 엔진 회계연도 (2026-09-30 실측: bsns_year = 보고서 기간이 끝난 해)", () => {
+  it("12월 결산은 두 연도가 늘 같다", () => {
+    for (const q of [1, 2, 3, 4] as const) expect(dartBsnsYear(2025, q, 12)).toBe(2025);
+  });
+
+  it("3월 결산(4월 시작): 1~3분기는 시작한 해, 사업보고서만 다음 해", () => {
+    // 동원모빌리티 제41기(2025.04~2026.03): 1·3분기보고서 bsns_year 2025, 사업보고서 2026
+    expect([1, 2, 3, 4].map((q) => dartBsnsYear(2025, q as 1 | 2 | 3 | 4, 3))).toEqual([
+      2025, 2025, 2025, 2026,
+    ]);
+    expect(fiscalYearOfReport(2026, "11011", 3)).toBe(2025);
+    expect(fiscalYearOfReport(2025, "11014", 3)).toBe(2025);
+  });
+
+  it("6월 결산(7월 시작): 1분기·반기는 시작한 해, 3분기·사업보고서는 다음 해", () => {
+    expect([1, 2, 3, 4].map((q) => dartBsnsYear(2025, q as 1 | 2 | 3 | 4, 6))).toEqual([
+      2025, 2025, 2026, 2026,
+    ]);
+    expect(fiscalYearOfReport(2026, "11014", 6)).toBe(2025);
+  });
+
+  it("3월 결산 4분기는 서로 다른 해의 사업보고서·3분기보고서를 쓴다 (같은 기끼리 뺀다)", () => {
+    expect(reportsForFiscalQuarter(2025, 4, 3)).toEqual([
+      { bsnsYear: 2026, reprtCode: "11011" },
+      { bsnsYear: 2025, reprtCode: "11014" },
+    ]);
   });
 });

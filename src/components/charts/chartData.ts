@@ -6,6 +6,7 @@ export const NULL_REASON_LABEL: Record<NullReason, string> = {
   NO_PREV_PERIOD: "비교할 직전 기간 없음",
   ZERO_DENOMINATOR: "기준 값이 0",
   MISSING_ACCOUNT: "공시에 계정 값 없음",
+  NO_REPORT: "보고서 없음 (제출 전이거나 공시 없음)",
   NO_PRICE: "주가 없음",
   DEFICIT: "적자",
   CAPITAL_IMPAIRMENT: "자본잠식",
