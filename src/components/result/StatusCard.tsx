@@ -27,21 +27,26 @@ export function describeStatus(
     return { title: "분석하지 못했습니다", body: "잠시 후 다시 질문해 주세요." };
   }
   if (status === "partial") {
+    // WU-302 상한 (TECH §4.7): 어느 상한에 닿았는지 말해 준다. 멈춘 단계는 아래 실행 기록에 있다
+    const limit =
+      stopReason === "STEP_LIMIT"
+        ? "질문 하나에 쓸 수 있는 단계 수"
+        : stopReason === "COST_LIMIT"
+          ? "질문 하나에 쓸 수 있는 AI 비용"
+          : stopReason === "TIMEOUT"
+            ? "질문 하나에 쓸 수 있는 실행 시간"
+            : null;
     return {
-      title: "분석이 중간에 멈췄습니다",
-      body: "질문 하나에 쓸 수 있는 단계·시간 한도에 닿아 끝까지 계산하지 못했습니다. 아래는 계산을 마친 부분까지입니다.",
+      title: "부분 결과입니다",
+      body: limit
+        ? `${limit} 한도에 닿아 끝까지 계산하지 못했습니다. 아래는 계산을 마친 부분까지이며, 멈춘 곳은 실행 기록에서 볼 수 있습니다.`
+        : "일부 단계를 끝내지 못했습니다. 아래는 계산을 마친 부분까지이며, 멈춘 곳은 실행 기록에서 볼 수 있습니다.",
     };
   }
   if (status === "canceled") {
     return { title: "취소한 분석입니다", body: "새로 질문하면 다시 분석합니다." };
   }
-  // awaiting_preprocess는 전처리 진단 카드(DiagnosisPanel, WU-203)가 안내한다
-  if (status === "awaiting_approval") {
-    return {
-      title: "아직 지원하지 않는 분석 방식입니다",
-      body: "여러 단계로 나눠 계산해야 하는 질문은 다음 업데이트에서 지원합니다. 기업 하나와 지표 하나로 나눠 물어봐 주세요.",
-    };
-  }
+  // awaiting_approval은 계획 카드(PlanCard, WU-301), awaiting_preprocess는 전처리 진단 카드(DiagnosisPanel, WU-203)가 안내한다
   return null;
 }
 

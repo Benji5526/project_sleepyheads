@@ -12,6 +12,7 @@ import {
   type PersistableResult,
 } from "@/lib/ask/persist";
 import { nextKstMidnight } from "@/lib/quota/kst";
+import { buildStoredPlan } from "@/lib/runner/steps/plan";
 import { QuotaExceededError, UpstreamApiError } from "@/lib/quota/errors";
 import {
   consumeQuestionQuota,
@@ -140,13 +141,16 @@ export const POST = route(
 
     // 새 프로젝트는 분석을 저장할 때만 만든다 — 한도 초과·AI 장애 때 빈 프로젝트가 남지 않게
     const projectId = requestedProjectId ?? (await createProject(supabase, userId));
-    const row = buildAnalysesInsertRow({
-      projectId,
-      ownerId: userId,
-      question,
-      idempotencyKey,
+    const row = withPlan(
+      buildAnalysesInsertRow({
+        projectId,
+        ownerId: userId,
+        question,
+        idempotencyKey,
+        result,
+      }),
       result,
-    });
+    );
     const { data: insertedRow, error: insertError } = await supabase
       .from("analyses")
       .insert(row)
@@ -177,6 +181,17 @@ export const POST = route(
     return created(await toAskResponseData(insertedRow, admin));
   },
 );
+
+// WU-301: 해석이 끝난 질문은 계획을 함께 저장한다. 복합 질문(TECH §4.6)은 awaiting_approval —
+// 계획 카드에서 승인(Q7)하기 전에는 외부 호출·계산을 하지 않는다. 단순 질문은 지금처럼 queued.
+function withPlan(
+  row: Record<string, unknown>,
+  result: PersistableResult,
+): Record<string, unknown> {
+  if (result.type !== "resolved") return row;
+  const plan = buildStoredPlan(result.request);
+  return { ...row, plan, ...(plan.complex ? { status: "awaiting_approval" } : {}) };
+}
 
 // 질문 1회 차감. 오늘 질문 수 소진이면 429 QUOTA_EXCEEDED + 초기화 시각 (API_SPEC §1.7).
 // @returns 같은 멱등키로 이미 차감된 질문이면 true (이번에는 차감하지 않음)

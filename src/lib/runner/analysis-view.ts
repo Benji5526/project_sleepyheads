@@ -14,9 +14,11 @@ import type {
 import { fetchDeclineMessage, type InternalDeclineCategory } from "@/lib/ask/decline";
 import type { AiAnalysisRequest } from "@/lib/ask/ai-request";
 import { isNewerDataAvailable, loadDataVersion } from "@/lib/versions/store";
+import type { StoredPlan } from "./steps/plan";
+import { loadFlowView } from "./steps/view";
 
 export const ANALYSIS_SELECT_COLUMNS =
-  "id, owner_id, project_id, question, status, stop_reason, decline_category, analysis_request, clarification, pending_ai_request, result, explanation, diagnoses, dataset_version_id, created_at, updated_at";
+  "id, owner_id, project_id, question, status, stop_reason, decline_category, analysis_request, clarification, pending_ai_request, result, explanation, diagnoses, dataset_version_id, plan, created_at, updated_at";
 
 export interface AnalysisDbRow {
   id: string;
@@ -35,13 +37,14 @@ export interface AnalysisDbRow {
   diagnoses?: Diagnosis[] | null;
   /** WU-202 — 데이터 버전 기록 전에 만든 분석은 null */
   dataset_version_id?: string | null;
+  /** WU-301 계획 — 계획 전에 만든 분석(Step 1·2)은 null */
+  plan?: StoredPlan | null;
   created_at: string;
   updated_at: string;
 }
 
 /**
- * Step 3~4가 채울 필드(plan·progress·steps·boardId)는 아직 없는 기능이라
- * 계약이 허용하는 빈 값으로 둔다 — WU-301·WU-302·WU-401이 채운다.
+ * plan·progress·steps는 WU-301·302 계획·실행 기록(steps/view.ts). boardId는 WU-401이 채운다.
  * `client`는 관리자 클라이언트 (거절 문구·데이터 버전·보고서 수집 기록 조회).
  */
 export async function toAnalysisView(
@@ -49,6 +52,8 @@ export async function toAnalysisView(
   client: SupabaseClient,
 ): Promise<Analysis> {
   const result = row.result ? await withNewerVersionFlag(row, row.result, client) : null;
+  // WU-301·302: 계획 카드·진행 상태·실행 기록
+  const flow = await loadFlowView(row.id, row.status, row.plan ?? null, client);
   return {
     id: row.id,
     projectId: row.project_id,
@@ -61,10 +66,10 @@ export async function toAnalysisView(
         : null,
     request: row.analysis_request,
     clarification: row.clarification,
-    plan: null,
+    plan: flow.plan,
     diagnoses: row.diagnoses ?? [],
-    progress: null,
-    steps: [],
+    progress: flow.progress,
+    steps: flow.steps,
     result,
     explanation: row.explanation,
     boardId: null,
