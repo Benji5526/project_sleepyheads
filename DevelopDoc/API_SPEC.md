@@ -6,7 +6,7 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.4 |
+| 버전 | v0.3.6 |
 | 기준 문서 | [PRD](./PRD.md) v0.6 · [TECH_SPEC](./TECH_SPEC.md) v0.6 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
@@ -22,6 +22,8 @@
 | v0.3.2 | 2026-09-29 | Q4 `step` 최대 실행 시간 60초 → 300초 (운영 첫 질문이 시간 초과로 실패, §8.2) |
 | v0.3.3 | 2026-09-30 | WU-114 질문 수 한도: 요청 속도 제한을 DB 함수 `check_request_rate`로(§1.6·§7.3, 한도 값은 `quota_config`), 같은 멱등키 동시 요청 1회만 차감(`quota_consumptions`, `consume_quota.already_consumed`, Q1 처리 중이면 409), A5 `serviceStatus` 판정 기준(§4) |
 | v0.3.4 | 2026-09-30 | WU-115 비로그인 예시: G1 응답 타입 `GuestExample`·예시가 아직 없으면 `404`, C2 `?force=1`(관리자 수동 재생성)·새 보고서 판정(정기공시 목록 1회)·최대 실행 시간 120초 → 300초 |
+| v0.3.5 | 2026-09-30 | PR #19 리뷰 후속: `/auth/callback`(A1)은 분당 요청 제한에서 제외(§1.6), Q1 같은 멱등키 재요청은 차감 뒤 2분이 지나도 분석이 없으면 409 대신 다시 처리 |
+| v0.3.6 | 2026-09-30 | WU-003 결정: Supabase 프로젝트를 **`sleepyhead` 하나로 유지**(로컬·Preview·운영 공용, §1.1·§7.1·§8.3), 운영·Preview 주소 확정, 마이그레이션 적용 순서(§7.6) — GitHub 연결로 자동 적용되지 않음 |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -66,9 +68,9 @@ flowchart LR
 ### 1.1 주소
 | 환경 | 주소 | Supabase 프로젝트 |
 |---|---|---|
-| 로컬 | `http://localhost:3000` | `sleepyheads-dev` |
-| Preview (PR마다) | `https://<자동 생성>.vercel.app` | `sleepyheads-dev` |
-| Production | `https://<프로젝트명>.vercel.app` (WU-003에서 확정) | `sleepyheads-prod` |
+| 로컬 | `http://localhost:3000` | `sleepyhead` |
+| Preview (PR마다) | `https://*-project-agent2.vercel.app` | `sleepyhead` |
+| Production | `https://projectsleepyheads.vercel.app` | `sleepyhead` |
 
 ### 1.2 인증
 - 로그인 세션은 Supabase Auth가 **쿠키**로 관리한다 (`@supabase/ssr`). 브라우저는 따로 토큰을 붙이지 않는다.
@@ -110,7 +112,7 @@ flowchart LR
 |---|---|---|
 | 질문 관련 요청 | 회원당 **분당 10회** | `ask`, `clarify`, `rewrite`, `rerun` |
 | 전체 요청 | 회원당 **분당 120회** | 모든 🔑 API (분석 진행 상태 확인·단계 실행 포함) |
-| 비로그인 | IP당 분당 30회 | 🔓 API |
+| 비로그인 | IP당 분당 30회 | 🔓 API (`/auth/callback` 제외 — 구글이 준 일회용 코드가 있어야만 로그인되고, 같은 IP로 여러 명이 동시에 로그인하는 수업 시연에서 막히면 안 된다) |
 
 - 1분 고정 창으로 DB에서 센다 (DB 함수 `check_request_rate`, §7.3). 한도 값은 `quota_config`의 `question_requests_per_minute`·`requests_per_minute`·`guest_requests_per_minute`라 코드 수정 없이 바꿀 수 있다.
 - DB 오류로 셀 수 없으면 제한 없이 통과시키고 서버 로그에 경고를 남긴다 (남용 방지 장치가 서비스 전체를 멈추지 않게). 질문 수 한도(`consume_quota`)는 따로 지킨다.
@@ -550,7 +552,7 @@ interface Analysis {
 오류: `400`, `401`, `403`, `404`(projectId), `409 INVALID_STATE`(같은 질문 처리 중), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`, `429 QUOTA_EXCEEDED`, `429 DECLINE_LIMIT`, `429 RATE_LIMITED`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
 
 - 질문 해석이 AI 장애로 실패하면 `503 LLM_UNAVAILABLE`이며 **질문 수를 돌려준다**(차감 취소).
-- 같은 `Idempotency-Key` 질문을 처리하는 중에 다시 보내면(동시에 두 번) 질문 수를 다시 차감하지 않고 AI도 다시 부르지 않는다. 먼저 보낸 질문의 분석이 이미 저장됐으면 그 결과를, 아직 처리 중이면 `409 INVALID_STATE`("같은 질문을 처리하고 있습니다")를 돌려준다.
+- 같은 `Idempotency-Key` 질문을 처리하는 중에 다시 보내면(동시에 두 번) 질문 수를 다시 차감하지 않고 AI도 다시 부르지 않는다. 먼저 보낸 질문의 분석이 이미 저장됐으면 그 결과를, 아직 처리 중이면 `409 INVALID_STATE`("같은 질문을 처리하고 있습니다")를 돌려준다. 다만 차감한 지 **2분**이 지나도 분석이 없으면 먼저 보낸 요청이 끊긴 것으로 보고(이 요청은 60초에 끊긴다) 다시 차감하지 않고 이어서 처리한다. 422(지원 불가·기간 밖)로 끝난 질문은 차감한 채로 두고 멱등키 기록만 정리하므로, 같은 키로 다시 보내면 새 질문으로 다시 차감한다.
 - `422`(지원 불가·기간 밖)와 **`declined`(범위 밖 거절)는 질문 수를 차감한다** (판정에 AI 비용이 들고, 반복 오남용을 막기 위함). 화면에 "질문 1회가 사용되었습니다"를 함께 안내한다.
 - 거절이 하루 `max_declines_per_day`(10회)를 넘으면 이후 질문은 판정 없이 `429 DECLINE_LIMIT`.
 - 후속 질문(`projectId` 있음)도 매번 새로 범위를 판정한다.
@@ -815,10 +817,14 @@ sequenceDiagram
 ### 7.1 프로젝트
 | 이름 | 용도 | 연결 환경 |
 |---|---|---|
-| `sleepyheads-dev` | 개발·테스트 | 로컬, Vercel Preview |
-| `sleepyheads-prod` | 운영·시연 | Vercel Production |
+| `sleepyhead` (ref `yaonpdxrlsigdnqfdujf`, 조직 "Benji chat bot", Free) | 개발·시험·운영·시연 **공용** | 로컬, Vercel Preview, Vercel Production |
 
-- 무료 플랜의 활성 프로젝트 한도 2개에 맞춘 구성이다. **1주일 미사용 시 일시정지**되므로 시연 전 확인한다.
+- **결정 (2026-09-30, 통합/배포, WU-003): 개발용·운영용을 나누지 않고 하나로 유지한다.** 수업 시연만 하고 외부 사용자가 없어, 두 벌을 관리하는 비용(마이그레이션·키·구글 로그인 주소·기업 목록 동기화를 두 번씩)이 섞일 위험보다 크다고 봤다.
+- 대신 지키는 규칙:
+  - 시연 전날부터 시연이 끝날 때까지 **DB 구조를 바꾸는 마이그레이션을 적용하지 않는다.**
+  - 로컬·Preview에서 로그인·질문하면 **실제 서비스 DB에 회원과 분석이 생긴다.** 시험 데이터를 지울 때는 본인 계정 것만 지운다.
+  - 외부 사용자가 쓰기 시작하는 사용자 테스트(WU-599) 전에 분리를 다시 검토한다.
+- **1주일 미사용 시 일시정지**된다. 매일 도는 Vercel Cron(기업 목록 동기화)이 DB를 쓰므로 보통은 멈추지 않지만, 시연 전날 대시보드에서 상태를 확인한다 (FINAL_CHECKLIST 시연 당일 1번).
 
 ### 7.2 클라이언트 3종 (`src/lib/supabase/`)
 | 클라이언트 | 키 | 어디서 | 용도 |
@@ -860,7 +866,8 @@ sequenceDiagram
 
 ### 7.6 마이그레이션
 - DB 변경은 모두 `supabase/migrations/`의 SQL 파일로만 한다 (대시보드에서 직접 표 수정 금지).
-- 순서: 로컬 작성 → `sleepyheads-dev`에 적용·테스트 → PR 합친 뒤 `sleepyheads-prod`에 적용 (통합/배포 담당).
+- 순서: 로컬 작성 → 테스트(`tests/unit/db/`는 PGlite에 전체 마이그레이션을 적용해 운영 DB를 건드리지 않고 검사) → PR 리뷰·머지 → **배포가 끝난 뒤 데이터/서버가 `supabase db push`로 `sleepyhead`에 적용**. 코드가 새 구조를 필요로 하면 PR에 적용 순서를 적는다.
+- Supabase GitHub 연결은 `main` 머지 때 마이그레이션을 **자동으로 적용하지 않는다** (2026-09-30 PR #19로 확인 — 머지 뒤에도 적용 기록이 없었고 직접 `db push`해서 들어갔다).
 - 한도 값(`quota_config`) 변경은 예외적으로 Supabase 대시보드의 SQL 편집기로 바로 수정 가능 (코드 수정·배포 불필요).
 
 ---
@@ -896,9 +903,9 @@ sequenceDiagram
 ### 8.3 환경변수 (환경별)
 | 이름 | Development (로컬 `.env.local`) | Preview | Production |
 |---|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | dev | dev | prod |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | dev | dev | prod |
-| `SUPABASE_SECRET_KEY` 🔒 | dev | dev | prod |
+| `NEXT_PUBLIC_SUPABASE_URL` | `sleepyhead` | `sleepyhead` | `sleepyhead` |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sleepyhead` | `sleepyhead` | `sleepyhead` |
+| `SUPABASE_SECRET_KEY` 🔒 | `sleepyhead` | `sleepyhead` | `sleepyhead` |
 | `OPENDART_API_KEY` 🔒 | 본인 키 | 팀 키 | 팀 키 |
 | `DATA_GO_KR_SERVICE_KEY` 🔒 | 본인 키 | 팀 키 | 팀 키 |
 | `OPENAI_API_KEY` 🔒 | 팀 키 | 팀 키 | 팀 키 |
@@ -908,7 +915,7 @@ sequenceDiagram
 
 - 뉴스(Google 뉴스 RSS)는 키가 필요 없어 환경변수가 없다.
 
-- Preview는 운영 DB(`prod`)에 절대 연결하지 않는다.
+- Supabase는 프로젝트 하나를 세 환경이 같이 쓴다 (§7.1 결정). 나중에 나누면 Preview에는 운영 DB를 절대 연결하지 않는다.
 
 ---
 
