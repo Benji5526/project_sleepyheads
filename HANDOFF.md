@@ -5,7 +5,7 @@
 | 프로젝트 | project_sleepyheads — 질문형 기업 분석 서비스 (공시 숫자 + 뉴스 단서) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6.2 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3.5 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3.6 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3 |
+| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6.2 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3.6 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3.7 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3.1 |
 
 ### 변경 이력
 | 날짜 | 내용 |
@@ -24,6 +24,7 @@
 | 2026-09-29 | 운영 첫 질문이 "상장사 목록에 없습니다"로 실패 → 기업개황을 첫 확정 때 채우도록 수정, 기업 목록 수동 동기화(3,994곳) |
 | 2026-09-29 | **하루 마감**: 운영 로그인 성공 확인, 첫 질문 시간 초과 수정(PR #17), §0.0 "내일 시작하기" 추가 |
 | 2026-09-30 | **운영 핵심 통과 테스트 성공**(§0.3 1번 ✅), WU-113 실제 응답 재확인 ✅, **WU-115 비로그인 예시 완료**(G1·C2·로그인 안내 창) |
+| 2026-09-30 | WU-003: Supabase 프로젝트 하나(`sleepyhead`) 유지 결정, 마이그레이션 자동 적용 안 됨 확인 — §0.3 4번·§0.4·§2.1·§3.3·§6.2 반영 |
 
 > 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
@@ -82,7 +83,7 @@
 | ~~1~~ ✅ | 검증/문서 (현준) | ~~구글 로그인 → 약관 동의 → 대기화면~~ ✅. ~~Step 1 핵심 통과 테스트 질문을 운영에서 다시 실행~~ ✅ **2026-09-30 성공 (현준 확인)** — 2026-09-29 마지막 시도는 시간 초과(#17로 수정). 어제 실패한 결과 화면을 **새로고침하면 멈춘 분석이 이어서 실행**된다(질문 수 추가 차감 없음) | WU-108 완료조건 "배포 주소 로그인" ✅, WU-199. 실패하면 화면의 요청 ID로 Vercel 로그(Logs) 확인. 여전히 느리면 T3(Vercel 실행 시간) 측정 |
 | 2 | 데이터/서버 (+통합/배포) | WU-109~111 🟨 → 코드 마무리는 main 반영(PR #23→#24, 2026-09-30). **운영 적용 남음: 마이그레이션 `20260930020000_profiles_lock_update.sql`을 배포가 끝난 뒤 `supabase db push`로 적용** — 배포 전에 적용하면 새 회원 약관 동의가 조용히 실패한다. 후속: 회귀 Q1 설명 실패 재현 확인, 결론 문장 원인 추정 검사 여부 | 마이그레이션 `20260929070000`~`110000`, `20260930010000`(WU-114)은 운영에 적용됨 (2026-09-30 확인) |
 | 3 | 통합/배포 | WU-114 🟨 코드 main 반영(PR #19), **마이그레이션 `20260930010000` 운영 적용 확인됨**(2026-09-30) → 운영에서 남은 질문 표시·동시 2번 1회 차감 확인. 검토 후속: 차감 후 분석 없는 멱등키가 7일간 409, `/auth/callback`도 비로그인 분당 30회에 걸림 (PR #19 리뷰) | — |
-| 4 | 통합/배포 | WU-003 마무리 (Supabase 프로젝트 dev/prod 분리 여부 결정, Supabase GitHub 연결이 main 머지 때 마이그레이션을 자동 적용하는지) → WORK_UNITS 상태 갱신 | 지금은 로컬·Preview·운영이 **같은 DB** |
+| 4 | 통합/배포 | WU-003 🟨 (2026-09-30): **Supabase는 `sleepyhead` 하나로 유지 결정**, GitHub 연결은 머지 때 마이그레이션을 **자동 적용하지 않음** 확인, 서버 키 노출 없음 확인. **남은 것: Vercel 팀 `Project_Agent2`가 Hobby(무료)인지 현준님 확인** | API_SPEC §7.1·§7.6 |
 | ~~5~~ ✅ | 기획/화면 (현준) | ~~실제 서버 응답으로 WU-113 화면 재확인~~ ✅ → ~~WU-115 비로그인 예시~~ ✅ (2026-09-30). 다음: 로컬 로그인 확인(WU-108 마지막 조건), WU-199 시연 준비 | 로컬에서 실제 연결로 보려면 `.env.local`의 `NEXT_PUBLIC_API_MOCK`을 비운다 |
 | 6 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·**AI 입력 가능 여부**), T6(12월 외 결산 샘플), 손 계산 정답표 | WU-304 전 필수 |
 
@@ -96,7 +97,7 @@
 - 앞으로 로그인하면 **실제 서비스 DB에 회원이 생긴다** (DB가 하나뿐이라 로컬 시험도 마찬가지).
 - **분석 속도**: 처음 조회하는 기업은 보고서 20여 개를 전자공시에서 받아야 해서 느리다(한 번 받은 보고서는 DB에 남아 다음부터 빠름). 한 요청 300초가 Vercel Hobby 한계라, 그래도 넘치면 단계 나눠 실행(WU-302)을 앞당겨야 한다.
 - 시간 초과 등으로 끊긴 분석은 상태가 `running`으로 남는다. 결과 화면을 다시 열면 이어서 실행되지만, 목록 화면(WU-201)이 생기면 오래된 `running` 정리 규칙이 필요하다.
-- **Supabase 프로젝트는 실제로 `sleepyhead` 하나**(병준님 조직 "Benji chat bot")다. §2.1의 dev/prod 두 개 분리는 아직 안 됐다 — 로컬·Preview·운영이 같은 DB를 쓴다. 분리 여부는 통합/배포가 결정.
+- **Supabase 프로젝트는 `sleepyhead` 하나로 유지한다** (2026-09-30 통합/배포 결정, API_SPEC §7.1): 로컬·Preview·운영이 같은 DB를 쓴다. 규칙 — 시연 전날부터 끝날 때까지 DB 구조 마이그레이션 적용 금지, 시험 데이터는 본인 것만 지우기, 사용자 테스트(WU-599) 전 분리 재검토.
 - **[보안] 코드 수정 완료(PR #24), 운영 DB 적용 남음(§0.3 2번)** — **[보안] `profiles_update_own` RLS 정책이 모든 컬럼 수정을 허용**한다 (`supabase/migrations/20260929020000_rls_policies.sql:14`) — 로그인한 사용자가 Data API로 자기 `agreed_terms_at`·`email`을 직접 바꿀 수 있다. 데이터/서버가 마이그레이션으로 고칠 것 (PR #10 병준님 지적). 고칠 때 A4(`/api/me/terms`)가 지금 회원 세션으로 `agreed_terms_at`을 쓰므로 **A4를 관리자 클라이언트로 바꾸는 것과 함께** 해야 한다.
 - `/privacy`의 연락처 `admin@sleepyheads.com`은 **임시** — `sleepyheads.com`은 다른 곳이 쓰는 도메인이라 메일이 팀에 오지 않는다. 공개 전 팀이 받을 수 있는 주소로 교체.
 - `TEAM_AGREEMENT.md`(저장소 밖에서 관리)는 아직 "계산 결과를 **설명하는** 분석 글" 표현 — 투자 인사이트 방향으로 맞출지 결정 필요.
@@ -159,7 +160,7 @@
 | **Vercel — 배포** | `main` → 운영, PR → Preview 주소 자동 생성 | 통합/배포 |
 | **Supabase — Auth** | 구글 로그인만, 이메일·비밀번호 가입 끔 | 통합/배포 |
 | **Supabase — Postgres** | 모든 데이터, RLS, 한도 차감 등 DB 함수 5개 | 데이터/서버 |
-| **Supabase 프로젝트 2개** (계획) | `sleepyheads-dev`(로컬·Preview), `sleepyheads-prod`(운영) — **현재는 `sleepyhead` 하나를 모두가 같이 쓴다** (§0.4) | 통합/배포 |
+| **Supabase 프로젝트 1개** | `sleepyhead` 하나를 로컬·Preview·운영이 같이 쓴다 (2026-09-30 결정, API_SPEC §7.1) | 통합/배포 |
 
 - **브라우저는 Supabase DB를 직접 조회하지 않는다.** 로그인·로그아웃만 브라우저에서 Supabase를 쓰고, 나머지 데이터는 모두 `/api/*`를 거친다.
 
@@ -209,7 +210,7 @@
 **지금 바로 시작할 일**
 1. **계약 타입 검토**: [API_SPEC §2](DevelopDoc/API_SPEC.md)의 타입이 계산 엔진·실행기 결과로 실제로 만들 수 있는 모양인지 확인하고, 서버 쪽 **Zod 스키마**와 AI 내부 형식(TECH §4.2, snake_case) → API 형식(camelCase) 변환 함수를 설계 → 기획/화면과 합의.
 2. **계산 엔진 순수 함수**(WU-106) 먼저 작성: TECH §6.2~6.4는 외부 API 없이 가상 입력으로 개발·테스트할 수 있다. 3월 결산 달력 환산 예시(TECH §6.3 표)를 첫 테스트로.
-3. **DB 스키마 SQL 초안**(WU-101): TECH §15 테이블 + [API_SPEC §7.3 DB 함수 5개](DevelopDoc/API_SPEC.md) + §7.4 RLS를 마이그레이션 파일로. 적용은 WU-003(`sleepyheads-dev` 생성) 후.
+3. **DB 스키마 SQL 초안**(WU-101): TECH §15 테이블 + [API_SPEC §7.3 DB 함수 5개](DevelopDoc/API_SPEC.md) + §7.4 RLS를 마이그레이션 파일로. 적용은 WU-003(`sleepyhead` 생성) 후.
 4. 개발용 OpenDART 키를 **본인 이름으로 발급**(§6.2)해 SK하이닉스·삼성전자·KB금융 응답 샘플을 받아 둔다.
 
 **지켜야 할 원칙 (TECH §0)**: 숫자는 서버가 계산, AI는 숫자를 직접 쓰지 않음(자리표시자), 허용 도구만 실행, 원본 응답·기사 본문 저장 금지, 모든 외부 호출은 공통 래퍼 경유.
@@ -232,7 +233,7 @@
 **지금 바로 시작할 일**
 1. **WU-001을 가장 먼저** 끝낸다. 다른 역할의 코드 작업이 이것을 기다린다. 목표: `pnpm dev`가 되는 뼈대 + `src/contracts/`에 [API_SPEC §2](DevelopDoc/API_SPEC.md) 타입 옮기기 + `vercel.json`(§8.1 crons) + CI.
 2. 현준님과 **WU-002·WU-003** 진행: 운영용 계정·키는 현준님 명의(또는 팀 공용)로 만들고, 운영 키는 Vercel 환경변수에만 넣는다.
-3. **Supabase 프로젝트 2개**를 만든다: `sleepyheads-dev`(로컬·Preview), `sleepyheads-prod`(운영·시연). 무료 플랜의 활성 프로젝트 한도가 2개라 딱 맞다.
+3. ~~**Supabase 프로젝트 2개**를 만든다~~ → **`sleepyhead` 하나로 유지하기로 결정** (2026-09-30, API_SPEC §7.1).
 4. **Vercel 환경변수를 환경별로 등록**: [API_SPEC §8.3 표](DevelopDoc/API_SPEC.md) 그대로. Preview에는 절대 prod DB를 연결하지 않는다. `CRON_SECRET`은 16자 이상 무작위 문자열.
 5. **API 뼈대 만들기**: [API_SPEC §3](DevelopDoc/API_SPEC.md)의 23개 경로에 빈 Route Handler를 만들고, 공통 처리(세션 검증·약관 확인·소유자 검사·오류 형식 §1.7·요청 속도 §1.6·`Idempotency-Key`)를 미들웨어·헬퍼로 먼저 구현한다. 내부 로직은 데이터/서버가 채운다.
 6. `.env.example`과 §6의 키 배포 방식을 팀에 공지한다.
@@ -321,7 +322,7 @@ flowchart LR
 | 공공데이터포털 주가 | 각자 발급 | 팀 운영 키 | 통합/배포 |
 | 뉴스 (Google 뉴스 RSS) | 키 없음 | 키 없음 | — |
 | OpenAI (유료) | **팀 키 1개 공유** (월 예산 상한 설정 필수) | 같은 키 또는 운영 전용 키 | 현준님 |
-| Supabase | `sleepyheads-dev` 프로젝트 키 (현재는 `sleepyhead` 하나) | `sleepyheads-prod` 프로젝트 키 (현재는 `sleepyhead` 하나) | 통합/배포 |
+| Supabase | `sleepyhead` 프로젝트 키 | 같은 `sleepyhead` 프로젝트 키 (하나로 유지 결정) | 통합/배포 |
 | `CRON_SECRET` | 임의 값 | 운영 값 (Vercel Production에만) | 통합/배포 |
 
 - 환경별 전체 목록(로컬·Preview·Production)은 [API_SPEC §8.3](DevelopDoc/API_SPEC.md).
