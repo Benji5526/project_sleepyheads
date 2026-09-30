@@ -7,7 +7,7 @@
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
 | 버전 | v0.3.6 |
-| 기준 문서 | [PRD.md](./PRD.md) v0.6, [TECH_SPEC.md](./TECH_SPEC.md) v0.6, [API_SPEC.md](./API_SPEC.md) v0.3.4 |
+| 기준 문서 | [PRD.md](./PRD.md) v0.6, [TECH_SPEC.md](./TECH_SPEC.md) v0.6, [API_SPEC.md](./API_SPEC.md) v0.3.5 |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |

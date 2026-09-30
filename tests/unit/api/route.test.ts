@@ -164,6 +164,15 @@ describe("route() 공통 처리", () => {
     ]);
   });
 
+  it("skipRateLimit이면 분당 제한을 세지 않는다 (구글 로그인 콜백)", async () => {
+    rate.calls = [];
+    rate.result = { allowed: false, retryAfterSeconds: 30 };
+    const GET = route({ access: "public", skipRateLimit: true }, async () => ok(null));
+    const res = await GET(request("/auth/callback"), noParams);
+    expect(res.status).toBe(200);
+    expect(rate.calls).toEqual([]);
+  });
+
   it("분당 한도를 넘으면 429 RATE_LIMITED + Retry-After", async () => {
     rate.result = { allowed: false, retryAfterSeconds: 37 };
     const POST = route({ access: "member", questionRequest: true }, async () => ok(null));

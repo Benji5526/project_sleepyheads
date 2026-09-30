@@ -12,7 +12,9 @@ function redirectTo(req: NextRequest, path: string) {
 // A1 GET /auth/callback 🔓 — API_SPEC §4
 // 구글 로그인 뒤 Supabase가 돌려보내는 주소. code를 세션 쿠키로 바꾸고,
 // 처음이면 profiles를 만든 뒤 약관 동의 여부에 따라 /onboarding 또는 next로 보낸다.
-export const GET = route({ access: "public" }, async ({ req, requestId }) => {
+// 분당 요청 제한은 걸지 않는다: 구글이 준 일회용 code가 있어야만 로그인되고, 같은 IP로
+// 여러 명이 동시에 로그인하는 수업 시연에서 막히면 안 된다 (PR #19 리뷰 후속).
+export const GET = route({ access: "public", skipRateLimit: true }, async ({ req, requestId }) => {
   const next = safeNextPath(req.nextUrl.searchParams.get("next"));
   const failed = () => redirectTo(req, `/login?error=callback&next=${encodeURIComponent(next)}`);
 
