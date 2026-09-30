@@ -75,7 +75,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await apiSignOut();
-    setSnapshot(ANONYMOUS);
+    // 화면 상태를 손으로 바꾸지 않고 첫 화면을 새로 불러온다: 회원 화면에 남아 있던 내용이 모두 지워지고,
+    // replace라 '뒤로 가기'로 이 화면에 돌아오지 않는다. 새 화면이 로그인 상태를 다시 읽는다
+    window.location.replace("/");
   }, []);
 
   const value = useMemo(

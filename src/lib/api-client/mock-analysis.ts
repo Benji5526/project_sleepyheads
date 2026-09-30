@@ -6,6 +6,7 @@
 //   … 사도 돼 / 목표주가   → 투자 권유 거절          기업 없는 주식 질문  → 되묻기
 //   주식과 무관           → 범위 밖 거절            … 2013년            → 조회 기간 밖(422)
 //   … 직원 만족도         → 지원하지 않는 지표(422)  … AI 장애          → AI 장애(503, 차감 없음)
+//   … 서버 오류           → 예상 못 한 서버 오류(500, 요청 ID 안내)
 import type { Analysis, CompanyRef } from "@/contracts";
 import { MOCK_COMPANIES, findMockCompany } from "../../../tests/fixtures/mock/companies";
 import {
@@ -112,6 +113,18 @@ export async function mockAsk(question: string): Promise<WithRemaining<AskRespon
   // AI 장애로 질문 해석 실패 → 차감 취소 (API_SPEC Q1)
   if (/AI 장애/.test(question)) {
     throw new ApiRequestError("LLM_UNAVAILABLE", "AI 서비스에 일시적인 문제가 있습니다.", 503);
+  }
+  // 서버가 예상 못 한 오류로 끊김 → 요청 ID만 돌아온다 (API_SPEC §1.7)
+  if (/서버 오류/.test(question)) {
+    throw new ApiRequestError(
+      "INTERNAL_ERROR",
+      "서버 오류가 발생했습니다.",
+      500,
+      null,
+      null,
+      null,
+      crypto.randomUUID(),
+    );
   }
 
   charge();

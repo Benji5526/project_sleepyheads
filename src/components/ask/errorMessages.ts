@@ -8,6 +8,8 @@ export interface ErrorNotice {
   charged: boolean;
   /** 대신 해볼 수 있는 질문 */
   suggestions: string[];
+  /** 문의할 때 알려 줄 요청 ID (예상 못 한 서버 오류일 때만 보여 준다) */
+  requestId?: string | null;
 }
 
 export function formatKstTime(iso: string | null): string | null {
@@ -95,6 +97,13 @@ export function describeError(error: unknown): ErrorNotice {
       };
     case "VALIDATION_ERROR":
       return { title: "질문을 확인해 주세요", body: "질문은 1~500자로 입력해 주세요.", ...none };
+    case "INTERNAL_ERROR":
+      return {
+        title: "일시적인 서버 오류가 발생했습니다",
+        body: "잠시 후 다시 시도해 주세요. 같은 문제가 계속되면 아래 요청 ID를 함께 알려 주세요.",
+        ...none,
+        requestId: e.requestId,
+      };
     case "NETWORK_ERROR":
       return {
         title: "서버에 연결하지 못했습니다",
@@ -106,6 +115,7 @@ export function describeError(error: unknown): ErrorNotice {
         title: "요청을 처리하지 못했습니다",
         body: "잠시 후 다시 시도해 주세요.",
         ...none,
+        requestId: e.requestId,
       };
   }
 }

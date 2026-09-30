@@ -12,6 +12,7 @@ vi.mock("@/lib/supabase/server", () => ({
         session.userId
           ? { data: { claims: { sub: session.userId } }, error: null }
           : { data: null, error: null },
+      signOut: async () => ({ error: null }),
     },
     from: () => ({
       select: () => ({
@@ -32,18 +33,19 @@ const ID = "22222222-2222-4222-8222-222222222222";
 // API_SPEC §3 엔드포인트 23개:
 // [#, 메서드, 경로, 비로그인 기대 상태, 로그인·약관 미동의 기대 상태, maxDuration(§8.2)]
 //  🔓 → 501 / 501, 🔑* → 401 / 501, 🔑·🛡️ → 401 / 403, ⚙️ → 401 / 401
+//  WU-108에서 구현한 A1~A4는 실제 응답: A1 code 없음 → 303 로그인 화면, A2 → 303 /, A3 → 200, A4 본문 없음 → 400
 const ENDPOINTS: [string, string, string, number, number, number?][] = [
-  ["A1", "GET", "/auth/callback", 501, 501],
-  ["A2", "POST", "/auth/signout", 401, 501],
-  ["A3", "GET", "/api/me", 401, 501],
-  ["A4", "POST", "/api/me/terms", 401, 501],
+  ["A1", "GET", "/auth/callback", 303, 303],
+  ["A2", "POST", "/auth/signout", 401, 303],
+  ["A3", "GET", "/api/me", 401, 200],
+  ["A4", "POST", "/api/me/terms", 401, 400],
   ["A5", "GET", "/api/me/usage", 401, 403],
   ["A6", "DELETE", "/api/me", 401, 403],
   ["S1", "GET", "/api/search", 401, 403],
   ["Q1", "POST", "/api/ask", 401, 403, 60],
   ["Q2", "GET", "/api/analyses/[id]", 401, 403],
   ["Q3", "POST", "/api/analyses/[id]/clarify", 401, 403],
-  ["Q4", "POST", "/api/analyses/[id]/step", 401, 403, 60],
+  ["Q4", "POST", "/api/analyses/[id]/step", 401, 403, 300],
   ["Q5", "POST", "/api/analyses/[id]/preprocess", 401, 403],
   ["Q6", "POST", "/api/analyses/[id]/rerun", 401, 403, 60],
   ["Q7", "POST", "/api/analyses/[id]/approve", 401, 403],

@@ -8,7 +8,7 @@
 | 작성일 | 2026-09-28 |
 | 버전 | v0.6.1 |
 | 기준 PRD | [PRD.md](./PRD.md) v0.6 |
-| 관련 문서 | [API_SPEC.md](./API_SPEC.md) v0.3 — 서버 API 상세 명세 |
+| 관련 문서 | [API_SPEC.md](./API_SPEC.md) v0.3.1 — 서버 API 상세 명세 |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |

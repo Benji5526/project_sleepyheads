@@ -1,0 +1,78 @@
+import { describe, expect, it } from "vitest";
+import {
+  addQuarters,
+  clipToAvailableRange,
+  compareQuarters,
+  EARLIEST_QUARTER,
+  formatQuarter,
+  latestAvailableQuarter,
+  parseQuarter,
+  quarterSpan,
+} from "@/lib/ask/quarter";
+
+describe("quarter 산술", () => {
+  it("parseQuarter/formatQuarter가 왕복한다", () => {
+    expect(parseQuarter("2026Q2")).toEqual({ year: 2026, q: 2 });
+    expect(formatQuarter(2026, 2)).toBe("2026Q2");
+  });
+
+  it("addQuarters는 연도 경계를 넘나든다", () => {
+    expect(addQuarters("2026Q1", -1)).toBe("2025Q4");
+    expect(addQuarters("2025Q4", 1)).toBe("2026Q1");
+    expect(addQuarters("2026Q2", -3)).toBe("2025Q3");
+  });
+
+  it("compareQuarters는 순서를 매긴다", () => {
+    expect(compareQuarters("2025Q1", "2025Q2")).toBeLessThan(0);
+    expect(compareQuarters("2025Q2", "2025Q1")).toBeGreaterThan(0);
+    expect(compareQuarters("2025Q2", "2025Q2")).toBe(0);
+  });
+
+  it("quarterSpan은 양끝을 포함한 개수다", () => {
+    expect(quarterSpan("2025Q3", "2026Q2")).toBe(4);
+    expect(quarterSpan("2026Q2", "2025Q3")).toBe(0);
+  });
+
+  it("latestAvailableQuarter는 이번 분기 이전(가장 최근에 끝난 분기)이다", () => {
+    // 2026-09-29(3Q) 기준 -> 가장 최근에 끝난 분기는 2Q
+    expect(latestAvailableQuarter(new Date("2026-09-29T00:00:00+09:00"))).toBe("2026Q2");
+    // 연초(1Q 안쪽)는 작년 4Q
+    expect(latestAvailableQuarter(new Date("2026-01-15T00:00:00+09:00"))).toBe("2025Q4");
+  });
+
+  describe("clipToAvailableRange", () => {
+    const latest = "2026Q2" as const;
+
+    it("범위 안이면 그대로", () => {
+      expect(clipToAvailableRange("2025Q3", "2026Q2", latest)).toEqual({
+        from: "2025Q3",
+        to: "2026Q2",
+        clipped: false,
+      });
+    });
+
+    it("시작이 2015Q1보다 이르면 잘라내고 clipped=true", () => {
+      expect(clipToAvailableRange("2010Q1", "2016Q4", latest)).toEqual({
+        from: EARLIEST_QUARTER,
+        to: "2016Q4",
+        clipped: true,
+      });
+    });
+
+    it("전부 2015Q1 이전이면 null (OUT_OF_RANGE)", () => {
+      expect(clipToAvailableRange("2010Q1", "2013Q4", latest)).toBeNull();
+    });
+
+    it("from이 latest보다 미래면 null", () => {
+      expect(clipToAvailableRange("2027Q1", "2027Q4", latest)).toBeNull();
+    });
+
+    it("to가 latest를 넘으면 latest로 잘라내고 clipped=true", () => {
+      expect(clipToAvailableRange("2026Q1", "2027Q4", latest)).toEqual({
+        from: "2026Q1",
+        to: latest,
+        clipped: true,
+      });
+    });
+  });
+});

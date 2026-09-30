@@ -16,7 +16,8 @@ function format(value: string | number | null, type: UsedData["columns"][number]
   if (value === null || value === undefined) return "—";
   if (typeof value === "string") return value;
   if (type === "krw") return won.format(value);
-  if (type === "percent") return `${value}%`;
+  // 차트 표와 같게 소수 첫째 자리까지 (계산값 11.2345678 → 11.2%)
+  if (type === "percent") return `${Math.round(value * 10) / 10}%`;
   if (type === "times") return `${value}배`;
   return String(value);
 }

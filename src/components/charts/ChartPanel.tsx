@@ -82,7 +82,7 @@ export function ChartPanel({
       {chart.footnotes.length > 0 && (
         <ul className="mt-3 space-y-1 text-xs leading-5 text-muted">
           {chart.footnotes.map((note) => (
-            <li key={note}>※ {note}</li>
+            <li key={note}>※ {note.replace(/^※\s*/, "")}</li>
           ))}
         </ul>
       )}

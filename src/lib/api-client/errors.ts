@@ -9,6 +9,8 @@ export class ApiRequestError extends Error {
     readonly resetAt: string | null = null,
     readonly retryAfterSeconds: number | null = null,
     readonly details: Record<string, unknown> | null = null,
+    /** 응답의 X-Request-Id. 오류 문의 때 서버 로그를 찾는 값 (API_SPEC §1.5) */
+    readonly requestId: string | null = null,
   ) {
     super(message);
     this.name = "ApiRequestError";
@@ -25,6 +27,9 @@ export function codeFromHttpStatus(status: number): ApiErrorCode {
   if (status === 413) return "TOO_LARGE";
   if (status === 422) return "UNSUPPORTED_QUESTION";
   if (status === 429) return "RATE_LIMITED";
+  if (status === 501) return "NOT_IMPLEMENTED";
+  if (status === 502) return "UPSTREAM_ERROR";
   if (status === 503) return "SERVICE_BUDGET";
-  return "UPSTREAM_ERROR";
+  // 500, 그리고 본문 없이 끊긴 응답(예: Vercel 실행 시간 초과 504)
+  return "INTERNAL_ERROR";
 }
