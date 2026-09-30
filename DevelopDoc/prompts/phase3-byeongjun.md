@@ -15,17 +15,15 @@
 - `src/lib/limits/size.ts` 다듬기: 행 수 추정이 실제와 맞는지, 15만 행 초과 `TOO_LARGE` 안내, 차트 점 500개 초과 안내, 집계 30초 상한(TECH §12.5)
 - `pnpm test`에는 가벼운 판정 테스트만. 무거운 측정은 별도 설정(예: `vitest.perf.config.ts`, CI 제외)
 
-### 2. OpenAI 키 여러 개 순차 사용 (2026-09-30 현준님 요청)
-- `OPENAI_API_KEY`에 쉼표로 여러 키 → 앞 키가 **잔액 부족**(HTTP 429 + `insufficient_quota`)이면 다음 키로 같은 요청을 한 번 더. 속도 제한(`rate_limit_exceeded`)·5xx는 지금처럼 재시도(키 바꾸지 않음)
-- 오류 코드 이름은 **OpenAI 공식 문서(Error codes)에서 확인**하고 테스트에 적는다. 키 값은 로그에 남기지 않는다(몇 번째 키인지만)
-- Vercel 환경변수 넣기는 사용자가 할 일 — 안내 전에 Vercel 화면 메뉴를 실제로 확인
-- 조원 키는 **본인 동의 후**. 시연용으로 한 키를 개발에 쓰지 않는 운영 전용으로 두는 방안도 보고서에 제안
+### 2. ~~OpenAI 키 여러 개 순차 사용~~ ✅ 현준이 먼저 함 (2026-09-30, `feat/WU-401-board-ui`)
+- `src/lib/llm/client.ts`: 쉼표로 여러 키, 잔액·지출 한도 오류(공식 코드 4종 + `error.type` `insufficient_quota`)면 다음 키, 속도 제한은 그대로, 키 값은 로그에 없음. `pnpm check:keys`가 키마다 확인. 테스트 `tests/unit/llm-client.test.ts`
+- **남은 것(병준)**: 조원 키를 Vercel `OPENAI_API_KEY`에 쉼표로 넣기(본인 동의 후 — 사용자 안내 전에 Vercel 화면 메뉴 확인), 시연 전용 키를 개발에 쓰지 않는 방안 보고서에 제안. 이 파일은 통합 전까지 고치지 않는다(겹침 방지)
 
 ### 3. Phase 2 후속 (보고서 "다른 트랙에 부탁")
-- `tests/unit/api/owner-routes.test.ts`: Q5(preprocess)·Q6(rerun)을 "구현된 경로" 묶음으로 옮겨 **404만** 허용
+- ~~`tests/unit/api/owner-routes.test.ts`: Q5·Q6을 "구현된 경로"로~~ ✅ 현준이 먼저 함 (Q5~Q8 모두 404만, 2026-09-30)
 - 설명 재사용(같은 요청 + 같은 데이터 버전)일 때도 `search_news`가 먼저 돌아 RSS·요지 비용이 드는 문제 — 재사용이 확실하면 뉴스 단계를 건너뛸지 검토(`engine.ts`)
 - 계획의 뉴스 핵심어: `METRIC_LABEL` 전부가 아니라 기본 지표 이름만(예: "YoY 증감률" 빼기) — `plan.ts`
-- WU-399에서 나온 엔진 문제(현준 보고)
+- WU-399에서 나온 것 (`DevelopDoc/STEP3_PASS_TEST.md` §2.1): **운영(Vercel)에서 주가 API 실패**(로컬은 성공 — Vercel 환경변수 `DATA_GO_KR_SERVICE_KEY` 확인), 처음 조회하는 경쟁사 3곳 재무 수집 102초(복합 질문이면 90초 상한 — WU-403 측정 때 함께), 단순 질문은 한 요청에서 끝까지 해 진행 칸이 첫 단계에 머묾(설계대로, 개선 여부 판단)
 
 ## 하지 말 것
 - 소유표 밖 파일·잠긴 파일 수정 (`src/contracts/**`, `limits/size.ts`의 이름·인자, `ResultView.tsx`·`AnalysisScreen.tsx`, `http.ts`, `route.ts`, `guards.ts`, `package.json`, `HANDOFF.md`)

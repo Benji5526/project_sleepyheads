@@ -17,11 +17,14 @@
 - **DB 안 SQL 집계**(WU-403 완료조건 "서버로 12만 행을 가져오지 않음"): 섹터별·연도별 합계를 DB 함수로. 병준님이 이 함수로 대용량 측정을 한다
 - 가짜 모드는 현준님(`mock-boards.ts`) — 서버는 경로 단위 테스트 + `tests/unit/db/boards*.test.ts`(PGlite: RLS·cascade)
 
-### 2. Phase 2 후속 (현준 WU-299·WU-305에서 찾음)
-- **질문에 적은 기간이 무시된다**: "하이브 2023년 1분기부터 2024년 4분기까지 분기별 당기순이익" → `period.specified=false`, 최근 8분기로 계산 (운영 분석 `97016b86-7de2-41fe-b188-1c28ca07de2e`). 해석 AI 출력(`period.text`)과 서버 기간 변환(TECH §4.3) 중 어디서 빠지는지 확인·회귀 테스트
-- **"현대차 최근 4분기 매출과 영업이익" → 현대차증권으로 해석** (2026-09-30 실제 API). 기업 찾기(`resolveCompany`)에서 정확 일치·별칭(현대차 = 현대자동차) 우선
+### 2. Phase 2 후속 (현준 WU-299·WU-305·WU-399에서 찾음)
+- ~~질문에 적은 기간이 무시된다~~ ✅ 현준이 먼저 함 (2026-09-30): `src/lib/ask/period.ts`가 "2023년 1분기부터 2024년 4분기까지"·"2023Q1~2024Q4" 같은 분기 범위를 읽는다 (`ask-period.test.ts`)
+- ~~"현대차" → 현대차증권~~ ✅ 현준이 먼저 함: `src/lib/companies/resolve.ts` 줄임말 표 `COMPANY_ALIASES` (`companies-resolve.test.ts`). 더 넣을 줄임말이 있으면 이 표에
+- ~~기업 비교가 QoQ·YoY를 빼먹음~~ ✅ 현준이 먼저 함: `series-builders.ts` `buildCompanyComparisonSeries`에 기업별 증감률 시리즈 (`tests/accuracy/step3-qoq-compare.test.ts`, 손 계산 정답 대조). 검토 부탁
+- **운영(Vercel)에서 주가 API 실패** → 경쟁사가 "종목코드 순 (주가를 받지 못함)" (분석 `e2fc3367…`). 같은 요청이 로컬에서는 성공 — `market-cap.ts` 쪽 원인인지 병준님(Vercel 환경변수)과 함께 확인
+- ISC 섹터가 `기타`(반도체 검사 소켓) — 섹터 규칙·수동 지정 검토
 - DB하이텍 2026Q2: 반기보고서 3개월 값과 "반기 누적 − 1분기"가 3,190,705,373원 다르다 — TECH §6.2대로 3개월 값을 쓰는지 확인 (`STEP3_PASS_TEST.md` §3.4)
-- WU-399에서 나온 계산·비교 문제(현준 보고)
+- 위 세 파일(`period.ts`·`resolve.ts`·`series-builders.ts`)은 현준 브랜치에 있다 — 통합 전에 같은 곳을 고치면 겹치니, 더 고칠 것이 있으면 보고서 "다른 트랙에 부탁"에 적어 주세요
 
 ## 하지 말 것
 - 소유표 밖 파일·잠긴 파일 수정 (`src/contracts/**`, `tools/types.ts`·`registry.ts`, `limits/size.ts`, `ResultView.tsx`·`AnalysisScreen.tsx`, `http.ts`, `route.ts`, `guards.ts`, `package.json`, `HANDOFF.md`), 병준님 `steps/**`, 현준님 화면·`news-tools.ts`·`explain/**`
