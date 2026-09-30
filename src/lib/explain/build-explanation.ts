@@ -14,8 +14,15 @@ const MIXED_SCOPE_NOTICE =
 
 /** "때문", "원인", "영향으로" 등 — 뉴스 근거 없이 원인을 추정했는지 보는 실용적 신호(완전한 검사는 아니다). */
 const CAUSAL_KEYWORDS = ["때문", "원인", "영향으로", "탓에", "덕분에", "여파로"];
+/**
+ * "원인을 다음 보고서에서 확인할 필요"처럼 원인을 단정하지 않고 앞으로 확인할 거리로 남기는 표현은 추정이 아니다.
+ * "원인은 …로 확인됩니다"(단정)는 빼지 않도록 앞으로 할 일 형태(확인할·살펴볼…)만, 사이에 다른 원인 표현이 없을 때만.
+ */
+const CAUSE_TO_CHECK =
+  /원인(?:(?!때문|탓에|덕분에|여파로|영향으로)[^.?!])*?(확인할|확인이 필요|확인해야|파악할|점검할|살펴볼|지켜볼)/g;
 function looksLikeCausalClaim(text: string): boolean {
-  return CAUSAL_KEYWORDS.some((kw) => text.includes(kw));
+  const claim = text.replace(CAUSE_TO_CHECK, "");
+  return CAUSAL_KEYWORDS.some((kw) => claim.includes(kw));
 }
 
 function chartRefOrNull(ref: string | null, chartIds: ReadonlySet<string>): string | null {
@@ -73,7 +80,7 @@ export function buildExplanation(input: BuildExplanationInput): Explanation {
     const figureIds = raw.figure_ids.filter((id) => id in input.figures);
     const newsIds = input.hasNews ? raw.news_ids.filter((id) => newsClueById.has(id)) : [];
     if (figureIds.length === 0 && newsIds.length === 0) continue; // 근거 연결 검사
-    if (raw.inferred && newsIds.length === 0 && looksLikeCausalClaim(text)) continue; // 원인 추정엔 뉴스 근거 필수
+    if (newsIds.length === 0 && looksLikeCausalClaim(text)) continue; // 원인 추정엔 뉴스 근거 필수 — `inferred` 자가 신고 여부와 무관하게 문장 자체를 검사(우회 방지)
 
     insights.push({
       kind: raw.kind,

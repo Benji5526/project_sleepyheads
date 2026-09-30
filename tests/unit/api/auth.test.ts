@@ -48,12 +48,6 @@ vi.mock("@/lib/supabase/server", () => ({
         select: () => query,
         eq: () => query,
         is: () => query,
-        update: (values: { agreed_terms_at: string }) => {
-          if (fake.profile && !fake.profile.agreed_terms_at) {
-            fake.profile = { ...fake.profile, ...values };
-          }
-          return query;
-        },
         maybeSingle: async () => ({ data: fake.profile, error: null }),
       };
       return query;
@@ -61,20 +55,34 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
+// profiles UPDATE는 RLS로 막혀 있어 관리자 클라이언트로만 한다 (recordTermsAgreement).
 vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: () => ({
-    from: () => ({
-      upsert: async (
-        row: { id: string; email: string; nickname: string | null },
-        options: unknown,
-      ) => {
-        fake.upserts.push(row);
-        fake.upsertOptions.push(options);
-        if (fake.upsertError) return { error: fake.upsertError };
-        fake.profile ??= { ...row, agreed_terms_at: null };
-        return { error: null };
-      },
-    }),
+    from: () => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        is: () => query,
+        update: (values: { agreed_terms_at: string }) => {
+          if (fake.profile && !fake.profile.agreed_terms_at) {
+            fake.profile = { ...fake.profile, ...values };
+          }
+          return query;
+        },
+        maybeSingle: async () => ({ data: fake.profile, error: null }),
+        upsert: async (
+          row: { id: string; email: string; nickname: string | null },
+          options: unknown,
+        ) => {
+          fake.upserts.push(row);
+          fake.upsertOptions.push(options);
+          if (fake.upsertError) return { error: fake.upsertError };
+          fake.profile ??= { ...row, agreed_terms_at: null };
+          return { error: null };
+        },
+      };
+      return query;
+    },
   }),
 }));
 

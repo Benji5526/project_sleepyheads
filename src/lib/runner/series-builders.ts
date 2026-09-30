@@ -20,7 +20,7 @@ import {
 
 /** 요청된 metrics 중 revenue > operating_income > net_income 순으로 첫 번째를 YoY/QoQ 기준으로 쓴다. */
 function primaryChangeMetric(metrics: MetricId[]): FlowMetricId {
-  const priority: FlowMetricId[] = ["operating_income", "revenue", "net_income"];
+  const priority: FlowMetricId[] = ["revenue", "operating_income", "net_income"];
   return priority.find((m) => metrics.includes(m)) ?? "revenue";
 }
 
@@ -207,8 +207,9 @@ export function buildAnnualSeries(
       continue;
     }
 
-    // 그 밖 지표(ROE·TTM 등)는 이미 분기말 기준 4분기 합/평균이라 연간 재계산 없이 그 해 4분기 값을 쓴다.
+    // 그 밖 지표(ROE·부채비율·TTM 등)는 이미 분기말 기준 4분기 합/평균이라 연간 재계산 없이 그 해 4분기 값을 쓴다.
     const points: Series["points"] = [];
+    let footnoteMark: "※" | undefined;
     for (const year of years) {
       const key = `${year}Q4` as Quarter;
       const row = financials.metricsByQuarter.get(key);
@@ -216,6 +217,8 @@ export function buildAnnualSeries(
         value: null,
         reason: "MISSING_ACCOUNT" as const,
       };
+      const footnote = (computed as { footnoteMark?: "※" }).footnoteMark;
+      if (footnote) footnoteMark = footnote;
       const figure = allocator.add({
         label: `${METRIC_LABEL[metric]} ${year}년 (연말 기준)`,
         unit: METRIC_UNIT[metric],
@@ -225,7 +228,13 @@ export function buildAnnualSeries(
       });
       points.push({ x: `${year}`, figureId: figure.id });
     }
-    series.push({ key: metric, label: METRIC_LABEL[metric], unit: METRIC_UNIT[metric], points });
+    series.push({
+      key: metric,
+      label: METRIC_LABEL[metric],
+      unit: METRIC_UNIT[metric],
+      points,
+      footnoteMark,
+    });
   }
 
   return { series, reportsUsed };
@@ -262,9 +271,13 @@ export function buildCompanyComparisonSeries(
 
   for (const metric of directMetrics) {
     const points: Series["points"] = [];
+    // 비교 기업 중 금융업이 있으면 부채비율 등에 ※를 단다 (분기·연도별 경로와 같게)
+    let footnoteMark: "※" | undefined;
     for (const sample of samples) {
       const row = sample.financials.metricsByQuarter.get(quarter);
       const computed = row?.metrics[metric] ?? { value: null, reason: "MISSING_ACCOUNT" as const };
+      const footnote = (computed as { footnoteMark?: "※" }).footnoteMark;
+      if (footnote) footnoteMark = footnote;
       const report = reportBasis(quarter, sample.financials.fiscalRefByQuarter);
       reportsUsed.add(`${sample.company.name} ${report}`);
 
@@ -277,7 +290,13 @@ export function buildCompanyComparisonSeries(
       });
       points.push({ x: sample.company.name, figureId: figure.id });
     }
-    series.push({ key: metric, label: METRIC_LABEL[metric], unit: METRIC_UNIT[metric], points });
+    series.push({
+      key: metric,
+      label: METRIC_LABEL[metric],
+      unit: METRIC_UNIT[metric],
+      points,
+      footnoteMark,
+    });
   }
 
   return { series, reportsUsed };
