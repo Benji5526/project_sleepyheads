@@ -24,6 +24,9 @@ import type { SessionClient } from "@/lib/supabase/server";
 // API_SPEC §8.2
 export const maxDuration = 60;
 
+// Postgres unique_violation — analyses (owner_id, idempotency_key)
+const UNIQUE_VIOLATION = "23505";
+
 const AskBodySchema = z.object({
   question: z.string().trim().min(1).max(500),
   projectId: z.string().nullable(),
@@ -66,14 +69,26 @@ export const POST = route(
       throw new HttpError("DECLINE_LIMIT", undefined, { resetAt: nextKstMidnight() });
     }
 
+    let alreadyConsumed: boolean;
     try {
-      await consumeQuestionQuota(userId, idempotencyKey, admin);
+      ({ alreadyConsumed } = await consumeQuestionQuota(userId, idempotencyKey, admin));
     } catch (err) {
       // 오늘 질문 수 소진 → 429 QUOTA_EXCEEDED + 초기화 시각 (API_SPEC §1.7). 그냥 두면 500이 된다
       if (err instanceof QuestionQuotaExceededError) {
         throw new HttpError("QUOTA_EXCEEDED", undefined, { resetAt: err.resetAt });
       }
       throw err;
+    }
+
+    // 같은 멱등키 질문을 다른 요청이 이미 차감하고 처리하는 중이다 (동시에 두 번 보냄, WU-114).
+    // AI를 다시 부르지 않고(비용·전체 AI 상한 중복 소모 방지), 이미 끝났으면 그 결과를 돌려준다.
+    if (alreadyConsumed) {
+      const winner = await findByIdempotencyKey(supabase, userId, idempotencyKey);
+      if (winner) return created(await toAskResponseData(winner, admin));
+      throw new HttpError(
+        "INVALID_STATE",
+        "같은 질문을 처리하고 있습니다. 잠시 후 다시 시도해 주세요.",
+      );
     }
 
     let result: PersistableResult;
@@ -117,11 +132,42 @@ export const POST = route(
       .insert(row)
       .select("id, project_id, status, decline_category")
       .single();
+    if (insertError?.code === UNIQUE_VIOLATION && isIdempotencyConflict(insertError)) {
+      // 같은 멱등키 질문을 다른 요청이 먼저 저장했다 (WU-114, 마이그레이션 전 옛 consume_quota 등).
+      // 먼저 저장된 분석을 그대로 돌려주고, 이번 요청이 만든 빈 새 프로젝트는 지운다.
+      if (!requestedProjectId) {
+        const { error: deleteError } = await supabase.from("projects").delete().eq("id", projectId);
+        if (deleteError) console.warn(`[${ctx.requestId}] 빈 프로젝트 정리 실패:`, deleteError);
+      }
+      const winner = await findByIdempotencyKey(supabase, userId, idempotencyKey);
+      if (!winner) throw insertError;
+      return created(await toAskResponseData(winner, admin));
+    }
     if (insertError) throw insertError;
 
     return created(await toAskResponseData(insertedRow, admin));
   },
 );
+
+// analyses (owner_id, idempotency_key) 고유 제약 위반인지 (다른 고유 제약과 구분)
+function isIdempotencyConflict(error: { message?: string; details?: string }): boolean {
+  return `${error.message ?? ""} ${error.details ?? ""}`.includes("idempotency_key");
+}
+
+async function findByIdempotencyKey(
+  supabase: SessionClient,
+  userId: string,
+  idempotencyKey: string,
+) {
+  const { data, error } = await supabase
+    .from("analyses")
+    .select("id, project_id, status, decline_category")
+    .eq("owner_id", userId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
 
 async function ensureOwnProject(
   supabase: SessionClient,

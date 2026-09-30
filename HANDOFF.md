@@ -5,7 +5,7 @@
 | 프로젝트 | project_sleepyheads — 질문형 기업 분석 서비스 (공시 숫자 + 뉴스 단서) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6.1 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3.3 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3.5 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3 |
+| 기준 문서 | [PRD](DevelopDoc/PRD.md) v0.6 · [TECH_SPEC](DevelopDoc/TECH_SPEC.md) v0.6.2 · [API_SPEC](DevelopDoc/API_SPEC.md) v0.3.4 · [WORK_UNITS](DevelopDoc/WORK_UNITS.md) v0.3.6 · [FINAL_CHECKLIST](DevelopDoc/FINAL_CHECKLIST.md) v0.3 |
 
 ### 변경 이력
 | 날짜 | 내용 |
@@ -77,7 +77,7 @@
 | ~~0~~ ✅ | 현준 | ~~Vercel `NEXT_PUBLIC_SUPABASE_URL` 수정 후 재배포~~ — 2026-09-29 수정 완료. 값이 Supabase *대시보드 화면 주소*로 들어가 로그인 버튼이 Supabase 404로 가던 문제. 수정·재배포 뒤 운영 로그인 버튼 → 구글 계정 선택 화면까지 확인 | `NEXT_PUBLIC_` 값은 빌드 때 박히므로 바꾸면 **재배포해야 반영**된다 (Vercel → Settings → Environment Variables) |
 | ~~1~~ ✅ | 검증/문서 (현준) | ~~구글 로그인 → 약관 동의 → 대기화면~~ ✅. ~~Step 1 핵심 통과 테스트 질문을 운영에서 다시 실행~~ ✅ **2026-09-30 성공 (현준 확인)** — 2026-09-29 마지막 시도는 시간 초과(#17로 수정). 어제 실패한 결과 화면을 **새로고침하면 멈춘 분석이 이어서 실행**된다(질문 수 추가 차감 없음) | WU-108 완료조건 "배포 주소 로그인" ✅, WU-199. 실패하면 화면의 요청 ID로 Vercel 로그(Logs) 확인. 여전히 느리면 T3(Vercel 실행 시간) 측정 |
 | 2 | 데이터/서버 | WU-109~111 🟨 마무리: 회귀 10문항·실제 OpenAI 응답 검증·입력 토큰 측정, §0.4 "PR #11 검토 남은 것" 4개, `profiles` RLS 보안 수정 | 마이그레이션 `20260929070000`~`110000`은 Supabase에 적용됨 |
-| 3 | 통합/배포 | WU-114 질문 수 한도(`/api/me/usage`, `X-Questions-Remaining`) — 지금은 화면 오른쪽 위 "남은 질문"이 안 보인다 | 한도 차감 자체는 `/api/ask`가 이미 한다 |
+| 3 | 통합/배포 (+데이터/서버) | WU-114 🟨 코드는 main 반영(PR #19, 2026-09-30). **마이그레이션 `20260930010000_wu114_quota.sql`을 `supabase db push`로 적용**(SQL 편집기에 나눠 붙이지 말 것) → 운영에서 남은 질문 표시·동시 2번 1회 차감 확인. 검토 후속: 차감 후 분석 없는 멱등키가 7일간 409, `/auth/callback`도 비로그인 분당 30회에 걸림 (PR #19 리뷰) | 적용 전에는 분당 제한만 꺼진 채로 동작한다 |
 | 4 | 통합/배포 | WU-003 마무리 (Supabase 프로젝트 dev/prod 분리 여부 결정, Supabase GitHub 연결이 main 머지 때 마이그레이션을 자동 적용하는지) → WORK_UNITS 상태 갱신 | 지금은 로컬·Preview·운영이 **같은 DB** |
 | ~~5~~ ✅ | 기획/화면 (현준) | ~~실제 서버 응답으로 WU-113 화면 재확인~~ ✅ → ~~WU-115 비로그인 예시~~ ✅ (2026-09-30). 다음: 로컬 로그인 확인(WU-108 마지막 조건), WU-199 시연 준비 | 로컬에서 실제 연결로 보려면 `.env.local`의 `NEXT_PUBLIC_API_MOCK`을 비운다 |
 | 6 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·**AI 입력 가능 여부**), T6(12월 외 결산 샘플), 손 계산 정답표 | WU-304 전 필수 |

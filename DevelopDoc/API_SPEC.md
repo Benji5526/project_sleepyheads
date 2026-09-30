@@ -6,7 +6,7 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.3 |
+| 버전 | v0.3.4 |
 | 기준 문서 | [PRD](./PRD.md) v0.6 · [TECH_SPEC](./TECH_SPEC.md) v0.6 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
@@ -20,7 +20,8 @@
 | v0.3 | 2026-09-29 | **분석 글에 투자 포인트 `insights` 추가**(§2.6, 필드 추가만 — 기존 필드 그대로), 분량 상한 `EXPLANATION_LIMITS`. 뉴스 출처를 Google 뉴스 RSS로 교체해 환경변수 `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` 삭제(§8.3), 개발 전용 `NEXT_PUBLIC_API_MOCK` 추가(§8.3) |
 | v0.3.1 | 2026-09-29 | WU-108 구글 로그인 반영: A1 실패 시 `/login?error=callback&next=…`로 이동·이동은 `303`, 회원 정보(`profiles`)는 첫 로그인 때 서버가 만든다, Auth 설정(§7.5) Site URL·Redirect URL(`/**` 와일드카드)·구글 클라우드 승인된 리디렉션 URI 확정 |
 | v0.3.2 | 2026-09-29 | Q4 `step` 최대 실행 시간 60초 → 300초 (운영 첫 질문이 시간 초과로 실패, §8.2) |
-| v0.3.3 | 2026-09-30 | WU-115 비로그인 예시: G1 응답 타입 `GuestExample`·예시가 아직 없으면 `404`, C2 `?force=1`(관리자 수동 재생성)·새 보고서 판정(정기공시 목록 1회)·최대 실행 시간 120초 → 300초 |
+| v0.3.3 | 2026-09-30 | WU-114 질문 수 한도: 요청 속도 제한을 DB 함수 `check_request_rate`로(§1.6·§7.3, 한도 값은 `quota_config`), 같은 멱등키 동시 요청 1회만 차감(`quota_consumptions`, `consume_quota.already_consumed`, Q1 처리 중이면 409), A5 `serviceStatus` 판정 기준(§4) |
+| v0.3.4 | 2026-09-30 | WU-115 비로그인 예시: G1 응답 타입 `GuestExample`·예시가 아직 없으면 `404`, C2 `?force=1`(관리자 수동 재생성)·새 보고서 판정(정기공시 목록 1회)·최대 실행 시간 120초 → 300초 |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -110,6 +111,9 @@ flowchart LR
 | 질문 관련 요청 | 회원당 **분당 10회** | `ask`, `clarify`, `rewrite`, `rerun` |
 | 전체 요청 | 회원당 **분당 120회** | 모든 🔑 API (분석 진행 상태 확인·단계 실행 포함) |
 | 비로그인 | IP당 분당 30회 | 🔓 API |
+
+- 1분 고정 창으로 DB에서 센다 (DB 함수 `check_request_rate`, §7.3). 한도 값은 `quota_config`의 `question_requests_per_minute`·`requests_per_minute`·`guest_requests_per_minute`라 코드 수정 없이 바꿀 수 있다.
+- DB 오류로 셀 수 없으면 제한 없이 통과시키고 서버 로그에 경고를 남긴다 (남용 방지 장치가 서비스 전체를 멈추지 않게). 질문 수 한도(`consume_quota`)는 따로 지킨다.
 
 ### 1.7 오류 코드
 | code | HTTP | 뜻 | 화면 처리 |
@@ -477,6 +481,12 @@ interface Analysis {
             "resetAt": "2026-09-29T00:00:00+09:00", "serviceStatus": "ok" } }
 ```
 
+| `serviceStatus` | 뜻 (오늘 한국 날짜의 `api_usage_daily` 기준) |
+|---|---|
+| `ok` | 정상 |
+| `degraded` | 전자공시 호출이 `dart_global_soft_limit`을 넘었거나, 외부 API가 상한으로 막힌 적이 있다 — 새 데이터 수집이 제한될 수 있음 |
+| `budget_reached` | AI 호출이 `llm_questions_per_day_global`에 닿았거나 상한으로 막혔다 — 새 질문은 `503 SERVICE_BUDGET` |
+
 ### A6 `DELETE /api/me` 🔑
 - 되돌릴 수 없음. 화면에서 확인 창을 거친다.
 
@@ -537,9 +547,10 @@ interface Analysis {
     "questionCharged": true } } }
 ```
 
-오류: `400`, `401`, `403`, `404`(projectId), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`, `429 QUOTA_EXCEEDED`, `429 DECLINE_LIMIT`, `429 RATE_LIMITED`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
+오류: `400`, `401`, `403`, `404`(projectId), `409 INVALID_STATE`(같은 질문 처리 중), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`, `429 QUOTA_EXCEEDED`, `429 DECLINE_LIMIT`, `429 RATE_LIMITED`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
 
 - 질문 해석이 AI 장애로 실패하면 `503 LLM_UNAVAILABLE`이며 **질문 수를 돌려준다**(차감 취소).
+- 같은 `Idempotency-Key` 질문을 처리하는 중에 다시 보내면(동시에 두 번) 질문 수를 다시 차감하지 않고 AI도 다시 부르지 않는다. 먼저 보낸 질문의 분석이 이미 저장됐으면 그 결과를, 아직 처리 중이면 `409 INVALID_STATE`("같은 질문을 처리하고 있습니다")를 돌려준다.
 - `422`(지원 불가·기간 밖)와 **`declined`(범위 밖 거절)는 질문 수를 차감한다** (판정에 AI 비용이 들고, 반복 오남용을 막기 위함). 화면에 "질문 1회가 사용되었습니다"를 함께 안내한다.
 - 거절이 하루 `max_declines_per_day`(10회)를 넘으면 이후 질문은 판정 없이 `429 DECLINE_LIMIT`.
 - 후속 질문(`projectId` 있음)도 매번 새로 범위를 판정한다.
@@ -820,8 +831,9 @@ sequenceDiagram
 ### 7.3 DB 함수 (RPC)
 | 함수 | 입력 | 출력 | 용도 |
 |---|---|---|---|
-| `consume_quota` | `user_id`, `kind`(`question`), `idempotency_key` | `allowed`, `remaining`, `reset_at` | 질문 한도 확인·차감을 한 번에 (같은 멱등키면 재차감 없음) |
-| `refund_quota` | `user_id`, `idempotency_key` | — | AI 장애 시 차감 취소 |
+| `consume_quota` | `user_id`, `kind`(`question`), `idempotency_key` | `allowed`, `remaining`, `reset_at`, `already_consumed` | 질문 한도 확인·차감을 한 번에. 같은 멱등키면 재차감 없음 — 동시에 두 번 와도 `quota_consumptions`에 먼저 기록한 요청만 차감 |
+| `refund_quota` | `user_id`, `idempotency_key` | — | AI 장애 시 차감 취소 (차감 기록이 있을 때 한 번만, 차감한 날 기준) |
+| `check_request_rate` | `subject`(회원 ID 또는 IP), `scope`(`guest`·`member`·`question`) | `allowed`, `retry_after_seconds` | §1.6 분당 요청 제한. `question`은 회원 전체 한도와 질문 한도를 함께 센다 |
 | `check_and_record_api_usage` | `provider`, `user_id?`, `calls`, `tokens?`, `cost?` | `allowed` | 외부 API 전체·회원별 상한 확인 후 기록 |
 | `acquire_step_lock` | `analysis_id`, `seq` | `acquired` | 같은 단계 동시 실행 방지 |
 | `delete_my_data` | `user_id` | — | 탈퇴 시 개인 데이터 일괄 삭제 |
