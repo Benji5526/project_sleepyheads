@@ -24,7 +24,7 @@
 | v0.3.4 | 2026-09-29 | WU-111 설명 작성 착수(🟨) — `src/lib/explain/`, `POST /step` 실행 흐름에 연결 |
 | v0.3.5 | 2026-09-30 | WU-114 질문 수 한도 착수(🟨) — `/api/me/usage`, `X-Questions-Remaining`, DB 분당 제한, 동시 중복 요청 1회 차감. 마이그레이션 `20260930010000` 운영 적용·운영 확인 남음 |
 | v0.3.6 | 2026-09-30 | **WU-115 ✅** 비로그인 예시(G1·C2·화면·로그인 안내 창), WU-113 "실제 서버 응답으로 재확인" 체크 (운영 핵심 통과 테스트 성공 2026-09-30 현준 확인 + 실제 SK하이닉스 결과로 화면 확인) |
-| v0.3.7 | 2026-09-30 | WU-003 🟨 완료조건 3/4 확인(무료 플랜은 Supabase만 확인, Vercel 팀 플랜 확인 남음), Supabase 하나로 유지 결정 기록 |
+| v0.3.7 | 2026-09-30 | **WU-003 ✅** 완료조건 4/4 (Vercel 무료 플랜·결제 수단 없음 현준 확인), Supabase 하나로 유지 결정 기록 |
 
 ---
 
@@ -52,7 +52,7 @@
 |---|---|---|---|---|---|
 | WU-001 | 프로젝트 뼈대·개발 환경 | 🤖 | S | — | ✅ |
 | WU-002 | 외부 API 키 발급 (DART·주가·OpenAI) | 👤🤖 | S | — | 🟨 |
-| WU-003 | Supabase·Vercel 연결과 첫 배포 | 👤🤖 | M | WU-001 | 🟨 |
+| WU-003 | Supabase·Vercel 연결과 첫 배포 | 👤🤖 | M | WU-001 | ✅ |
 
 ### Step 1 — 종목+질문으로 첫 분석
 | WU | 이름 | 담당 | 규모 | 선행 | 상태 |
@@ -231,7 +231,7 @@ flowchart LR
 - [x] 로컬 앱에서 Supabase 연결 확인이 성공한다 (2026-09-29 현준 로컬 `pnpm check:keys` 6개 ✅)
 - [x] `main` 푸시 시 Vercel이 자동 배포하고 `*.vercel.app` 주소에서 페이지가 뜬다 (`https://projectsleepyheads.vercel.app`, PR 머지마다 자동 배포 기록)
 - [x] Vercel 환경변수에 서버 전용 키가 `NEXT_PUBLIC_` 없이 등록되어 있다 (2026-09-30 운영 번들 12개 파일에 secret key·`SUPABASE_SECRET_KEY`·`OPENAI_API_KEY` 등 없음, 서버 관리자 작업 정상)
-- [ ] 두 서비스 모두 **무료 플랜**이다 (결제 수단 미등록) — Supabase는 Free 확인, **Vercel 팀 `Project_Agent2`가 Hobby인지(Pro 체험판 아님) 현준님 확인 남음**
+- [x] 두 서비스 모두 **무료 플랜**이다 (결제 수단 미등록) — Supabase Free(조직 "Benji chat bot"), Vercel 팀 `Project_Agent2` 무료 플랜·결제 수단 없음 (2026-09-30 현준 확인)
 
 **결정 (2026-09-30)**: Supabase 프로젝트는 `sleepyhead` 하나를 로컬·Preview·운영이 같이 쓴다 (API_SPEC §7.1). Supabase GitHub 연결은 머지 때 마이그레이션을 자동 적용하지 않는다 → 배포 뒤 `supabase db push` (API_SPEC §7.6).
 
