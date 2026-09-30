@@ -6,7 +6,7 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.2 |
+| 버전 | v0.3.3 |
 | 기준 문서 | [PRD](./PRD.md) v0.6 · [TECH_SPEC](./TECH_SPEC.md) v0.6 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
@@ -20,6 +20,7 @@
 | v0.3 | 2026-09-29 | **분석 글에 투자 포인트 `insights` 추가**(§2.6, 필드 추가만 — 기존 필드 그대로), 분량 상한 `EXPLANATION_LIMITS`. 뉴스 출처를 Google 뉴스 RSS로 교체해 환경변수 `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` 삭제(§8.3), 개발 전용 `NEXT_PUBLIC_API_MOCK` 추가(§8.3) |
 | v0.3.1 | 2026-09-29 | WU-108 구글 로그인 반영: A1 실패 시 `/login?error=callback&next=…`로 이동·이동은 `303`, 회원 정보(`profiles`)는 첫 로그인 때 서버가 만든다, Auth 설정(§7.5) Site URL·Redirect URL(`/**` 와일드카드)·구글 클라우드 승인된 리디렉션 URI 확정 |
 | v0.3.2 | 2026-09-29 | Q4 `step` 최대 실행 시간 60초 → 300초 (운영 첫 질문이 시간 초과로 실패, §8.2) |
+| v0.3.3 | 2026-09-30 | WU-115 비로그인 예시: G1 응답 타입 `GuestExample`·예시가 아직 없으면 `404`, C2 `?force=1`(관리자 수동 재생성)·새 보고서 판정(정기공시 목록 1회)·최대 실행 시간 120초 → 300초 |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -698,7 +699,8 @@ interface Analysis {
 ---
 
 ### G1 `GET /api/guest/example` 🔓
-- 미리 만들어 둔 SK하이닉스 예시 (`guest_examples`). **외부 API·AI 호출 없음.**
+- 미리 만들어 둔 SK하이닉스 예시 (`guest_examples`의 가장 최근 행). **외부 API·AI 호출 없음.** 응답 타입 `GuestExample` (`src/contracts/guest.ts`)
+- 예시를 아직 한 번도 만들지 않았으면 `404 NOT_FOUND` → 화면은 예시 없이 입력창만 보여준다.
 
 응답 `200`
 ```json
@@ -717,9 +719,12 @@ interface Analysis {
 
 ### C2 `GET /api/cron/refresh-guest-example` ⚙️
 - 하루 1회. SK하이닉스에 **새 정기보고서가 있을 때만** 예시를 다시 만든다 (시스템 예약 한도 사용).
-- 함수 최대 실행 시간: 120초
+  - 판정: 마지막 예시를 만든 날 다음 날부터 오늘까지 OpenDART `list.json`(`pblntf_ty=A` 정기공시)을 1회 조회. 예시가 없으면 바로 만든다.
+  - 만들기: 회원 질문과 같은 순서(해석 → 실행 → 설명 작성, AI 2회). 되묻기·거절·**설명 작성 실패**면 저장하지 않고 기존 예시를 유지한다 (`502 UPSTREAM_ERROR`).
+  - 관리자가 손으로 다시 만들 때: `?force=1` (같은 `CRON_SECRET` 필요). 응답 `reason: "forced"`.
+- 함수 최대 실행 시간: 300초 (처음이면 보고서 수집 + AI 2회)
 
-응답 `200` → `{ "data": { "regenerated": false, "reason": "no_new_report" } }`
+응답 `200` → `{ "data": { "regenerated": false, "reason": "no_new_report" } }` (`reason`: `no_new_report` · `no_example` · `new_report` · `forced`)
 
 ---
 
@@ -870,7 +875,7 @@ sequenceDiagram
 | `/api/analyses/:id/step` | Node.js | 300초 (Hobby 최대 — 첫 조회 기업의 보고서 수집) |
 | `/api/analyses/:id/rewrite`, `/rerun` | Node.js | 60초 |
 | `/api/cron/sync-companies` | Node.js | 300초 (Hobby 최대) |
-| `/api/cron/refresh-guest-example` | Node.js | 120초 |
+| `/api/cron/refresh-guest-example` | Node.js | 300초 |
 | 그 밖의 API | Node.js | 기본값 |
 
 - 모든 API는 **Node.js 실행 환경**을 쓴다 (ZIP 해제·기사 본문 추출 라이브러리가 Edge 환경에서 동작하지 않을 수 있음).

@@ -27,6 +27,13 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
+// G1은 DB(guest_examples)만 읽는다 — 여기서는 예시가 아직 없는 상태
+vi.mock("@/lib/guest/example", () => ({
+  loadGuestExample: async () => null,
+  refreshGuestExample: async () => ({ regenerated: false, reason: "no_new_report" }),
+  GuestExampleUnusableError: class extends Error {},
+}));
+
 const USER = "11111111-1111-4111-8111-111111111111";
 const ID = "22222222-2222-4222-8222-222222222222";
 
@@ -34,6 +41,7 @@ const ID = "22222222-2222-4222-8222-222222222222";
 // [#, 메서드, 경로, 비로그인 기대 상태, 로그인·약관 미동의 기대 상태, maxDuration(§8.2)]
 //  🔓 → 501 / 501, 🔑* → 401 / 501, 🔑·🛡️ → 401 / 403, ⚙️ → 401 / 401
 //  WU-108에서 구현한 A1~A4는 실제 응답: A1 code 없음 → 303 로그인 화면, A2 → 303 /, A3 → 200, A4 본문 없음 → 400
+//  WU-115 G1은 저장된 예시가 없으면 404
 const ENDPOINTS: [string, string, string, number, number, number?][] = [
   ["A1", "GET", "/auth/callback", 303, 303],
   ["A2", "POST", "/auth/signout", 401, 303],
@@ -55,9 +63,9 @@ const ENDPOINTS: [string, string, string, number, number, number?][] = [
   ["P2", "GET", "/api/projects/[id]", 401, 403],
   ["B1", "GET", "/api/boards/[id]", 401, 403, 60],
   ["B2", "PATCH", "/api/boards/[id]", 401, 403, 60],
-  ["G1", "GET", "/api/guest/example", 501, 501],
+  ["G1", "GET", "/api/guest/example", 404, 404],
   ["C1", "GET", "/api/cron/sync-companies", 401, 401, 300],
-  ["C2", "GET", "/api/cron/refresh-guest-example", 401, 401, 120],
+  ["C2", "GET", "/api/cron/refresh-guest-example", 401, 401, 300],
 ];
 
 type Handler = (
