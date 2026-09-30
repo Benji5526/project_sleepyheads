@@ -127,7 +127,7 @@ export function AskHome() {
       {guestPossible && (
         // 비로그인: 입력창 아래로 예시 분석을 펼친다
         <div hidden={!anonymous} className="border-t border-line pt-10 pb-16">
-          <GuestExampleSection onBlocked={promptLogin} />
+          <GuestExampleSection visible={anonymous} onBlocked={promptLogin} />
         </div>
       )}
       {anonymous && <LoginPromptDialog open={loginPrompt} onClose={() => setLoginPrompt(false)} />}

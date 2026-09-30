@@ -17,7 +17,14 @@ const DATE = new Intl.DateTimeFormat("ko-KR", {
  * 비로그인 첫 화면 아래의 SK하이닉스 예시 분석 (PRD F-G1, WU-115).
  * 서버에 미리 저장된 결과만 받아 오므로 외부 API·AI를 부르지 않는다. 예시가 없거나 못 받으면 아무것도 안 보인다.
  */
-export function GuestExampleSection({ onBlocked }: { onBlocked: () => void }) {
+export function GuestExampleSection({
+  visible,
+  onBlocked,
+}: {
+  /** false = 로그인 확인 중. 데이터는 미리 받아 두되, 크기가 0인 숨은 칸에 차트를 그리지는 않는다 */
+  visible: boolean;
+  onBlocked: () => void;
+}) {
   const [example, setExample] = useState<GuestExample | null>(null);
 
   useEffect(() => {
@@ -33,7 +40,7 @@ export function GuestExampleSection({ onBlocked }: { onBlocked: () => void }) {
     };
   }, []);
 
-  if (!example) return null;
+  if (!example || !visible) return null;
 
   return (
     <section
