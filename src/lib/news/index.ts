@@ -33,7 +33,7 @@ import { readNewsCache, writeNewsCache } from "./cache";
 import { writeNewsGists, type GistArticle } from "./gist";
 import { DomainPacer, type GuardedFetchDeps } from "./guarded-fetch";
 import { buildRssUrl, buildSearchQuery, type NewsPeriod } from "./query";
-import { dedupeNewsItems, normalizeTitle, rankNewsItems } from "./rank";
+import { dedupeNewsItems, rankNewsItems, titleMentionsCompany } from "./rank";
 import { parseRss, type RssItem } from "./rss";
 
 export const MAX_SEARCHES_PER_QUESTION = 2;
@@ -108,8 +108,8 @@ async function search(
  * (2026-09-30 현준님 결정. 요지 검사는 gist.ts `isAcceptableGist`).
  */
 function isUsableItem(item: RssItem, companyName: string): boolean {
-  const name = normalizeTitle(companyName);
-  return name !== "" && normalizeTitle(item.title).includes(name);
+  // 기업명이 다른 낱말의 앞부분이면 제외 ("하이브로자임"·"현대차증권") — rank.ts titleMentionsCompany
+  return titleMentionsCompany(item.title, companyName);
 }
 
 function summarizeReasons(reasons: string[]): string[] {

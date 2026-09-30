@@ -10,10 +10,15 @@ const SIGN_CHANGE_TEXT = new Set(["흑자전환", "적자전환", "적자지속"
 
 /** 자리표시자를 뺀 나머지에서 "연도·분기 표기"로 봐줄 접미사 (개수 표현 "4개 분기" 포함). */
 // "개"는 "4개 분기"·"3개 연도"처럼 기간 개수일 때만 — "3개 사업부" 같은 지어낸 개수는 막는다.
-const ALLOWED_NUMBER_CONTEXT_RE = /^(년|개월|월|분기|개\s?(분기|연도|년)|Q[1-4])/;
+// "1~3분기"·"2024~2025년"처럼 범위의 앞 숫자는 뒤 숫자에 붙은 단위로 본다.
+const ALLOWED_NUMBER_CONTEXT_RE =
+  /^(년|개월|월|분기|개\s?(분기|연도|년)|Q[1-4]|\s?[~∼-]\s?\p{Nd}+\s?(년|개월|월|분기))/u;
+
+/** "2025Q2"·"2026 Q1" — 차트·숫자 이름과 같은 분기 표기. Q 뒤 숫자를 따로 세면 문장이 통째로 버려진다 */
+const YEAR_QUARTER_RE = /(?<!\p{Nd})(?:19|20)\p{Nd}{2}\s?Q[1-4](?!\p{Nd})/gu;
 
 function stripPlaceholders(text: string): string {
-  return text.replace(PLACEHOLDER_RE, "");
+  return text.replace(PLACEHOLDER_RE, "").replace(YEAR_QUARTER_RE, "");
 }
 
 /** 자리표시자를 뺀 나머지 텍스트에 "연도·분기 표기가 아닌" 숫자가 남아 있는가. */

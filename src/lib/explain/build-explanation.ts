@@ -18,8 +18,9 @@ const CAUSAL_KEYWORDS = ["때문", "원인", "영향으로", "탓에", "덕분�
  * "원인을 다음 보고서에서 확인할 필요"처럼 원인을 단정하지 않고 앞으로 확인할 거리로 남기는 표현은 추정이 아니다.
  * "원인은 …로 확인됩니다"(단정)는 빼지 않도록 앞으로 할 일 형태(확인할·살펴볼…)만, 사이에 다른 원인 표현이 없을 때만.
  */
+// "원인을 설명하지 않아 …특정하기 어렵다"처럼 원인을 **모른다고** 밝히는 표현도 같다 (2026-09-30 WU-305 실측).
 const CAUSE_TO_CHECK =
-  /원인(?:(?!때문|탓에|덕분에|여파로|영향으로)[^.?!])*?(확인할|확인이 필요|확인해야|파악할|점검할|살펴볼|지켜볼)/g;
+  /원인(?:(?!때문|탓에|덕분에|여파로|영향으로)[^.?!])*?(확인할|확인이 필요|확인해야|파악할|점검할|살펴볼|지켜볼|설명하지 않|밝히지 않|특정하기 어렵|특정할 수 없|알 수 없)/g;
 function looksLikeCausalClaim(text: string): boolean {
   const claim = text.replace(CAUSE_TO_CHECK, "");
   return CAUSAL_KEYWORDS.some((kw) => claim.includes(kw));
@@ -54,15 +55,24 @@ export interface BuildExplanationInput {
 export function buildExplanation(input: BuildExplanationInput): Explanation {
   const chartIds = new Set(input.charts.map((c) => c.id));
   const newsClueById = new Map(input.newsClues.map((n) => [n.newsId, n]));
+  // AI가 인용했다고 밝힌 뉴스 중 실제로 있는 것 (결론의 원인 문장은 이것이 있어야 남는다)
+  const citedNewsIds = input.hasNews
+    ? input.ai.news_clues.map((n) => n.news_id).filter((id) => newsClueById.has(id))
+    : [];
 
   // 결론은 앞에서부터 최대 2문장, 합계가 한 화면 분량(320자)을 넘지 않게 (§11.5, EXPLANATION_LIMITS)
   const conclusion: string[] = [];
   let conclusionChars = 0;
+  let conclusionUsesNews = false;
   for (const raw of input.ai.conclusion) {
     if (conclusion.length >= EXPLANATION_LIMITS.conclusionSentences) break;
     const text = resolveText(raw, input.figures);
     if (text === null || containsBannedWord(text)) continue;
+    // 결론도 뉴스 근거 없이 원인을 단정하지 않는다 (투자 포인트와 같은 검사, TECH §11.5)
+    const causal = looksLikeCausalClaim(text);
+    if (causal && citedNewsIds.length === 0) continue;
     if (conclusionChars + text.length > EXPLANATION_LIMITS.mainMaxChars) continue;
+    if (causal) conclusionUsesNews = true;
     conclusion.push(text);
     conclusionChars += text.length;
   }
@@ -111,7 +121,11 @@ export function buildExplanation(input: BuildExplanationInput): Explanation {
     })
     .filter((e): e is { text: string; chartRef: string | null } => e !== null);
 
-  const referencedNewsIds = new Set(keptInsights.flatMap((i) => i.newsIds));
+  // 화면의 뉴스 단서 = 남은 투자 포인트가 근거로 단 뉴스 (+ 결론이 뉴스로 배경을 말했으면 AI가 인용한 뉴스)
+  const referencedNewsIds = new Set([
+    ...keptInsights.flatMap((i) => i.newsIds),
+    ...(conclusionUsesNews ? citedNewsIds : []),
+  ]);
   const newsClues = input.newsClues.filter((n) => referencedNewsIds.has(n.newsId));
 
   const caveats = [

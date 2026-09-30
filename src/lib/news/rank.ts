@@ -10,6 +10,31 @@ export function normalizeTitle(title: string): string {
     .toLowerCase();
 }
 
+// 기업명 바로 뒤에 올 수 있는 조사 — 그 뒤는 끝이거나 한글이 아니어야 한다 ("하이브로 품었지만" ○, "하이브로자임" ×)
+const PARTICLE =
+  "(?:으로|에서|에게|까지|부터|보다|처럼|이나|과의|와의|에는|에도|로는|은|는|이|가|을|를|의|와|과|도|로|에|만|나|랑|엔|측)";
+const AFTER_NAME_RE = new RegExp(`^(?:$|[^가-힣]|${PARTICLE}(?:$|[^가-힣]))`);
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * 제목이 이 기업을 말하는가 (WU-305, 2026-09-30 실측 보강). 기업명이 **다른 낱말의 앞부분**이면 아니다 —
+ * "하이브" 검색에 "하이브로자임", "현대차"에 "현대차증권", "카카오"에 "카카오페이" 기사가 섞이던 문제.
+ * 기업명 안의 띄어쓰기("SK 하이닉스")와 대소문자는 무시한다.
+ */
+export function titleMentionsCompany(title: string, companyName: string): boolean {
+  const chars = [...companyName.replace(/\s+/g, "")];
+  if (chars.length === 0) return false;
+  const nameRe = new RegExp(chars.map(escapeRegExp).join("\\s?"), "giu");
+  for (const match of title.matchAll(nameRe)) {
+    const after = title.slice((match.index ?? 0) + match[0].length);
+    if (AFTER_NAME_RE.test(after)) return true;
+  }
+  return false;
+}
+
 function bigrams(value: string): Map<string, number> {
   const grams = new Map<string, number>();
   for (let i = 0; i < value.length - 1; i += 1) {

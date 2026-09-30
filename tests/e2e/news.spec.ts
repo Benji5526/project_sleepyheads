@@ -90,6 +90,21 @@ test.describe("뉴스 단서 (WU-305)", () => {
     expect(newsBox.y).toBeGreaterThanOrEqual(mainBox.y + mainBox.height);
   });
 
+  test("뉴스를 근거로 단 투자 포인트의 [뉴스 1]을 누르면 그 기사로 옮겨 간다 (링크가 아니라 버튼)", async ({
+    page,
+  }) => {
+    await openNewsResult(page);
+    const button = page
+      .getByTestId("explanation-main")
+      .getByRole("button", { name: "근거 뉴스 1번 보기" });
+    await expect(button).toHaveText("뉴스 1");
+    await button.click();
+    const first = page.getByTestId("news-clue").nth(0);
+    await expect(first).toBeFocused();
+    await expect(first).toBeInViewport();
+    await expect(first).toContainText(MOCK_NEWS_CLUES[0].title);
+  });
+
   test("뉴스가 없는 결과에는 뉴스 단서 영역이 없다", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("questions-remaining")).toBeVisible();

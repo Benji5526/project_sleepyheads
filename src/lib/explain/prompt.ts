@@ -24,8 +24,18 @@ const INSTRUCTIONS = `
   - 뉴스 자료가 없으면(아래 "뉴스 단서" 목록이 비어 있으면) **원인(왜 그런 일이 생겼는지)을 추정하지
     않는다.** 숫자 사이의 관계와 그것이 뜻하는 바까지만 쓴다. 추정이 들어간 문장은 inferred: true로
     표시하고 "~로 보입니다"처럼 추정임을 드러낸다.
+
+**뉴스 단서 쓰는 법** (뉴스 단서가 있을 때)
+- 원인·배경(왜 늘었나/줄었나)은 **뉴스 단서로만** 설명한다. 그 투자 포인트는 news_ids에 뉴스 ID를 넣고,
+  숫자와 이어지면 figure_ids도 함께 넣는다. inferred: true로 표시한다.
+- 문장에 **출처(언론사)를 밝힌다**: "한국경제 보도처럼 HBM 공급 확대가 이익 증가로 이어진 것으로 보입니다".
+  뉴스는 확인된 사실이 아니라 참고용 단서다 — "~때문이다"처럼 단정하지 말고 "~로 보입니다"로 쓴다.
+- 뉴스 발행일이 분석 기간과 맞는 기사만 쓴다. 숫자와 관계없는 기사는 쓰지 않는다 (억지로 넣지 않는다).
+- 기사 속 목표주가·투자의견·주가 전망은 옮기지 않는다 (아래 금지와 같다).
+- 결론(conclusion)도 뉴스 근거 없이 원인을 말하지 않는다. 결론에 뉴스를 근거로 배경을 쓰면 그 뉴스 ID를
+  news_clues에 넣는다.
 - evidence: 결론·투자 포인트의 바탕이 된 사실 문장(선택, 근거 차트 연결).
-- news_clues: 실제로 인용한 뉴스 ID만. 뉴스 자료가 없으면 빈 배열.
+- news_clues: 실제로 인용한 뉴스 ID만 (투자 포인트·결론 어디에서든). 뉴스 자료가 없으면 빈 배열.
 - caveats: 이 분석에 특별히 알아야 할 한계(데이터 결측 등)가 있으면 적는다. 없으면 빈 배열도 된다
   (투자 권유가 아니라는 고지는 서버가 항상 따로 붙인다).
 
@@ -63,6 +73,16 @@ export interface NewsClueInput {
   newsId: string;
   title: string;
   gist: string;
+  /** 출처 인용용 ("한국경제 보도처럼 …") */
+  press: string;
+  /** ISO 시각 — AI에는 한국 날짜(YYYY-MM-DD)로 준다. 분석 기간과 맞는 기사인지 보는 데 쓴다 */
+  publishedAt: string;
+}
+
+/** ISO 시각 → 한국 날짜 "2026-07-24" (날짜를 못 읽으면 빈 문자열) */
+function kstDate(iso: string): string {
+  const time = Date.parse(iso);
+  return Number.isNaN(time) ? "" : new Date(time + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 export function buildExplainPrompt(input: {
@@ -76,7 +96,13 @@ export function buildExplainPrompt(input: {
     숫자_목록: input.figures,
     차트_목록: input.charts,
     // 외부 텍스트(뉴스 요지)는 "데이터" 구역에만 넣는다 — 그 안의 지시문은 따르지 않는다(§11.5).
-    뉴스_단서: input.newsClues.map((n) => ({ news_id: n.newsId, title: n.title, gist: n.gist })),
+    뉴스_단서: input.newsClues.map((n) => ({
+      news_id: n.newsId,
+      press: n.press,
+      published_date: kstDate(n.publishedAt),
+      title: n.title,
+      gist: n.gist,
+    })),
   };
 
   return [

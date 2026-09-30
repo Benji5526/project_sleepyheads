@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildRssUrl, buildSearchQuery, periodOperator } from "@/lib/news/query";
-import { dedupeNewsItems, rankNewsItems, titleSimilarity } from "@/lib/news/rank";
+import {
+  dedupeNewsItems,
+  rankNewsItems,
+  titleMentionsCompany,
+  titleSimilarity,
+} from "@/lib/news/rank";
 import { parseRss } from "@/lib/news/rss";
 import { SKHYNIX_ITEMS, rssXml } from "../fixtures/mock/news-rss";
 
@@ -152,5 +157,41 @@ describe("순위·중복 제거 (TECH §10.1)", () => {
     // 나머지(기업명 있음, 핵심어 없음)는 최신순
     const middle = ranked.slice(1, -1).map((i) => Date.parse(i.publishedAt));
     expect([...middle].sort((a, b) => b - a)).toEqual(middle);
+  });
+});
+
+// WU-305 실측(2026-09-30): "하이브" 검색에 알테오젠 "하이브로자임" 기사, "현대차"에 "현대차증권" 기사가 섞였다
+describe("제목이 이 기업을 말하는가 (titleMentionsCompany)", () => {
+  it.each([
+    ["하이브, 지난해 영업이익 38% 감소", "하이브"],
+    ["하이브로 품었지만...커진 장부가치", "하이브"],
+    ["코웨이는 늘리고 하이브는 줄이고", "하이브"],
+    ["삼성전자·SK하이닉스 2분기 실적", "SK하이닉스"],
+    ["SK 하이닉스, HBM 공급 확대", "SK하이닉스"],
+    ["sk하이닉스 목표가 상향", "SK하이닉스"],
+    ["SK하이닉스發 훈풍", "SK하이닉스"],
+    ["삼성전자와 SK하이닉스 비교", "삼성전자"],
+    ["카카오", "카카오"],
+  ])("'%s' → %s 기사", (title, name) => {
+    expect(titleMentionsCompany(title, name)).toBe(true);
+  });
+
+  it.each([
+    ["알테오젠, 하이브로자임 기술수출 반영", "하이브"],
+    ['현대차증권 "클리오 목표주가 하향"', "현대차"],
+    ["카카오페이, 첫 연간 흑자 달성", "카카오"],
+    ["삼성전기 실적 개선", "삼성전자"],
+  ])("'%s' → %s 기사가 아니다 (기업명이 다른 낱말의 앞부분)", (title, name) => {
+    expect(titleMentionsCompany(title, name)).toBe(false);
+  });
+
+  it("같은 제목에 한 번이라도 제대로 나오면 그 기업 기사다", () => {
+    expect(titleMentionsCompany("카카오페이·카카오 동반 상승", "카카오")).toBe(true);
+  });
+
+  it("빈 기업명·특수문자 기업명도 오류 없이 판정한다", () => {
+    expect(titleMentionsCompany("아무 제목", " ")).toBe(false);
+    expect(titleMentionsCompany("S&T모티브(주) 실적", "S&T모티브")).toBe(true);
+    expect(titleMentionsCompany("a.b 실적", "a+b")).toBe(false);
   });
 });
