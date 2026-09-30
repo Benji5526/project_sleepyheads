@@ -154,6 +154,51 @@ describe("ensureReportValues (WU-105, TECH §5.1·§5.3·§6.1·§6.5)", () => {
     ]);
   });
 
+  it("'아직 없음'으로 기록한 보고서도 하루 안에는 다시 부르지 않는다", async () => {
+    const { client } = dbWithAccountMap({
+      report_fetch_state: [
+        {
+          corp_code: "00164779",
+          bsns_year: 2026,
+          reprt_code: "11014",
+          fs_div_used: null,
+          rcept_no: null,
+          checked_at: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const now = () => new Date("2026-10-01T20:00:00.000Z");
+
+    const result = await ensureReportValues("00164779", 2026, "11014", { client, now });
+
+    expect(result.fromCache).toBe(true);
+    expect(result.fsDiv).toBeNull();
+    expect(dartFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("'아직 없음'으로 기록한 지 하루가 지나면 다시 확인한다 — 분기 끝난 뒤 제출된 보고서를 놓치지 않게", async () => {
+    dartFetchMock.mockResolvedValue({ status: "013", message: "조회된 데이터가 없습니다." });
+    const { client, tables } = dbWithAccountMap({
+      report_fetch_state: [
+        {
+          corp_code: "00164779",
+          bsns_year: 2026,
+          reprt_code: "11014",
+          fs_div_used: null,
+          rcept_no: null,
+          checked_at: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const now = () => new Date("2026-10-02T00:00:00.000Z");
+
+    const result = await ensureReportValues("00164779", 2026, "11014", { client, now });
+
+    expect(result.fromCache).toBe(false);
+    expect(dartFetchMock).toHaveBeenCalledTimes(2); // CFS → OFS
+    expect(tables.report_fetch_state).toHaveLength(1); // 같은 행을 새 확인 시각으로 덮어쓴다
+  });
+
   it("같은 보고서를 다시 요청하면 외부 호출 0건이다 (완료조건)", async () => {
     const { client } = dbWithAccountMap({
       report_fetch_state: [

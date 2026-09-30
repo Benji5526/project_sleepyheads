@@ -158,7 +158,11 @@ function AnalysisBody({
       {status && <StatusCard {...status} />}
 
       {(analysis.status === "succeeded" || analysis.status === "partial") && analysis.result && (
-        <ResultView analysis={analysis} result={analysis.result} />
+        <ResultView
+          result={analysis.result}
+          explanation={analysis.explanation}
+          groupBy={analysis.request?.groupBy}
+        />
       )}
     </article>
   );

@@ -16,3 +16,15 @@ export function list<T>(data: T[], nextCursor: string | null) {
 export function noContent() {
   return new NextResponse(null, { status: 204 });
 }
+
+// Response.redirect()나 fetch() 응답은 헤더를 바꿀 수 없으므로 그때는 복사본에 붙인다.
+export function withHeader(response: Response, name: string, value: string): Response {
+  try {
+    response.headers.set(name, value);
+    return response;
+  } catch {
+    const copy = new Response(response.body, response);
+    copy.headers.set(name, value);
+    return copy;
+  }
+}

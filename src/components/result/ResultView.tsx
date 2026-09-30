@@ -1,15 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Analysis, ResultObject } from "@/contracts";
+import type { Explanation, ResultObject } from "@/contracts";
 import { ChartPanel } from "@/components/charts/ChartPanel";
 import { BasisBar } from "./BasisBar";
 import { DisclosureList } from "./DisclosureList";
 import { ExplanationPanel } from "./ExplanationPanel";
 import { UsedDataPanel } from "./UsedDataPanel";
 
-/** 결과 화면: 분석 기준 바 + 왼쪽 차트(약 60%) / 오른쪽 분석 글(약 40%). 1024px 미만은 차트 → 글 순서 */
-export function ResultView({ analysis, result }: { analysis: Analysis; result: ResultObject }) {
+/**
+ * 결과 화면: 분석 기준 바 + 왼쪽 차트(약 60%) / 오른쪽 분석 글(약 40%). 1024px 미만은 차트 → 글 순서.
+ * 회원 분석(/p/…)과 비로그인 예시(/)가 함께 쓴다.
+ */
+export function ResultView({
+  result,
+  explanation,
+  groupBy,
+}: {
+  result: ResultObject;
+  explanation: Explanation | null;
+  groupBy?: string;
+}) {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -29,7 +40,7 @@ export function ResultView({ analysis, result }: { analysis: Analysis; result: R
 
   return (
     <div className="space-y-6">
-      <BasisBar result={result} groupBy={analysis.request?.groupBy} />
+      <BasisBar result={result} groupBy={groupBy} />
 
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr] lg:items-start">
         <div className="min-w-0 space-y-4" aria-label="근거 차트">
@@ -47,7 +58,7 @@ export function ResultView({ analysis, result }: { analysis: Analysis; result: R
 
         <div className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-6 lg:sticky lg:top-6">
           <ExplanationPanel
-            explanation={analysis.explanation}
+            explanation={explanation}
             charts={result.charts}
             onShowChart={showChart}
           />
