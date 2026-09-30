@@ -58,12 +58,20 @@ test.describe("뉴스 단서 (WU-305)", () => {
     expect(allHrefs.sort()).toEqual(MOCK_NEWS_CLUES.map((c) => c.url).sort());
   });
 
-  test("요지에 숫자가 없다 — 숫자 근거는 차트만", async ({ page }) => {
+  test("요지 속 숫자·의견은 출처(언론사)와 함께 — 서비스 의견이 아니다", async ({ page }) => {
     const section = await openNewsResult(page);
-    const gists = await section
-      .getByTestId("news-clue")
-      .evaluateAll((els) => els.map((el) => el.querySelectorAll("p")[1]?.textContent ?? ""));
-    for (const gist of gists) expect(gist).not.toMatch(/[0-9０-９]/);
+    const rows = await section.getByTestId("news-clue").evaluateAll((els) =>
+      els.map((el) => {
+        const ps = el.querySelectorAll("p");
+        return { press: ps[0]?.textContent ?? "", gist: ps[1]?.textContent ?? "" };
+      }),
+    );
+    for (const { press, gist } of rows) {
+      if (/[0-9０-９]|목표주가|매수|매도/.test(gist)) {
+        expect(gist).toContain(press.split(" · ")[0]);
+      }
+    }
+    await expect(section).toContainText("언론사 보도를 옮긴 것");
   });
 
   test("뉴스 근거 투자 포인트가 붙어도 결론 + 투자 포인트는 한 화면 안", async ({

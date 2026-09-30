@@ -14,11 +14,12 @@ export const MOCK_NEWS_CLUES: NewsClue[] = [
   },
   {
     newsId: "n2",
-    title: "SK하이닉스 D램 재고 감소…수급 개선 신호",
+    title: "증권가, SK하이닉스 목표주가 400만원대로 줄상향",
     press: "예시신문",
     publishedAt: "2026-09-25T07:15:00.000Z",
     url: "https://news.google.com/rss/articles/CBMiMOCK0002?oc=5",
-    gist: "D램 재고가 줄면서 공급과 수요의 균형이 나아지고 있다는 보도입니다.",
+    // 기사 속 숫자·의견은 출처(언론사)를 밝혀 인용할 때만 (2026-09-30 현준님 결정)
+    gist: "증권가가 목표주가를 400만원대로 올렸다고 예시신문이 보도했습니다.",
   },
   {
     newsId: "n3",

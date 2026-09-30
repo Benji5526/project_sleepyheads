@@ -23,7 +23,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NewsClue } from "@/contracts";
 import type { llmCall, LlmUsage } from "@/lib/llm/client";
-import { containsBannedWord } from "@/lib/explain/banned-words";
 import { QuotaExceededError } from "@/lib/quota/errors";
 import { todayKst } from "@/lib/quota/kst";
 import { newsFetch } from "@/lib/quota/news-fetch";
@@ -100,18 +99,14 @@ async function search(
   return { items };
 }
 
-/** 권유 금지어 목록(banned-words)에 없는, 기사 제목에 흔한 줄임 표현 */
-const ADVICE_TITLE = /목표가|투자의견|매수의견|매도의견/;
-
 /**
- * 단서로 쓸 기사: 제목에 기업명이 있고(띄어쓰기·대소문자 무시), 제목이 목표주가·매수 의견 같은
- * **투자 권유 기사가 아닌 것**. 서비스는 목표주가·매매 의견을 보여주지 않으므로(TECH §11.5) 그런 기사를
- * 분석 글 옆에 단서로 붙이지 않는다 (2026-09-30 실제 호출에서 "목표주가 상향" 기사가 섞여 나왔다).
+ * 단서로 쓸 기사: 제목에 기업명이 있는 것 (띄어쓰기·대소문자 무시).
+ * 목표주가·매매 의견 기사도 쓴다 — 서비스 의견이 아니라 언론사 보도이고, 요지에서 출처를 밝힌다
+ * (2026-09-30 현준님 결정. 요지 검사는 gist.ts `isAcceptableGist`).
  */
 function isUsableItem(item: RssItem, companyName: string): boolean {
   const name = normalizeTitle(companyName);
-  if (name === "" || !normalizeTitle(item.title).includes(name)) return false;
-  return !containsBannedWord(item.title) && !ADVICE_TITLE.test(item.title.replace(/\s+/g, ""));
+  return name !== "" && normalizeTitle(item.title).includes(name);
 }
 
 function summarizeReasons(reasons: string[]): string[] {

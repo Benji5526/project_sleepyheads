@@ -153,7 +153,8 @@ export function ExplanationPanel({
           </h3>
           {/* PRD F-W3·F-W4: 뉴스는 근거 숫자와 구분되는 "참고용 단서"다 (WU-305) */}
           <p className="mt-1 text-xs leading-5 text-muted">
-            뉴스는 참고용 단서입니다. 숫자 근거는 차트(공시 자료)만 씁니다.
+            뉴스는 참고용 단서입니다. 기사 속 숫자·의견은 언론사 보도를 옮긴 것이고, 분석 숫자는
+            차트(공시 자료)만 씁니다.
           </p>
           <ul className="mt-2 space-y-3">
             {explanation.newsClues.map((n) => (

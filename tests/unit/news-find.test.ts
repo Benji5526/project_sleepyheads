@@ -272,22 +272,12 @@ describe("실패해도 분석은 끝까지 — 뉴스 없이 (WU-304 완료조�
   });
 });
 
-describe("투자 권유 기사는 단서로 쓰지 않는다 (TECH §11.5)", () => {
+describe("목표주가·매매 의견 기사도 단서로 쓴다 — 출처를 밝힌 인용만 (2026-09-30 현준님 결정)", () => {
   const ADVICE_ITEMS: FakeRssItem[] = [
     {
-      title: "SK하이닉스 목표주가 줄상향",
+      title: "SK하이닉스 목표주가 400만원대로 줄상향",
       press: "가상경제",
-      pubDate: "Tue, 29 Sep 2026 01:00:00 GMT",
-    },
-    {
-      title: "SK하이닉스 목표가 올려…투자의견 유지",
-      press: "모의일보",
-      pubDate: "Tue, 29 Sep 2026 02:00:00 GMT",
-    },
-    {
-      title: "SK하이닉스 지금 매수 기회",
-      press: "예시신문",
-      pubDate: "Tue, 29 Sep 2026 03:00:00 GMT",
+      pubDate: "Tue, 29 Sep 2026 05:00:00 GMT",
     },
     {
       title: "SK하이닉스 청주 공장 증설 착수",
@@ -296,15 +286,31 @@ describe("투자 권유 기사는 단서로 쓰지 않는다 (TECH §11.5)", () 
     },
   ];
 
-  it("목표주가·목표가·투자의견·매수 제목은 뺀다", async () => {
+  it("권유 제목 기사도 남기고, 출처를 밝혀 기사 숫자를 인용한 요지는 통과", async () => {
     vi.spyOn(global, "fetch").mockImplementation(serveRss(ADVICE_ITEMS));
-    const result = await deps().run({ ...INPUT, keywords: [] });
-    expect(result.clues.map((c) => c.title)).toEqual(["SK하이닉스 청주 공장 증설 착수"]);
+    const llm = fakeLlm((id) =>
+      id === "n1"
+        ? "증권가가 목표주가를 400만원대로 올렸다고 가상경제가 보도했습니다."
+        : "청주 공장 증설에 들어갔다는 보도입니다.",
+    );
+    const result = await deps(createNewsFakeDb(), llm).run({ ...INPUT, keywords: [] });
+    expect(result.clues.map((c) => c.title).sort()).toEqual(
+      ["SK하이닉스 목표주가 400만원대로 줄상향", "SK하이닉스 청주 공장 증설 착수"].sort(),
+    );
+    const advice = result.clues.find((c) => c.press === "가상경제")!;
+    expect(advice.gist).toBe("증권가가 목표주가를 400만원대로 올렸다고 가상경제가 보도했습니다.");
   });
 });
 
-describe("요지에 숫자 근거 없음 (WU-305)", () => {
-  it("숫자·권유어가 든 요지는 버리고 제목만", async () => {
+describe("요지 검사 — 숫자·의견은 출처와 함께, 기사에 있는 숫자만", () => {
+  const ARTICLE = {
+    newsId: "n1",
+    title: "SK하이닉스 영업이익 37.6조…목표주가 1,200,000원",
+    press: "예시신문",
+    publishedDate: "2026-09-29",
+  };
+
+  it("출처 없는 숫자·지어낸 숫자·서비스 목소리 의견은 버리고 제목만", async () => {
     vi.spyOn(global, "fetch").mockImplementation(serveRss(SKHYNIX_ITEMS));
     const llm = fakeLlm((id) =>
       id === "n1"
@@ -320,18 +326,21 @@ describe("요지에 숫자 근거 없음 (WU-305)", () => {
     expect(result.clues.find((c) => c.newsId === "n3")!.gist).toBe(
       "메모리 가격이 반등했다는 보도입니다.",
     );
-    for (const clue of result.clues) expect(clue.gist).not.toMatch(/[0-9０-９]/);
   });
 
   it.each([
     ["HBM 공급 계약을 맺었다는 보도입니다.", true],
-    ["2026년 실적이 좋아졌다는 보도입니다.", false],
-    ["매출이 ３배 늘었다는 보도입니다.", false],
-    ["목표 주가를 올렸다는 보도입니다.", false],
+    ["영업이익이 37.6조 원이라고 예시신문이 보도했습니다.", true],
+    ["목표주가가 1,200,000원이라고 예시신문이 보도했습니다.", true],
+    ["목표주가가 １２０００００원이라고 예시신문이 보도했습니다.", true],
+    ["영업이익이 37.6조 원이라는 보도입니다.", false], // 출처 없음
+    ["영업이익이 40조 원이라고 예시신문이 보도했습니다.", false], // 기사에 없는 숫자
+    ["목표 주가를 올렸다는 보도입니다.", false], // 출처 없는 의견
+    ["목표주가를 올렸다고 예시신문이 보도했습니다.", true],
     ["가".repeat(121), false],
     ["첫째 문장입니다. 둘째 문장입니다. 셋째 문장입니다.", false],
     ["", false],
   ])("isAcceptableGist(%j) → %s", (gist, ok) => {
-    expect(isAcceptableGist(gist)).toBe(ok);
+    expect(isAcceptableGist(gist, ARTICLE)).toBe(ok);
   });
 });
