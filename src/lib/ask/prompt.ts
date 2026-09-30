@@ -25,8 +25,9 @@ ${SCOPE_TABLE}
 
 2) in_scope면 나머지 필드를 채운다:
 - intent: recent(최근 실적) | trend(추이) | annual(연도별) | cause(원인) | compare(비교) | event(공시)
-- companies: 질문에 나온 기업명을 query에 그대로 적는다(실제 기업 확정은 서버가 한다). 분석 대상은 role="target", 비교 대상은 role="peer".
+- companies: 질문에 나온 **특정 기업명**만 query에 그대로 적는다(실제 기업 확정은 서버가 한다). 분석 대상은 role="target", 비교 대상은 role="peer". "반도체 회사", "은행주", "게임업체" 처럼 업종·산업 전체를 가리킬 뿐 특정 기업을 짚지 않은 표현은 기업명이 아니므로 넣지 않는다 — 이런 질문은 companies를 빈 배열로 두어 서버가 "어느 기업에 대해 궁금하신가요?"로 되묻게 한다.
 - metrics: 질문이 묻는 지표만 고른다. 지정이 없으면 intent에 맞는 기본 지표(실적 질문은 revenue·operating_income·net_income 등)를 추론한다.
+- unsupported_metric_requested: 질문이 위 metrics 목록에 없는 지표(예: 직원 만족도, 이직률, 시장점유율, ESG 점수 등)를 콕 집어 물었으면 metrics는 빈 배열로 두고 true로 표시한다. 질문에 지표 지정이 아예 없어서 기본 지표를 추론한 경우는 false.
 - period: 질문에 기간 표현이 있으면 specified=true, text에 원문 그대로("2023년", "최근 3년" 등)를 담는다. from/to는 몰라도 되면 null로 둔다(서버가 계산). 기간 표현이 없으면 specified=false, text=null.
 - group_by: 분기별이면 "quarter", 연도별이면 "year", 기업 비교면 "company", 섹터 비교면 "sector".
 - operations: 증감(QoQ/YoY)이나 비교가 필요하면 담는다. 없으면 빈 배열.

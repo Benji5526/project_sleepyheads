@@ -62,6 +62,9 @@ export const aiAnalysisRequestSchema = z.object({
   intent: z.enum(AI_INTENTS),
   companies: z.array(aiCompanySchema).max(6),
   metrics: z.array(z.enum(AI_METRICS)),
+  // metrics가 비어 있는 이유가 "지정 안 함(기본 지표 추론)"인지 "목록에 없는 지표를 콕 집어 물음"인지
+  // metrics 배열만으로는 구분할 수 없어 따로 둔다 — 서버가 후자를 UNSUPPORTED_QUESTION으로 거절한다.
+  unsupported_metric_requested: z.boolean(),
   period: aiPeriodSchema,
   group_by: z.enum(AI_GROUP_BY),
   operations: z.array(aiOperationSchema),
@@ -83,6 +86,7 @@ export const AI_ANALYSIS_REQUEST_JSON_SCHEMA = {
     "intent",
     "companies",
     "metrics",
+    "unsupported_metric_requested",
     "period",
     "group_by",
     "operations",
@@ -107,6 +111,7 @@ export const AI_ANALYSIS_REQUEST_JSON_SCHEMA = {
       },
     },
     metrics: { type: "array", items: { type: "string", enum: AI_METRICS } },
+    unsupported_metric_requested: { type: "boolean" },
     period: {
       type: "object",
       additionalProperties: false,

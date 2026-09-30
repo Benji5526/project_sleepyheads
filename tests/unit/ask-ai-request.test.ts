@@ -7,6 +7,7 @@ const VALID = {
   intent: "recent",
   companies: [{ query: "SK하이닉스", role: "target" }],
   metrics: ["revenue", "operating_income"],
+  unsupported_metric_requested: false,
   period: { specified: false, from: null, to: null, text: null },
   group_by: "quarter",
   operations: [],

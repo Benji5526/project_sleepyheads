@@ -109,6 +109,16 @@ export async function finishValidation(
     };
   }
 
+  // ai.metrics = []는 "지정 안 함(기본 지표로 추론)"과 "목록에 없는 지표를 콕 집어 물음" 둘 다에서
+  // 나올 수 있어 metrics 배열만으로는 구분이 안 된다 — AI가 따로 표시한 unsupported_metric_requested로
+  // 후자를 가려낸다. 이 검사가 없으면 "직원 만족도" 같은 질문이 조용히 기본 지표로 대체돼 버린다.
+  if (ai.unsupported_metric_requested) {
+    return {
+      type: "unsupported_question",
+      message: `아직 지원하지 않는 지표입니다. 확인할 수 있는 지표: ${STEP1_METRICS.join(", ")}`,
+    };
+  }
+
   const requestedMetrics = ai.metrics.length > 0 ? ai.metrics : [...DEFAULT_METRICS];
   const metrics = requestedMetrics.filter((m): m is MetricId =>
     STEP1_METRICS.includes(m as MetricId),

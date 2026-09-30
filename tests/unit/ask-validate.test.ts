@@ -43,6 +43,7 @@ function baseAiRequest(overrides: Partial<AiAnalysisRequest> = {}): AiAnalysisRe
     intent: "recent",
     companies: [{ query: "SK하이닉스", role: "target" }],
     metrics: [],
+    unsupported_metric_requested: false,
     period: { specified: false, from: null, to: null, text: null },
     group_by: "quarter",
     operations: [],
@@ -102,6 +103,18 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
   it("Step 5 전용 지표만 요청하면 지원 불가 안내", async () => {
     const { client } = createFakeCompaniesClient([SK_HYNIX]);
     const result = await validateAnalysisRequest(baseAiRequest({ metrics: ["per"] }), { client });
+    expect(result.type).toBe("unsupported_question");
+  });
+
+  it("목록에 아예 없는 지표(예: 직원 만족도)를 물으면 기본 지표로 조용히 대체하지 않고 지원 불가로 거절한다", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    // AI는 이런 지표를 metrics 배열로 표현할 수 없어 metrics: []를 내고 대신 이 플래그로 알린다
+    // (실측 회귀에서 이 플래그가 없어 "SK하이닉스 직원 만족도 어때?"가 매출·영업이익·순이익으로
+    // 조용히 대체된 문제를 확인했다).
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ metrics: [], unsupported_metric_requested: true }),
+      { client },
+    );
     expect(result.type).toBe("unsupported_question");
   });
 
