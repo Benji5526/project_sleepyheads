@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveCompany } from "@/lib/companies/resolve";
+import { canonicalCompanyName, resolveCompany } from "@/lib/companies/resolve";
 import type { CompanyRow } from "@/lib/companies/row";
 import { createFakeCompaniesClient } from "./helpers/fake-companies-table";
 
@@ -38,7 +38,8 @@ const SAMSUNG_PREFERRED: CompanyRow = {
 const HYUNDAI_MOTOR: CompanyRow = {
   corp_code: "00164742",
   stock_code: "005380",
-  corp_name: "현대차",
+  // 운영 DB의 정식 이름 (2026-09-30 확인 — 예전 가짜 데이터는 "현대차"였다)
+  corp_name: "현대자동차",
   market: "KOSPI",
   acc_mt: 12,
   sector_source: "induty_code",
@@ -99,7 +100,7 @@ describe("resolveCompany (WU-103, TECH §4.4)", () => {
     const result = await resolveCompany("현대", { client });
     expect(result.type).toBe("candidates");
     if (result.type === "candidates") {
-      expect(result.candidates.map((c) => c.name).sort()).toEqual(["현대건설", "현대차"]);
+      expect(result.candidates.map((c) => c.name).sort()).toEqual(["현대건설", "현대자동차"]);
     }
   });
 
@@ -134,5 +135,31 @@ describe("resolveCompany (WU-103, TECH §4.4)", () => {
     const { client } = createFakeCompaniesClient(ALL_ROWS);
     const result = await resolveCompany("   ", { client });
     expect(result).toEqual({ type: "not_found" });
+  });
+});
+
+// 2026-09-30 실제 API: "현대차 최근 4분기 매출과 영업이익" → 이름에 "현대차"가 든 현대차증권만 걸려 그대로 확정되던 버그
+describe("자주 쓰는 줄임말 (COMPANY_ALIASES)", () => {
+  const HYUNDAI_SECURITIES: CompanyRow = {
+    corp_code: "00137997",
+    stock_code: "001500",
+    corp_name: "현대차증권",
+    market: "KOSPI",
+    acc_mt: 12,
+    sector_source: "induty_code",
+    sectors: { name: "증권", is_financial: true },
+  };
+
+  it("'현대차'는 현대차증권이 아니라 현대자동차", async () => {
+    const { client } = createFakeCompaniesClient([...ALL_ROWS, HYUNDAI_SECURITIES]);
+    const result = await resolveCompany("현대차", { client });
+    expect(result).toMatchObject({ type: "resolved", company: { name: "현대자동차" } });
+  });
+
+  it("줄임말은 띄어쓰기·대소문자를 무시하고, 줄임말이 아니면 그대로", () => {
+    expect(canonicalCompanyName("현대 차")).toBe("현대자동차");
+    expect(canonicalCompanyName("SKT")).toBe("SK텔레콤");
+    expect(canonicalCompanyName("하이닉스")).toBe("SK하이닉스");
+    expect(canonicalCompanyName("현대차증권")).toBe("현대차증권");
   });
 });

@@ -51,3 +51,36 @@ describe("resolvePeriod (TECH §4.3)", () => {
     expect(result).toEqual({ ok: false, code: "OUT_OF_RANGE" });
   });
 });
+
+// 2026-09-30 운영(분석 97016b86…): "하이브 2023년 1분기부터 2024년 4분기까지" → 분기 범위를 못 읽어 최근 8분기로 계산하던 버그
+describe("parsePeriodText — 분기·반기 범위", () => {
+  it.each([
+    ["2023년 1분기부터 2024년 4분기까지", "2023Q1", "2024Q4"],
+    ["2023년 1분기 ~ 2024년 4분기", "2023Q1", "2024Q4"],
+    ["2023Q1~2024Q4", "2023Q1", "2024Q4"],
+    ["2023Q3-2024Q2", "2023Q3", "2024Q2"],
+    ["2023년 1분기부터 3분기까지", "2023Q1", "2023Q3"],
+    ["2024년 상반기부터 2025년 하반기까지", "2024Q1", "2025Q4"],
+    ["2022년부터 2024년 2분기까지", "2022Q1", "2024Q2"],
+    ["2022~2024", "2022Q1", "2024Q4"],
+  ])("'%s' → %s ~ %s", (text, from, to) => {
+    expect(parsePeriodText(text, LATEST)).toEqual({ from, to });
+  });
+
+  it("거꾸로 된 범위·알아볼 수 없는 쪽이 있으면 읽지 않는다 (기본 기간으로)", () => {
+    expect(parsePeriodText("2024년 4분기부터 2023년 1분기까지", LATEST)).toBeNull();
+    expect(parsePeriodText("작년부터 올해까지", LATEST)).toBeNull();
+  });
+
+  it("resolvePeriod: 질문에 지정된 분기 범위로 계산한다 (specified)", () => {
+    const res = resolvePeriod(
+      { specified: true, text: "2023년 1분기부터 2024년 4분기까지" },
+      "trend",
+      LATEST,
+    );
+    expect(res).toMatchObject({
+      ok: true,
+      period: { from: "2023Q1", to: "2024Q4", specified: true },
+    });
+  });
+});

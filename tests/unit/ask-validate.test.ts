@@ -19,7 +19,7 @@ const SK_HYNIX: CompanyRow = {
 const HYUNDAI_MOTOR: CompanyRow = {
   corp_code: "00164742",
   stock_code: "005380",
-  corp_name: "현대차",
+  corp_name: "현대자동차", // 운영 정식 이름 — 질문의 "현대차"는 줄임말 표(COMPANY_ALIASES)로 찾는다
   market: "KOSPI",
   acc_mt: 12,
   sector_source: "induty_code",
@@ -86,7 +86,7 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
       expect(result.clarification.options).toHaveLength(2);
       expect(result.clarification.options.map((o) => o.company?.name).sort()).toEqual([
         "현대건설",
-        "현대차",
+        "현대자동차",
       ]);
     }
   });
@@ -185,7 +185,7 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
     expect(result.type).toBe("resolved");
     if (result.type !== "resolved") return;
     expect(result.request.target.name).toBe("SK하이닉스");
-    expect(result.request.peers.map((p) => p.name)).toEqual(["현대차"]);
+    expect(result.request.peers.map((p) => p.name)).toEqual(["현대자동차"]);
     expect(result.request.aggregate).toBe("sum");
   });
 
@@ -202,7 +202,7 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
       { client },
     );
     expect(result.type === "resolved" && result.request.peers.map((p) => p.name)).toEqual([
-      "현대차",
+      "현대자동차",
     ]);
     expect(result.type === "resolved" && result.request.aggregate).toBe("sum");
   });
