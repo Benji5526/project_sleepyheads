@@ -34,6 +34,26 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
+// 요청 속도 제한(DB 함수)과 남은 질문 수 조회를 흉내 낸다
+const rate = vi.hoisted(() => ({
+  calls: [] as [string, string][],
+  result: { allowed: true, retryAfterSeconds: 0 },
+}));
+vi.mock("@/lib/api/rate-limit", () => ({
+  checkRequestRate: async (subject: string, scope: string) => {
+    rate.calls.push([subject, scope]);
+    return rate.result;
+  },
+}));
+
+const remaining = vi.hoisted(() => ({ value: 20 as number | null }));
+vi.mock("@/lib/quota/question-quota", () => ({
+  getQuestionUsage: async () => {
+    if (remaining.value === null) throw new Error("db down");
+    return { used: 0, limit: 20, remaining: remaining.value, resetAt: "2026-10-01T00:00:00+09:00" };
+  },
+}));
+
 const USER = "11111111-1111-4111-8111-111111111111";
 const ID = "22222222-2222-4222-8222-222222222222";
 const noParams = { params: Promise.resolve({}) };
@@ -47,6 +67,8 @@ async function errorCode(res: Response) {
 }
 
 beforeEach(() => {
+  rate.result = { allowed: true, retryAfterSeconds: 0 };
+  remaining.value = 20;
   session.userId = USER;
   session.agreedTermsAt = "2026-09-28T10:00:00+09:00";
   vi.unstubAllEnvs();
@@ -124,16 +146,67 @@ describe("route() 공통 처리", () => {
     expect(await res.json()).toEqual({ data: { idempotencyKey: ID } });
   });
 
-  it("질문 관련 요청은 분당 10회를 넘으면 429 RATE_LIMITED + Retry-After", async () => {
-    session.userId = "33333333-3333-4333-8333-333333333333";
+  it("질문 관련 요청은 질문 한도(question)로, 나머지는 회원 한도(member)로 센다", async () => {
+    rate.calls = [];
     const POST = route({ access: "member", questionRequest: true }, async () => ok(null));
-    for (let i = 0; i < 10; i++) {
-      expect((await POST(request("/api/x", { method: "POST" }), noParams)).status).toBe(200);
-    }
+    const GET = route({ access: "member" }, async () => ok(null));
+    const guest = route({ access: "public" }, async () => ok(null));
+    await POST(request("/api/ask", { method: "POST" }), noParams);
+    await GET(request("/api/x"), noParams);
+    await guest(
+      request("/api/guest/example", { headers: { "x-forwarded-for": "1.2.3.4, 10.0.0.1" } }),
+      noParams,
+    );
+    expect(rate.calls).toEqual([
+      [USER, "question"],
+      [USER, "member"],
+      ["1.2.3.4", "guest"],
+    ]);
+  });
+
+  it("분당 한도를 넘으면 429 RATE_LIMITED + Retry-After", async () => {
+    rate.result = { allowed: false, retryAfterSeconds: 37 };
+    const POST = route({ access: "member", questionRequest: true }, async () => ok(null));
     const res = await POST(request("/api/x", { method: "POST" }), noParams);
     expect(res.status).toBe(429);
     expect(await errorCode(res)).toBe("RATE_LIMITED");
-    expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
+    expect(res.headers.get("Retry-After")).toBe("37");
+  });
+
+  it("🔑 응답에는 X-Questions-Remaining이 붙고, 🔓·🔑*에는 붙지 않는다", async () => {
+    remaining.value = 7;
+    const member = route({ access: "member" }, async () => ok(null));
+    const preTerms = route({ access: "preTerms" }, async () => ok(null));
+    const guest = route({ access: "public" }, async () => ok(null));
+    expect((await member(request("/api/x"), noParams)).headers.get("X-Questions-Remaining")).toBe(
+      "7",
+    );
+    expect(
+      (await preTerms(request("/api/me"), noParams)).headers.get("X-Questions-Remaining"),
+    ).toBeNull();
+    expect(
+      (await guest(request("/api/g"), noParams)).headers.get("X-Questions-Remaining"),
+    ).toBeNull();
+  });
+
+  it("오류 응답(예: 질문 수 소진 429)에도 남은 질문 수를 붙인다", async () => {
+    remaining.value = 0;
+    const POST = route({ access: "member" }, async () => {
+      throw new HttpError("QUOTA_EXCEEDED");
+    });
+    const res = await POST(request("/api/ask", { method: "POST" }), noParams);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("X-Questions-Remaining")).toBe("0");
+  });
+
+  it("남은 질문 수 조회가 실패해도 응답은 그대로 보낸다", async () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    remaining.value = null;
+    const GET = route({ access: "member" }, async () => ok({ fine: true }));
+    const res = await GET(request("/api/x"), noParams);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Questions-Remaining")).toBeNull();
+    spy.mockRestore();
   });
 
   it("cron은 CRON_SECRET이 맞을 때만 통과", async () => {

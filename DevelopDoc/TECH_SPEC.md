@@ -6,7 +6,7 @@
 | 문서 종류 | TECH_SPEC (기술 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.6.1 |
+| 버전 | v0.6.2 |
 | 기준 PRD | [PRD.md](./PRD.md) v0.6 |
 | 관련 문서 | [API_SPEC.md](./API_SPEC.md) v0.3.1 — 서버 API 상세 명세 |
 
@@ -22,6 +22,7 @@
 | v0.5.2 | 2026-09-29 | Next.js 16에서 `middleware.ts`가 `proxy.ts`로 이름이 바뀐 것을 저장소 구조(§18.1)에 반영 |
 | v0.6 | 2026-09-29 | **뉴스 수집을 Google 뉴스 RSS로 교체**(§3.3, §10, 한도 §13, 환경변수에서 `NAVER_*` 삭제). **분석 글을 투자 인사이트로 전환**: `insights`(투자 포인트) 추가, 분량 상한·근거 연결 검사(§11.3~11.5). 주가 API 주소가 **V2**(`GetStockSecuritiesInfoService_V2/getStockPriceInfo_V2`)로 바뀐 것을 반영(§3.2), 상장주식수 필드 확인(T5) |
 | v0.6.1 | 2026-09-29 | (WU-101, 원래 PR #7의 v0.5.1) WU-101 DB 스키마 작성 중 발견: `max_declines_per_day`(회원별 상한, F-U8)를 판정할 컬럼이 없었음 — `decline_stats_daily`는 전체 집계만, `usage_daily`엔 회원별 거절 횟수 컬럼이 없었다. §15.1 `usage_daily`에 `declines` 컬럼 추가. PR #7 합치면서 외부 호출 기록 `provider`의 `naver`를 `news`(Google 뉴스 RSS)로 바꾸는 마이그레이션 추가 |
+| v0.6.2 | 2026-09-30 | WU-114: 한도 표(§13)에 `guest_requests_per_minute`(비로그인 IP당 분당 30) 추가, 분당 요청 제한을 DB에서 센다는 점 명시 |
 
 > 이 문서는 PRD의 "무엇을 만들지"를 "어떻게 만들지"로 옮긴 것이다. 기능 ID(F-xx)는 PRD v0.4의 요구사항 ID를 그대로 쓴다.
 
@@ -629,6 +630,7 @@ sequenceDiagram
 | `questions_per_day` | 20 | 회원별 새 질문·후속 질문·설명 다시 쓰기 |
 | `question_requests_per_minute` | 10 | 회원별 질문 관련 요청(`ask`·`clarify`·`rewrite`·`rerun`) 분당 수 |
 | `requests_per_minute` | 120 | 회원별 전체 요청 분당 수 (진행 상태 확인·단계 실행 포함) |
+| `guest_requests_per_minute` | 30 | 비로그인 IP당 분당 요청 수 (🔓 API). 분당 제한 3개는 DB 함수 `check_request_rate`가 1분 고정 창으로 센다 (API_SPEC §1.6) |
 | `dart_calls_per_user_per_day` | 400 | 회원별 OpenDART 소모 상한 (숨은 한도) |
 | `dart_global_soft_limit` | 16,000 | 넘으면 회원의 새 수집 중단 (저장 데이터만) |
 | `dart_global_hard_limit` | 19,000 | 넘으면 시스템 수집도 중단 |
