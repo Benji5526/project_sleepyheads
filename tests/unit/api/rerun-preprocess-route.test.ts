@@ -91,6 +91,7 @@ const state = vi.hoisted(() => ({
   existingByKey: null as Record<string, unknown> | null,
   inserts: [] as Record<string, unknown>[],
   updates: [] as Record<string, unknown>[],
+  touchedTables: [] as string[],
   consumed: 0,
   rerunValue: 100,
   calcVersion: "v2",
@@ -119,6 +120,11 @@ vi.mock("@/lib/supabase/server", () => ({
           };
         },
         update: (patch: Record<string, unknown>) => {
+          if (table === "projects") {
+            state.touchedTables.push(table);
+            const noop = { eq: async () => ({ error: null }) };
+            return noop;
+          }
           state.updates.push(patch);
           const chain = {
             eq: () => chain,
@@ -219,6 +225,7 @@ beforeEach(() => {
   state.existingByKey = null;
   state.inserts = [];
   state.updates = [];
+  state.touchedTables = [];
   state.consumed = 0;
   state.rerunValue = 100;
   state.calcVersion = "v2";
@@ -246,6 +253,8 @@ describe("POST /api/analyses/:id/rerun (WU-202)", () => {
     // 이전 분석은 그대로 (update 없음), 새 결과에는 "새 데이터 있음"이 켜져 있다
     expect(state.updates).toHaveLength(0);
     expect((row.result as ResultObject).basis.newerDataVersionAvailable).toBe(true);
+    // 내 분석 목록(P1) 최근 활동순을 위해 프로젝트 활동 시각은 올린다
+    expect(state.touchedTables).toEqual(["projects"]);
   });
 
   it("같은 조건인데 숫자가 달라지면 sameNumbers=false, 옛 설명은 '갱신 필요'로 표시한다", async () => {

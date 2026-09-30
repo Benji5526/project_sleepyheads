@@ -13,6 +13,7 @@ import {
 import { CALC_VERSION } from "@/lib/metrics/types";
 import { runAnalysis } from "@/lib/runner/execute";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import type { SessionClient } from "@/lib/supabase/server";
 import { sameNumbers } from "@/lib/versions/compare";
 import { isNewerDataAvailable, loadDataVersion } from "@/lib/versions/store";
 import { hashAnalysisRequest } from "@/lib/versions/version";
@@ -146,6 +147,7 @@ export const POST = route(
         .select("id")
         .single();
       if (insertError) throw insertError;
+      await touchProject(supabase, original.project_id, ctx.requestId);
       return created({ analysisId: inserted.id, status: "succeeded", sameNumbers: same });
     }
 
@@ -176,6 +178,16 @@ export const POST = route(
       );
       throw insertError;
     }
+    await touchProject(supabase, original.project_id, ctx.requestId);
     return created({ analysisId: inserted.id, status: "queued", sameNumbers: null });
   },
 );
+
+// 내 분석 목록(P1)이 최근 활동순이라, 새 분석이 생기면 프로젝트 활동 시각을 올린다 (Q1 후속 질문과 같게)
+async function touchProject(supabase: SessionClient, projectId: string, requestId: string) {
+  const { error } = await supabase
+    .from("projects")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+  if (error) console.warn(`[${requestId}] 프로젝트 활동 시각 갱신 실패:`, error);
+}
