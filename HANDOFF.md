@@ -29,6 +29,7 @@
 | 2026-09-30 | WU-003: Supabase 프로젝트 하나(`sleepyhead`) 유지 결정, 마이그레이션 자동 적용 안 됨 확인 — §0.3 4번·§0.4·§2.1·§3.3·§6.2 반영 |
 | 2026-09-30 | **Step 1 마감**: 완료조건 전수 점검·버그 수정(PR #25), DB 변경 3개 운영 적용, §0.0·§0.3을 Step 2 기준으로 |
 | 2026-09-30 | **Phase 1 병렬 개발 계획**: `DevelopDoc/PHASE1_PLAN.md`, 지시문 3개+병합 지시문(`DevelopDoc/prompts/`), 시작 스크립트(`scripts/phase1-start.sh`·`.ps1`), §0.3을 Phase 1 기준으로 |
+| 2026-09-30 | **Phase 2 병합**: PR #33(트랙 A 병준: 계획·단계 실행 엔진)·#32(트랙 B 예림: 경쟁사·비교·섹터·계산식 v3)·트랙 C(현준: 뉴스 연결·분석 글 품질·T4)를 `integrate/phase2`에서 한 번에 합침. 교차 검토 수정(재무 앞 4분기, 상한이 결과 계산을 막지 않음, 재분석 계획 승인, 계산 불가 사유), 마이그레이션 5개 재번호·운영 적용. **T4: 분석 글만 gpt-6-sol + 하루 AI 예산 넘으면 저가 모델(시연용 토큰 보호)**, 질문당 AI 상한 $0.03. **Phase 3 계획**: [PHASE3_PLAN](DevelopDoc/PHASE3_PLAN.md)·지시문 4개·`scripts/phase3-start.*`, 보드 계약(`BoardView`)·한도 함수(`src/lib/limits/size.ts`) 고정 (§0.1·§0.3) |
 
 > 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
@@ -42,8 +43,8 @@
 1. 내 포크를 원본 main에 맞춘다 — GitHub 내 포크 화면의 **Sync fork → Update branch**, 또는 터미널에서 `git fetch upstream && git switch main && git merge upstream/main` (원본 저장소를 `upstream`으로 등록해 둔 경우)
 2. `pnpm install` (오늘 새 패키지는 없지만 습관으로)
 3. `.env.local` 확인 → `pnpm check:keys`에서 6개 모두 ✅ (Supabase 3개 포함). Supabase 키는 팀이 쓰는 **`sleepyhead` 프로젝트 하나**의 값
-4. `pnpm test` 가 통과하면 준비 끝 (단위·정확도·DB 663개)
-5. 상태 한 줄 요약 (2026-09-30 마감): **Step 1 완료**(PR #25). **다음은 Phase 1 = Step 2 병렬 개발** — 계획 `DevelopDoc/PHASE1_PLAN.md`, 각자 `bash scripts/phase1-start.sh 병준|예림|현준`(PowerShell은 `scripts/phase1-start.ps1`)으로 시작하면 main을 맞추고 내 브랜치를 만든 뒤 Claude Code가 내 지시문(`DevelopDoc/prompts/phase1-*.md`)으로 뜬다
+4. `pnpm test` 가 통과하면 준비 끝 (단위·정확도·DB 1,010개 — Phase 2 병합 기준)
+5. 상태 한 줄 요약 (2026-09-30 Phase 2 병합): **Step 3 코드 완료** — 운영 확인(WU-399)은 현준이 먼저. **다음은 Phase 3 = Step 4 병렬 개발** — 계획 `DevelopDoc/PHASE3_PLAN.md`, 각자 `bash scripts/phase3-start.sh 병준|예림|현준`(PowerShell은 `scripts/phase3-start.ps1`)으로 시작하면 main을 맞추고 내 브랜치를 만든 뒤 Claude Code가 내 지시문(`DevelopDoc/prompts/phase3-*.md`)으로 뜬다. **⚠️ AI 토큰은 시연용을 남긴다** — 로컬은 `OPENAI_EXPLAIN_MODEL=gpt-6-luna`, 실제 AI 회귀는 필요할 때 한 번만
 
 ### 0.1 main에 들어간 것 (2026-09-29 ~ 09-30)
 | PR | 내용 | 작성 |
@@ -67,8 +68,12 @@
 | #30 | **Phase 1 트랙 A**: WU-201 저장·후속 질문(직전 분석 요청만 문맥)·`/me` 내 분석, WU-204 소유자 검사·탈퇴(A6), WU-203 **진단 카드 화면**(`DiagnosisPanel`) | 병준 |
 | #31 | **Phase 1 트랙 C**: T7 조사·결정(제목·언론사·발행일로 요지, 본문 읽기 없음), WU-304 뉴스 모듈 `findNewsClues`(실행기 연결은 Phase 2), WU-305 뉴스 단서 화면 | 현준 |
 | (직접 병합) | **Phase 1 트랙 B**: WU-202 데이터 버전(`dataset_versions`, 접수번호로 못 박은 재계산)·재실행 Q6·"새 데이터 있음"·같은 요청+같은 버전 설명 재사용, WU-203 **서버** 진단 5종·계산 전 멈춤(`awaiting_preprocess`)·Q5. **마이그레이션 `20260930160000` 운영 적용 완료(2026-09-30, 배포 전에 적용)**. 세 트랙 통합 검사: 단위 825·화면 103 통과 | 예림 (통합: 예림) |
+| #33 | **Phase 2 트랙 A**: WU-301 복합 판별·계획 카드·승인(Q7)·닫기, WU-302 단계 실행 엔진(`src/lib/runner/steps/`)·진행 표시·취소(Q8)·재시도(최대 2회)·상한(단계 8·시간 90초·AI 비용)·복구·실행 기록(`analysis_steps`). Phase 1 후속: 끊긴 질문 동시 이어받기 1회, 422 뒤 같은 키 재전송 재차감 없음 | 병준 (통합: 현준) |
+| #32 | **Phase 2 트랙 B**: WU-303 경쟁사 자동 선택(`get_peers`, 같은 섹터 시가총액 순)·기업 비교 금융업 표시(§7 문구)·섹터 규칙 보강(삼성전자·리노공업 → 반도체 등)·계산 불가 사유, **계산식 v3**. Phase 1 후속: 결측 제외를 기업별로, 최신 데이터 재분석 기간 다시 잡기, 정정 공시 재수집 경로 | 예림 (통합: 현준) |
+| (브랜치) | **Phase 2 트랙 C** `feat/WU-304-link`: WU-299 Step 2 운영 통과 테스트, WU-304 `search_news` 실행기 연결·`news_clues` 표, WU-305 분석 글 품질("2025Q2" 문장 폐기 버그 등)·T4 결정, WU-399 증거표·손 계산 정답 | 현준 |
+| (통합) | **Phase 2 통합** `integrate/phase2`: 교차 검토 수정, **마이그레이션 5개 운영 적용**(`20260930170000` analysis_steps · `180000` quota_consumption_outcome · `190000` wu303_sector_rules · `200000` wu304_news_clues · `210000` llm_cost_cap). 검사: 단위 1,010 · 화면 117 통과. Phase 3 계획·지시문·시작 스크립트 | 현준 |
 
-- 테스트: 단위 825개, 화면 103개 (1280px·375px, Phase 1 통합 기준). CI는 Linux·Windows 두 환경에서 돈다. 실제 API 회귀는 `scripts/regression-live.test.ts`(CI 제외, 공유 DB·OpenAI 사용)
+- 테스트: 단위 1,010개, 화면 117개 (1280px·375px, Phase 2 통합 기준). CI는 Linux·Windows 두 환경에서 돈다. 실제 API 회귀는 `scripts/regression-live.test.ts`(CI 제외, 공유 DB·OpenAI 사용 — **시연용 토큰 때문에 필요할 때만**)
 - 배포: **https://projectsleepyheads.vercel.app** — 구글 로그인·약관 동의 성공(2026-09-29), **핵심 통과 테스트 질문 성공(2026-09-30 현준 확인)**, 비로그인 첫 화면에 SK하이닉스 예시(2026-09-30 확인).
 - 합치는 방식: 포크 PR이 main과 충돌하면 `merge/pr-<번호>-…` 브랜치에서 그 PR 커밋을 그대로 합치고 충돌만 풀어 새 PR로 올린다 → 합쳐지면 원래 PR도 자동으로 Merged 표시 (#8·#12·#13).
 
@@ -82,7 +87,22 @@
 | 합치는 방식 | 팀원은 **포크에서 PR** → main에 Merge (협업자 초대는 하지 않음). 포크 PR의 CI는 저장소 주인이 PR의 Files changed → **Awaiting approval → Approve workflows to run**을 눌러야 돈다 | 2026-09-29 현준 결정 |
 | Next.js 16 | `middleware.ts` → **`proxy.ts`** | TECH §18.1 |
 
-### 0.3 역할별 다음 할 일 — Phase 2 (Step 3 병렬 개발)
+### 0.3 역할별 다음 할 일 — Phase 3 (Step 4 병렬 개발)
+**Phase 2(Step 3)는 main에 합쳐졌다(2026-09-30).** 이번에도 각자 Claude Code로 끝까지 만들고 자체 검토를 마친 브랜치(협업자) 또는 포크 PR을 올리면, 통합 담당이 한 세션에서 한꺼번에 검토·수정·병합한다. 규칙·파일 소유·계약·통합 절차는 [PHASE3_PLAN](DevelopDoc/PHASE3_PLAN.md)이 기준이다.
+
+| 담당 | 맡는 일 | 시작 | 지시문 |
+|---|---|---|---|
+| 병준 (통합/배포) | WU-403 대용량 가상 데이터·측정·처리 한도 · OpenAI 키 여러 개 순차 사용 · Phase 2 후속(owner-routes Q5·Q6, 설명 재사용 때 뉴스 건너뛰기, 뉴스 핵심어) | `bash scripts/phase3-start.sh 병준` | [phase3-byeongjun](DevelopDoc/prompts/phase3-byeongjun.md) |
+| 예림 (데이터/서버) | WU-401 보드 서버(`boards`·B1·B2·DB 안 SQL 집계·`loadBoardResult`) · Phase 2 후속(**질문에 적은 기간 무시**, **현대차 → 현대차증권**, DB하이텍 3개월 값) | `bash scripts/phase3-start.sh 예림` | [phase3-yerim](DevelopDoc/prompts/phase3-yerim.md) |
+| 현준 (기획/화면·검증) | **WU-399 Step 3 운영 통과 테스트(먼저)** · WU-401 보드 화면·Q9 설명 다시 쓰기 · WU-402 차트 규격·용어 설명 · WU-499 준비 | `bash scripts/phase3-start.sh 현준` | [phase3-hyunjoon](DevelopDoc/prompts/phase3-hyunjoon.md) |
+| 통합 담당 (현준, 누구든) | 세 개가 모이면 한 번에 합치기·교차 검토·마이그레이션(배포 **전**)·main | — | [phase3-merge](DevelopDoc/prompts/phase3-merge.md) |
+
+- 계약: 보드 응답 `BoardView`·`RewriteResponse`(`src/contracts/board.ts`), **보드 ID = 분석 ID**, 한도 함수 `assertAggregateSize`·`chartPointsNotice`(`src/lib/limits/size.ts`, 첫 버전 동작) — Phase 3 동안 잠금.
+- 각자 보고서는 `DevelopDoc/phase3/<이름>.md`.
+- **⚠️ 시연용 AI 토큰**(PHASE3_PLAN §1-7): 키 3개(각 약 5천 원)를 개발·시연이 나눠 쓴다. 운영 하루 예산 `OPENAI_EXPLAIN_DAILY_BUDGET_USD`(기본 $1)를 넘으면 분석 글도 저가 모델로.
+
+<details><summary>지난 Phase 2 표 (기록용)</summary>
+
 **Phase 1(Step 2)은 main에 합쳐졌다(2026-09-30, `bd4b222`).** 이번에는 **PR을 건마다 만들지 않는다** — 각자 Claude Code로 끝까지 만들고 자체 검토를 마친 브랜치를 원본 저장소에 올리면, 통합 담당이 한 세션에서 한꺼번에 검토·수정·병합한다. 규칙·파일 소유·도구 계약·통합 절차는 [PHASE2_PLAN](DevelopDoc/PHASE2_PLAN.md)이 기준이다.
 
 | 담당 | 맡는 일 | 시작 | 지시문 |
@@ -94,6 +114,8 @@
 
 - 도구 계약(`src/lib/runner/tools/types.ts`·`registry.ts`)은 미리 고정했고, 단순 질문 도구(`get_financials`·`get_disclosures`·`build_result`·`write_explanation`)는 동작하는 첫 버전이 들어 있다 — 엔진을 처음부터 끝까지 돌려 볼 수 있다.
 - 각자 보고서는 `DevelopDoc/phase2/<이름>.md` (PR 본문 대신).
+
+</details>
 
 <details><summary>지난 Phase 1 표 (기록용)</summary>
 
@@ -119,7 +141,9 @@
 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·AI 입력 가능 여부) | ✅ Phase 1에서 완료 (TECH §21 T7) |
 
 ### 0.4 남은 확인·주의
-- **계산식 v2 (2026-09-30)**: 12월 외 결산 기업 분기가 1년 어긋나던 버그를 고쳤다. 그 전에 저장된 분석(계산식 v1)의 12월 외 결산 숫자는 틀릴 수 있다 — 다시 질문하면 맞는 값이 나온다.
+- **Phase 2 병합 뒤 사람이 확인할 것** (보고서 3개에서 옮김, WU-399에서 함께): ① 운영 단순 질문 1건이 엔진 경로로 결과까지 ② 복합 질문 → 계획 카드 → 승인 전 `api_usage_daily` 변화 없음 → 진행 → 결과 → 실행 기록, [취소]·[닫기] ③ **실행 시간 상한 90초**: 처음 조회하는 기업이 둘 이상인 비교는 넘을 수 있다 — 넘어도 결과(차트·표)까지는 만들고 분석 글 앞에서 멈춘다(통합 수정). 자주 걸리면 `quota_config.max_seconds_per_question`을 240으로 ④ 섹터 보정: `select c.corp_name, s.name from companies c join sectors s on s.id = c.sector_id where c.corp_name in ('삼성전자','삼성전기','삼성카드','SK하이닉스');` → 반도체·전자부품·장비·기타금융·반도체 ⑤ "SK하이닉스 경쟁사보다 부채비율 나아?" → 경쟁사 반도체 기업, 실행 기록 "시가총액 순" ⑥ "SK하이닉스와 KB금융 부채비율 비교" → `KB금융※`·`부채비율※`·§7 문구·그래프 자기자본비율 ⑦ 뉴스 질문 → 실행 기록 `search_news` 사유·분석 글 뉴스 단서·[뉴스 N], Vercel에서 Google 뉴스 RSS가 막히지 않는지(T8) ⑧ 운영 하이브 12분기 질문의 투자 포인트가 나오는지("2025Q2" 버그 수정) ⑨ 주가 API 사용량: 경쟁사 고르기 첫 호출 2건, 그 뒤 4일 0건
+- **AI 모델 (T4, 2026-09-30 현준님)**: 분석 글만 `gpt-6-sol`, 해석·뉴스 요지는 `gpt-6-luna`. 오늘 전체 AI 비용이 `OPENAI_EXPLAIN_DAILY_BUDGET_USD`(Vercel에 없으면 $1) 이상이면 그날 분석 글도 luna(로그 `[explain:…] 기본 모델로 작성 (daily_budget)`). 질문당 AI 상한 `max_llm_cost_usd_per_question` = **$0.03** (마이그레이션 `20260930210000`). 키 여러 개 순차 사용은 Phase 3 병준
+- **계산식 v3 (2026-10-01, Phase 2 트랙 B)**: 기업 비교 결과의 숫자 목록이 바뀌어(자기자본비율·기업별 기준 분기) 올렸다. v2 이하로 저장된 분석의 [같은 조건으로 재실행]은 "계산 방식이 바뀌어…" 안내가 정상. (v2 2026-09-30: 12월 외 결산 분기가 1년 어긋나던 버그 수정)
 - **응답 시간 목표 30초**(PRD §8): 실측 10~14초, OpenAI가 느릴 때 30~46초도 나온다(해석·설명 각 AI 1회, 한 번에 30초 넘으면 1회 재시도 후 실패).
 - **분석 글 품질은 부족**(현준 검토) — 뉴스 근거가 붙는 WU-304·305에서 다시 본다.
 - **비로그인 예시(WU-115)**: 첫 화면 아래 예시는 `guest_examples` 표의 최근 행이다. 2026-09-30 로컬에서 한 번 만들어 넣었다(실제 SK하이닉스 2025Q3~2026Q2). 이후는 Vercel Cron이 매일 04시 KST에 **SK하이닉스 정기보고서가 새로 나왔을 때만** 다시 만든다. 손으로 다시 만들려면 `GET /api/cron/refresh-guest-example?force=1` + `Authorization: Bearer <CRON_SECRET>` (AI 2회 사용). 설명 작성이 실패하면 저장하지 않고 이전 예시를 둔다.
