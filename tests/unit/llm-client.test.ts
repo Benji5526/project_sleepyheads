@@ -169,6 +169,20 @@ describe("OpenAI 키 여러 개 — 잔액·한도가 떨어지면 다음 키", 
     expect(logged).not.toMatch(/key-[abc]/);
   });
 
+  it("모든 키가 떨어진 뒤에도 다음 요청은 첫 키부터 다시 해 본다 (충전하면 서버 재시작 없이 되살아남)", async () => {
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValueOnce(billing("credit_balance_exhausted"))
+      .mockResolvedValueOnce(billing("credit_balance_exhausted"))
+      .mockResolvedValueOnce(billing("credit_balance_exhausted"))
+      .mockResolvedValue(jsonResponse(OK));
+    const { client } = createFakeSupabase();
+
+    await expect(llmCall({ client, input: "질문" })).rejects.toThrow();
+    await expect(llmCall({ client, input: "충전 뒤" })).resolves.toMatchObject({ output: "ok" });
+    expect(authOf(fetchSpy.mock.calls[3])).toBe("Bearer key-a");
+  });
+
   it("키가 하나면 지금과 같다 — 잔액 부족이면 바로 실패", async () => {
     vi.stubEnv("OPENAI_API_KEY", "only-key");
     const fetchSpy = vi

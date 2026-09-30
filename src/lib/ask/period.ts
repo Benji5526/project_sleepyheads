@@ -80,14 +80,16 @@ const RECENT_QUARTERS_RE = /^최근\s*(\d+)\s*개?\s*분기$/;
 const YEAR_RANGE_RE = /^(\d{4})\s*년\s*(?:~|부터)\s*(\d{4})\s*년\s*(?:까지)?$/;
 
 const RANGE_RE = /^(.+?)\s*(?:~|∼|부터|에서|-|–)\s*(.+?)\s*(?:까지)?$/;
-const QUARTER_ONLY_RE = /^([1-4])\s*분기$/;
+const QUARTER_ONLY_RE = /^(?:([1-4])\s*분기|[Qq]\s*([1-4]))$/;
+const SAME_YEAR_QUARTERS_RE =
+  /^(\d{4})\s*(?:년\s*([1-4])\s*(?:분기)?|[Qq]\s*([1-4]))\s*(?:~|∼|-|–|부터)\s*[Qq]?\s*([1-4])\s*(?:분기)?\s*(?:까지)?$/;
 
 /** 범위의 한쪽: 연도·분기·반기 하나 ("3분기"처럼 연도가 빠지면 왼쪽 연도를 쓴다) */
 function parsePoint(raw: string, yearOfLeft?: number): { from: Quarter; to: Quarter } | null {
   const text = raw.trim();
   const quarterOnly = QUARTER_ONLY_RE.exec(text);
   if (quarterOnly && yearOfLeft !== undefined) {
-    const q = formatQuarter(yearOfLeft, Number(quarterOnly[1]) as 1 | 2 | 3 | 4);
+    const q = formatQuarter(yearOfLeft, Number(quarterOnly[1] ?? quarterOnly[2]) as 1 | 2 | 3 | 4);
     return { from: q, to: q };
   }
   const yearQuarter = YEAR_QUARTER_RE.exec(text);
@@ -128,6 +130,20 @@ export function parsePeriodText(
 
   // "2023년 1분기부터 2024년 4분기까지"·"2023Q1~2024Q4"·"2024년 상반기부터 2025년까지" — 양쪽을 한 시점씩 읽는다
   // (2026-09-30 운영: 분기 범위를 못 읽어 기본 기간으로 계산하던 버그, 분석 97016b86…)
+  // "2024년 1~3분기"·"2024년 1-3분기"·"2023Q1-Q3" — 같은 해 안의 분기 범위 (아래 일반 범위는 왼쪽을 "2024년 1"로 잘라 못 읽는다)
+  const sameYear = SAME_YEAR_QUARTERS_RE.exec(text);
+  if (sameYear) {
+    const y = sameYear[1];
+    const a = sameYear[2] ?? sameYear[3];
+    const b = sameYear[4];
+    if (a <= b) {
+      return {
+        from: formatQuarter(Number(y), Number(a) as 1 | 2 | 3 | 4),
+        to: formatQuarter(Number(y), Number(b) as 1 | 2 | 3 | 4),
+      };
+    }
+  }
+
   const range = RANGE_RE.exec(text);
   if (range) {
     const left = parsePoint(range[1]);

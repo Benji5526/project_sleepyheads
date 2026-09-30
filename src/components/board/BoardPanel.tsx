@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BoardFilters, BoardView, CompanyRef, Explanation, ResultObject } from "@/contracts";
 import { ErrorCard } from "@/components/ask/ErrorCard";
 import type { ErrorNotice } from "@/components/ask/errorMessages";
@@ -119,6 +119,7 @@ export function BoardPanel({
     setRewritten(false);
     try {
       const { data, questionsRemaining } = await updateBoardFilters(analysisId, next);
+      rewriteKey.current = null;
       setBoard(data);
       setRewritePhase("idle");
       setRewriteNotice(null);
@@ -137,14 +138,17 @@ export function BoardPanel({
     void apply({ period, peers: next.map((p) => p.stockCode) });
   };
 
+  // 같은 [설명 다시 쓰기]를 다시 누르면(응답을 못 받은 경우 등) 같은 멱등키 — 서버가 두 번 차감하지 않는다.
+  // 성공하거나 필터가 바뀌면 새 키
+  const rewriteKey = useRef<string | null>(null);
+
   async function rewrite() {
     setRewritePhase("pending");
     setRewriteNotice(null);
+    rewriteKey.current ??= crypto.randomUUID();
     try {
-      const { data, questionsRemaining } = await rewriteExplanation(
-        analysisId,
-        crypto.randomUUID(),
-      );
+      const { data, questionsRemaining } = await rewriteExplanation(analysisId, rewriteKey.current);
+      rewriteKey.current = null;
       setExplanation(data.explanation);
       setBoard((prev) => ({ ...prev, explanationStatus: "ready" }));
       setRewritten(true);

@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CompanyRef } from "@/contracts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { canonicalCompanyName } from "./aliases";
 import {
   COMPANY_SELECT_COLUMNS,
   type CompanyRow,
@@ -35,17 +36,31 @@ export async function searchCompanies(
   const boundedLimit = Math.min(Math.max(Math.trunc(limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
   const admin = options.client ?? getSupabaseAdmin();
 
-  const pattern = `%${escapeIlikePattern(trimmed)}%`;
-  const { data, error } = await admin
-    .from("companies")
-    .select(COMPANY_SELECT_COLUMNS)
-    .ilike("corp_name", pattern)
-    .order("corp_name", { ascending: true })
-    .limit(boundedLimit * FETCH_MULTIPLIER);
+  const find = async (text: string) => {
+    const { data, error } = await admin
+      .from("companies")
+      .select(COMPANY_SELECT_COLUMNS)
+      .ilike("corp_name", `%${escapeIlikePattern(text)}%`)
+      .order("corp_name", { ascending: true })
+      .limit(boundedLimit * FETCH_MULTIPLIER);
+    if (error) throw new Error(`기업 검색 실패: ${error.message}`);
+    return (data ?? []) as unknown as CompanyRow[];
+  };
 
-  if (error) throw new Error(`기업 검색 실패: ${error.message}`);
-
-  const rows = (data ?? []) as unknown as CompanyRow[];
+  // 줄임말("현대차")이면 정식 이름(현대자동차)을 맨 앞에 — 이름에 "현대차"가 든 현대차증권만 뜨지 않게
+  const canonical = canonicalCompanyName(trimmed);
+  const rows = await find(trimmed);
+  if (canonical !== trimmed) {
+    const preferred = rankCompanyRowsByRelevance(await find(canonical), canonical);
+    const seen = new Set(preferred.map((r) => r.corp_code));
+    return [
+      ...preferred,
+      ...rankCompanyRowsByRelevance(rows, trimmed).filter((r) => !seen.has(r.corp_code)),
+    ]
+      .map(toCompanyRef)
+      .filter((company): company is CompanyRef => company !== null)
+      .slice(0, boundedLimit);
+  }
   return rankCompanyRowsByRelevance(rows, trimmed)
     .map(toCompanyRef)
     .filter((company): company is CompanyRef => company !== null)

@@ -93,7 +93,9 @@ export const POST = route(
 
     const { data: updated, error: updateError } = await supabase
       .from("analyses")
-      .update({ explanation, updated_at: new Date().toISOString() })
+      // request_hash를 비운다: 이 설명은 보드의 바뀐 조건 기준이라, "같은 요청 + 같은 데이터 버전" 설명 재사용(WU-202)이
+      // 원래 조건의 새 질문에 이 글을 붙이면 안 된다 (자체 검토 2026-09-30). 결과 숫자·데이터 버전은 그대로
+      .update({ explanation, request_hash: null, updated_at: new Date().toISOString() })
       .eq("id", analysis.id)
       .select("id");
     if (updateError || (updated ?? []).length === 0) {

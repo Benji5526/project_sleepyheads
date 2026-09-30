@@ -73,3 +73,16 @@ describe("searchCompanies (WU-103, API_SPEC S1)", () => {
     fetchSpy.mockRestore();
   });
 });
+
+// 2026-09-30: 보드 비교 기업 찾기에서 "현대차"를 치면 현대차증권만 뜨던 문제 (줄임말 표 COMPANY_ALIASES)
+describe("searchCompanies — 줄임말", () => {
+  it("'현대차'는 정식 이름 현대자동차를 맨 앞에, 이름에 '현대차'가 든 기업은 그 뒤에", async () => {
+    const { client } = createFakeCompaniesClient([
+      company({ corp_name: "현대자동차", stock_code: "005380" }),
+      company({ corp_name: "현대차증권", stock_code: "001500" }),
+      company({ corp_name: "현대건설", stock_code: "000720" }),
+    ]);
+    const result = await searchCompanies("현대차", 10, { client });
+    expect(result.map((c) => c.name)).toEqual(["현대자동차", "현대차증권"]);
+  });
+});

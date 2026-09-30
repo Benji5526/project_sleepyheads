@@ -153,6 +153,8 @@ describe("POST /api/analyses/:id/rewrite (Q9, WU-401)", () => {
     expect(state.refunded).toBe(0);
     expect(state.updates).toHaveLength(1);
     expect(state.updates[0].explanation).toEqual(NEW);
+    // 보드 조건 기준 설명이라, 원래 조건의 설명 재사용(WU-202)에 걸리지 않게 요청 해시를 비운다
+    expect(state.updates[0]).toHaveProperty("request_hash", null);
     // 보드 결과로 쓰고, 뉴스는 새로 찾지 않고 기존 단서를 넘긴다
     expect(state.generateInputs[0].result).toBe(RESULT);
     expect(state.generateInputs[0].newsClues).toEqual(OLD.newsClues);

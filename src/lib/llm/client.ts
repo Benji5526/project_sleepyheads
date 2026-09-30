@@ -102,7 +102,10 @@ export async function llmCall<T = unknown>(request: LlmCallRequest): Promise<Llm
   const raw = process.env.OPENAI_API_KEY;
   const apiKeys = parseApiKeys(raw);
   if (apiKeys.length === 0) throw new Error("OPENAI_API_KEY가 설정되지 않았습니다.");
-  if (exhausted.keys !== raw) exhausted = { keys: raw ?? "", from: 0 };
+  // 키 목록이 바뀌었거나, 모든 키가 떨어졌다고 기억 중이면 처음 키부터 다시 (충전·한도 조정 뒤 서버 재시작 없이 되살아나게)
+  if (exhausted.keys !== raw || exhausted.from >= apiKeys.length) {
+    exhausted = { keys: raw ?? "", from: 0 };
+  }
 
   try {
     let body: OpenAiResponsesBody | null = null;
