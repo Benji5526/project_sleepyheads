@@ -35,6 +35,8 @@ export interface CompanyFinancials {
   accMt?: number;
   /** 계산에 쓴 보고서 출처 (WU-202 데이터 버전). 테스트용 가짜 값에서는 비어 있을 수 있다 */
   sources?: DataSource[];
+  /** 이번에 부른 전자공시 호출 수 — 캐시 적중은 세지 않는다 (`ensureCompanyFinancials`만 채운다) */
+  externalCalls?: number;
 }
 
 export interface EnsureCompanyFinancialsOptions {
@@ -79,7 +81,10 @@ export async function ensureCompanyFinancials(
     fsDiv: r.fsDiv,
     rceptNo: r.fsDiv ? r.rceptNo : null,
   }));
-  return financialsFromSources(company, from, to, sources, { client: options.client });
+  const financials = await financialsFromSources(company, from, to, sources, {
+    client: options.client,
+  });
+  return { ...financials, externalCalls: fetched.reduce((n, r) => n + r.externalCalls, 0) };
 }
 
 /**

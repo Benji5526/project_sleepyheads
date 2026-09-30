@@ -40,7 +40,7 @@ const MISSING: DataSource = {
 function content(overrides: Partial<DataVersionContent> = {}): DataVersionContent {
   return {
     sources: [S1, S2, MISSING],
-    calcVersion: "v2",
+    calcVersion: "v3",
     priceDate: null,
     decisions: {},
     ...overrides,
@@ -59,7 +59,7 @@ describe("데이터 버전 해시·ID (WU-202)", () => {
     expect(
       hashDataVersion(content({ sources: [{ ...S1, rceptNo: "20260820000200" }, S2] })),
     ).not.toBe(base);
-    expect(hashDataVersion(content({ calcVersion: "v3" }))).not.toBe(base);
+    expect(hashDataVersion(content({ calcVersion: "v4" }))).not.toBe(base);
     expect(hashDataVersion(content({ decisions: { missing_account: "show_blank" } }))).not.toBe(
       base,
     );

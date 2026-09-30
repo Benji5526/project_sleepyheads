@@ -5,7 +5,7 @@ type Row = Record<string, unknown>;
 /**
  * WU-105 재무제표 수집 코드가 실제로 쓰는 체인만 지원하는 가짜 Supabase 클라이언트.
  * `select→eq/is/in→order→maybeSingle`(또는 바로 await), `insert(rows)→select(cols)`(또는 바로 await),
- * `update(patch)→eq(col,val)`, `upsert(rows, {onConflict})`.
+ * `update(patch)→eq(col,val)`, `upsert(rows, {onConflict})`, `select(col, {count, head: true})`(개수만).
  */
 export function createFakeFinancialsDb(initial: Record<string, unknown[]> = {}) {
   const tables: Record<string, Row[]> = {};
@@ -22,6 +22,7 @@ export function createFakeFinancialsDb(initial: Record<string, unknown[]> = {}) 
     let rows: Row[] = [...ensureTable(tableName)];
     let mode: "select" | "insert" = "select";
     let selectCalled = false;
+    let countOnly = false;
     const filters: Array<(row: Row) => boolean> = [];
 
     function applyFilters(): Row[] {
@@ -29,8 +30,10 @@ export function createFakeFinancialsDb(initial: Record<string, unknown[]> = {}) 
     }
 
     const builder = {
-      select() {
+      select(_cols?: string, opts: { count?: string; head?: boolean } = {}) {
         selectCalled = true;
+        // select(col, { count: "exact", head: true }) — 행 없이 개수만 (market-cap.ts)
+        if (opts.count && opts.head) countOnly = true;
         return builder;
       },
       eq(col: string, val: unknown) {
@@ -101,12 +104,17 @@ export function createFakeFinancialsDb(initial: Record<string, unknown[]> = {}) 
           },
         };
       },
-      then(resolve: (result: { data: Row[] | null; error: null }) => void) {
+      then(resolve: (result: { data: Row[] | null; error: null; count?: number }) => void) {
         if (mode === "insert") {
           resolve({ data: selectCalled ? rows : null, error: null });
           return;
         }
-        resolve({ data: applyFilters(), error: null });
+        const filtered = applyFilters();
+        if (countOnly) {
+          resolve({ data: null, count: filtered.length, error: null });
+          return;
+        }
+        resolve({ data: filtered, error: null });
       },
     };
 

@@ -35,6 +35,8 @@ export interface EnsureReportValuesResult {
   reprtCode: ReprtCode;
   /** true면 report_fetch_state에 이미 있어 외부 호출 없이 끝냈다는 뜻(완료조건). */
   fromCache: boolean;
+  /** 이번에 부른 전자공시 호출 수 — 캐시면 0, 연결(CFS)만 1, 별도(OFS)로 대체하면 2 (실행 기록 사용량) */
+  externalCalls: number;
   /** null이면 CFS·OFS 모두 013(데이터 없음)이었다는 뜻. */
   fsDiv: FsDiv | null;
   rceptNo: string | null;
@@ -63,14 +65,15 @@ export async function ensureReportValues(
   const admin = options.client ?? getSupabaseAdmin();
   const force = options.force ?? false;
 
+  const cached = await readFetchState(admin, corpCode, bsnsYear, reprtCode);
   if (!force) {
-    const cached = await readFetchState(admin, corpCode, bsnsYear, reprtCode);
     if (cached && isUsableFetchState(cached, options.now?.() ?? new Date())) {
       return {
         corpCode,
         bsnsYear,
         reprtCode,
         fromCache: true,
+        externalCalls: 0,
         fsDiv: cached.fs_div_used,
         rceptNo: cached.rcept_no,
         insertedCount: 0,
@@ -79,6 +82,7 @@ export async function ensureReportValues(
     }
   }
 
+  let externalCalls = 1;
   const cfs = await fetchStatement(corpCode, bsnsYear, reprtCode, "CFS", options);
   const { fsDiv, items } = cfs ? { fsDiv: "CFS" as const, items: cfs } : await fallbackToOfs();
 
@@ -86,11 +90,33 @@ export async function ensureReportValues(
     fsDiv: FsDiv | null;
     items: DartFinancialStatementItem[];
   }> {
+    externalCalls += 1;
     const ofs = await fetchStatement(corpCode, bsnsYear, reprtCode, "OFS", options);
     return ofs ? { fsDiv: "OFS", items: ofs } : { fsDiv: null, items: [] };
   }
 
   const rceptNo = items[0]?.rcept_no ?? null;
+
+  // 정정 재수집(force)인데 받은 보고서가 이미 저장한 것과 같으면(정정이 재무제표를 바꾸지 않았다)
+  // 같은 행을 또 넣지 않는다. 연결/별도가 달라졌으면(일시적 013으로 연결이 비어 별도로 대체되는 등)
+  // 예전 값을 그대로 둔다 — 정정은 같은 재무제표의 값만 바꾸고, 연결↔별도를 조용히 바꾸면 기간이 섞인다
+  if (
+    force &&
+    cached?.fs_div_used &&
+    (fsDiv !== cached.fs_div_used || cached.rcept_no === rceptNo)
+  ) {
+    return {
+      corpCode,
+      bsnsYear,
+      reprtCode,
+      fromCache: false,
+      externalCalls,
+      fsDiv: cached.fs_div_used,
+      rceptNo: cached.rcept_no,
+      insertedCount: 0,
+      missingMetrics: [],
+    };
+  }
 
   let insertedCount = 0;
   let missingMetrics: StandardMetric[] = [];
@@ -129,9 +155,7 @@ export async function ensureReportValues(
     if (rows.length > 0) {
       insertedCount = await insertReportValueRows(
         admin,
-        corpCode,
-        bsnsYear,
-        reprtCode,
+        { corpCode, bsnsYear, reprtCode, fsDiv },
         rows,
         force,
       );
@@ -148,6 +172,7 @@ export async function ensureReportValues(
     bsnsYear,
     reprtCode,
     fromCache: false,
+    externalCalls,
     fsDiv,
     rceptNo,
     insertedCount,
@@ -247,19 +272,24 @@ async function recordMissingAccounts(
   if (error) throw new Error(`data_issues 기록 실패: ${error.message}`);
 }
 
+interface ReportKey {
+  corpCode: string;
+  bsnsYear: number;
+  reprtCode: ReprtCode;
+  fsDiv: FsDiv;
+}
+
 /**
  * 새 계정 값 행을 저장한다. `force`(정정 공시 재수집)일 때는 같은 보고서의 예전 "현재 값"
  * 행(`superseded_by is null`)을 지우지 않고, 새로 넣은 행으로 잇는다(완료조건).
  */
 async function insertReportValueRows(
   admin: SupabaseClient,
-  corpCode: string,
-  bsnsYear: number,
-  reprtCode: ReprtCode,
+  report: ReportKey,
   rows: Record<string, unknown>[],
   force: boolean,
 ): Promise<number> {
-  const previous = force ? await findCurrentRows(admin, corpCode, bsnsYear, reprtCode) : [];
+  const previous = force ? await findCurrentRows(admin, report) : [];
 
   const { data, error } = await admin.from("report_values").insert(rows).select("id, account_id");
   if (error) throw new Error(`report_values 저장 실패: ${error.message}`);
@@ -273,18 +303,21 @@ async function insertReportValueRows(
   return inserted.length;
 }
 
+/**
+ * 같은 보고서·**같은 연결/별도**의 지금 값 행. 연결(CFS)을 다시 받았는데 별도(OFS, WU-203 "별도로 통일"이
+ * 따로 넣은 행)까지 이으면 별도 행이 연결 행에 대체된 것처럼 꼬인다.
+ */
 async function findCurrentRows(
   admin: SupabaseClient,
-  corpCode: string,
-  bsnsYear: number,
-  reprtCode: ReprtCode,
+  report: ReportKey,
 ): Promise<{ id: string; account_id: string }[]> {
   const { data, error } = await admin
     .from("report_values")
     .select("id, account_id")
-    .eq("corp_code", corpCode)
-    .eq("bsns_year", bsnsYear)
-    .eq("reprt_code", reprtCode)
+    .eq("corp_code", report.corpCode)
+    .eq("bsns_year", report.bsnsYear)
+    .eq("reprt_code", report.reprtCode)
+    .eq("fs_div", report.fsDiv)
     .is("superseded_by", null);
   if (error) throw new Error(`report_values 이전 값 조회 실패: ${error.message}`);
   return (data ?? []) as unknown as { id: string; account_id: string }[];

@@ -8,6 +8,7 @@ import {
   loadIssueRules,
   stripCorrectionPrefix,
 } from "./issue-rules";
+import { isPeriodicReportTitle, refetchCorrectedReports } from "./periodic-corrections";
 import type { DartDisclosureItem } from "./types";
 
 // TECH §3.1·§5: 공시 목록은 "마지막 확인 후 24시간 경과 시 그 이후분만" 다시 부른다.
@@ -36,6 +37,10 @@ export interface EnsureDisclosuresResult {
   insertedCount: number;
   /** 지분변동(하)이라 건수만 올린 횟수. */
   lowVolumeCount: number;
+  /** 이번에 부른 전자공시 호출 수 (공시 목록 쪽수 + 정정된 정기보고서 재수집) */
+  externalCalls: number;
+  /** 정정 공시로 다시 받은 정기보고서가 있으면 그 제목들 */
+  correctedReports: string[];
 }
 
 interface SyncStateRow {
@@ -61,7 +66,14 @@ export async function ensureDisclosures(
 
   const syncState = await readSyncState(admin, corpCode);
   if (isFresh(syncState?.last_checked_at ?? null)) {
-    return { corpCode, fromCache: true, insertedCount: 0, lowVolumeCount: 0 };
+    return {
+      corpCode,
+      fromCache: true,
+      insertedCount: 0,
+      lowVolumeCount: 0,
+      externalCalls: 0,
+      correctedReports: [],
+    };
   }
 
   const endDe = formatDartDate(new Date());
@@ -69,7 +81,11 @@ export async function ensureDisclosures(
     ? formatDartDate(addDays(parseIsoDate(syncState.last_rcept_dt), 1))
     : formatDartDate(addDays(new Date(), -INITIAL_LOOKBACK_DAYS));
 
-  const items = bgnDe <= endDe ? await fetchDisclosureList(corpCode, bgnDe, endDe, options) : [];
+  const listed =
+    bgnDe <= endDe
+      ? await fetchDisclosureList(corpCode, bgnDe, endDe, options)
+      : { items: [], calls: 0 };
+  const items = listed.items;
   // 원 공시를 정정 공시보다 앞에 두어 같은 목록 안에서 바로 묶을 수 있게 한다 (같은 날은 접수번호 순).
   items.sort(
     (a, b) => a.rcept_dt.localeCompare(b.rcept_dt) || a.rcept_no.localeCompare(b.rcept_no),
@@ -83,12 +99,16 @@ export async function ensureDisclosures(
   const rows: Record<string, unknown>[] = [];
   const lowVolume = new Map<string, { count: number; lastRceptDt: string }>();
   const originalsInList = new Map<string, string>(); // 정정 접두어 뗀 제목 → 원 공시 접수번호
+  const correctedPeriodic: string[] = []; // "[기재정정]사업보고서 (2025.12)" → "사업보고서 (2025.12)"
 
   for (const item of items) {
     if (!lastRceptDt || item.rcept_dt > lastRceptDt) lastRceptDt = item.rcept_dt;
 
     // OpenDART 제목 끝에 공백이 붙어 온다 — 그대로 두면 정정 공시가 원 공시 제목과 달라 묶이지 않는다
     const reportNm = item.report_nm.trim();
+    if (isCorrectionReport(reportNm) && isPeriodicReportTitle(stripCorrectionPrefix(reportNm))) {
+      correctedPeriodic.push(stripCorrectionPrefix(reportNm));
+    }
     const classification = classifyDisclosure(reportNm, rules);
     if (!classification) continue; // 분류표에 없는 공시 — 근거 자료로 쓰지 않으니 저장하지 않는다.
 
@@ -127,9 +147,23 @@ export async function ensureDisclosures(
     lowVolumeCount += count;
   }
 
+  // 정정된 정기보고서의 재무 값을 다시 받는다 — 실패하면 확인 상태를 남기지 않아 다음에 다시 본다
+  const refetchCalls = await refetchCorrectedReports(corpCode, correctedPeriodic, {
+    client: admin,
+    userId: options.userId ?? null,
+    analysisId: options.analysisId ?? null,
+  });
+
   await writeSyncState(admin, corpCode, lastRceptDt);
 
-  return { corpCode, fromCache: false, insertedCount: rows.length, lowVolumeCount };
+  return {
+    corpCode,
+    fromCache: false,
+    insertedCount: rows.length,
+    lowVolumeCount,
+    externalCalls: listed.calls + refetchCalls,
+    correctedReports: correctedPeriodic,
+  };
 }
 
 async function fetchDisclosureList(
@@ -137,7 +171,7 @@ async function fetchDisclosureList(
   bgnDe: string,
   endDe: string,
   options: DartFetchOptions,
-): Promise<DartDisclosureItem[]> {
+): Promise<{ items: DartDisclosureItem[]; calls: number }> {
   const items: DartDisclosureItem[] = [];
   let pageNo = 1;
   for (;;) {
@@ -153,7 +187,7 @@ async function fetchDisclosureList(
     if (pageNo >= totalPage) break;
     pageNo += 1;
   }
-  return items;
+  return { items, calls: pageNo };
 }
 
 async function readSyncState(

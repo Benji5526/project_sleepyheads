@@ -16,6 +16,7 @@ import {
   METRIC_LABEL,
   METRIC_UNIT,
   RATIO_METRIC_INPUTS,
+  metricLabelFor,
   type DirectMetricId,
   type FlowMetricId,
 } from "./metric-info";
@@ -268,38 +269,101 @@ export interface CompanyMetricSample {
   fsDiv: FsDiv;
 }
 
-/** groupBy = "company" | "sector": 비교 대상마다 같은 분기 하나의 값을 나란히 놓는다. */
+export interface BuildComparisonResult extends BuildQuarterlyResult {
+  /** 비교 그래프에 그릴 Series — 금융사가 있으면 부채비율 대신 자기자본비율 (TECH §7). 표는 `series` 전부 */
+  chartSeries: Series[];
+  /** 기업(corpCode) → 비교에 쓴 분기. 기업마다 다를 수 있다 ("기준 분기 다름") */
+  quarterByCorp: Map<string, Quarter>;
+  /** 비교 기업 중 금융사가 있는가 */
+  hasFinancial: boolean;
+  /** 금융사 기업명·부채비율에 ※를 달았는가 (표에 부채비율이 있을 때만) → 표 아래 §7 주석 */
+  financialFootnote: boolean;
+  /** 비교 그래프의 안정성 지표를 부채비율 → 자기자본비율로 바꿨는가 */
+  stabilitySwitched: boolean;
+  /** 표 행 이름 (기업 순서대로, 금융사는 ※가 붙을 수 있다) — 차트 x와 같다 */
+  rowKeys: string[];
+}
+
+const STABILITY_METRICS: readonly DirectMetricId[] = ["debt_ratio", "equity_ratio"];
+
+function isFinancialSample(sample: CompanyMetricSample, quarter: Quarter): boolean {
+  if (sample.company.sector.isFinancial) return true;
+  // 섹터 정보가 없던 옛 요청도 계산 엔진이 단 부채비율 ※(sectors.is_financial)로 알아본다
+  const debt = sample.financials.metricsByQuarter.get(quarter)?.metrics.debt_ratio as
+    { footnoteMark?: "※" } | undefined;
+  return debt?.footnoteMark === "※";
+}
+
+/**
+ * 비교 표·그래프의 행 이름. 표에 부채비율이 있으면 금융사 이름에 ※ (TECH §7 "기업명·부채비율에 ※").
+ * 차트 x·표 행·"사용된 데이터" 행이 이 이름 하나로 맞물린다.
+ */
+export function comparisonRowLabel(company: CompanyRef, marked: boolean): string {
+  return marked ? `${company.name}※` : company.name;
+}
+
+/**
+ * groupBy = "company" | "sector": 비교 대상마다 한 분기의 값을 나란히 놓는다 (TECH §4.4 `compare`, §7).
+ * - `quarter`: 모든 기업에 같은 분기, 또는 기업(corpCode)별 분기 — 한 기업의 보고서가 늦거나 결측 분기를
+ *   뺐다고 다른 기업의 비교 분기까지 밀리지 않게 기업마다 따로 정한다 (`comparisonQuarters`).
+ * - 금융업 변환 (§7): 금융사의 매출은 영업수익, 영업이익률은 영업이익 ÷ 영업수익 (계산식은 같고 계정만 다르다
+ *   — account_map 2순위). 안정성 지표를 물으면 **표에는 부채비율·자기자본비율 둘 다**, 금융사가 1곳이라도
+ *   있으면 **그래프는 모든 기업 자기자본비율**, 금융사 이름·부채비율에 ※.
+ */
 export function buildCompanyComparisonSeries(
   samples: CompanyMetricSample[],
-  quarter: Quarter,
+  quarter: Quarter | ReadonlyMap<string, Quarter>,
   metrics: MetricId[],
   allocator: FigureAllocator,
-): BuildQuarterlyResult {
-  const series: Series[] = [];
-  const reportsUsed = new Set<string>();
-  const directMetrics = metrics.filter(
+): BuildComparisonResult {
+  const quarterByCorp = new Map<string, Quarter>();
+  for (const sample of samples) {
+    const q = typeof quarter === "string" ? quarter : quarter.get(sample.company.corpCode);
+    if (q) quarterByCorp.set(sample.company.corpCode, q);
+  }
+  const quarterOf = (sample: CompanyMetricSample) => quarterByCorp.get(sample.company.corpCode)!;
+
+  const requested = metrics.filter(
     (m): m is DirectMetricId => m !== "yoy" && m !== "qoq" && m in METRIC_LABEL,
   );
+  // 비교표에는 안정성 지표를 둘 다 (TECH §7 "비교표: 부채비율·자기자본비율 모두 표시")
+  const tableMetrics: DirectMetricId[] = [...requested];
+  if (requested.some((m) => STABILITY_METRICS.includes(m))) {
+    for (const m of STABILITY_METRICS) if (!tableMetrics.includes(m)) tableMetrics.push(m);
+  }
 
-  for (const metric of directMetrics) {
+  const financialCorps = new Set(
+    samples.filter((s) => isFinancialSample(s, quarterOf(s))).map((s) => s.company.corpCode),
+  );
+  const hasFinancial = financialCorps.size > 0;
+  const financialFootnote = hasFinancial && tableMetrics.includes("debt_ratio");
+  const rowLabel = (sample: CompanyMetricSample) =>
+    comparisonRowLabel(
+      sample.company,
+      financialFootnote && financialCorps.has(sample.company.corpCode),
+    );
+
+  const series: Series[] = [];
+  const reportsUsed = new Set<string>();
+  for (const metric of tableMetrics) {
     const points: Series["points"] = [];
-    // 비교 기업 중 금융업이 있으면 부채비율 등에 ※를 단다 (분기·연도별 경로와 같게)
     let footnoteMark: "※" | undefined;
     for (const sample of samples) {
-      const computed = metricAt(sample.financials, quarter, metric);
-      const footnote = (computed as { footnoteMark?: "※" }).footnoteMark;
-      if (footnote) footnoteMark = footnote;
-      const report = reportBasis(quarter, sample.financials);
+      const q = quarterOf(sample);
+      const computed = metricAt(sample.financials, q, metric);
+      const isFinancial = financialCorps.has(sample.company.corpCode);
+      if (metric === "debt_ratio" && isFinancial) footnoteMark = "※";
+      const report = reportBasis(q, sample.financials);
       reportsUsed.add(`${sample.company.name} ${report}`);
 
       const figure = allocator.add({
-        label: `${sample.company.name} ${METRIC_LABEL[metric]} ${quarter}`,
+        label: `${sample.company.name} ${metricLabelFor(metric, isFinancial)} ${q}`,
         unit: METRIC_UNIT[metric],
         value: computed.value,
         reason: computed.reason,
         basis: { report, fsDiv: sample.fsDiv },
       });
-      points.push({ x: sample.company.name, figureId: figure.id });
+      points.push({ x: rowLabel(sample), figureId: figure.id });
     }
     series.push({
       key: metric,
@@ -310,7 +374,42 @@ export function buildCompanyComparisonSeries(
     });
   }
 
-  return { series, reportsUsed };
+  // 비교 그래프: 금융사가 있으면 부채비율을 빼고 자기자본비율로. 없으면 물은 지표 그대로(덧붙인 것은 표에만)
+  const chartKeys = new Set<string>(requested);
+  let stabilitySwitched = false;
+  if (hasFinancial && chartKeys.has("debt_ratio")) {
+    chartKeys.delete("debt_ratio");
+    chartKeys.add("equity_ratio");
+    stabilitySwitched = true;
+  }
+  const chartSeries = series.filter((s) => chartKeys.has(s.key));
+
+  return {
+    series,
+    chartSeries,
+    reportsUsed,
+    quarterByCorp,
+    hasFinancial,
+    financialFootnote,
+    stabilitySwitched,
+    rowKeys: samples.map(rowLabel),
+  };
+}
+
+/**
+ * 기업마다 비교에 쓸 분기: 요청 범위 안에서 그 기업이 쓸 수 있는 분기(`allowed`, 결측 제외 반영) 중
+ * **보고서가 있는 가장 최근 분기**. 아직 제출 전(013)인 분기 때문에 비교가 빈칸이 되지 않게 한다.
+ * 쓸 분기가 하나도 없으면 요청 범위의 마지막 분기(계산 불가로 보인다).
+ */
+export function comparisonQuarter(
+  financials: CompanyFinancials,
+  allowed: readonly Quarter[],
+  fallback: Quarter,
+): Quarter {
+  for (let i = allowed.length - 1; i >= 0; i -= 1) {
+    if (!financials.quartersWithoutReport?.has(allowed[i])) return allowed[i];
+  }
+  return allowed[allowed.length - 1] ?? fallback;
 }
 
 export interface BuildSumResult extends BuildQuarterlyResult {
