@@ -217,7 +217,12 @@ beforeEach(() => {
     question: "SK하이닉스 최근 실적 어때?",
     status: "succeeded",
     mixed_scope: false,
-    analysis_request: { target: {}, metrics: ["revenue"] },
+    analysis_request: {
+      target: { name: "SK하이닉스" },
+      peers: [],
+      metrics: ["revenue"],
+      period: { from: "2025Q3", to: "2026Q2", specified: true, reason: "", clipped: false },
+    },
     result: result(100),
     explanation: EXPLANATION,
     diagnoses: [],
@@ -284,6 +289,10 @@ describe("POST /api/analyses/:id/rerun (WU-202)", () => {
     expect(state.inserts[0]).toMatchObject({ project_id: "p1", status: "queued" });
     expect(state.inserts[0].result).toBeUndefined();
     expect(state.updates).toHaveLength(0);
+    // 이미 [최신 데이터로 다시 분석]을 눌렀으니 계획은 승인된 채로 — 엔진이 계획 카드를 다시 띄우지 않는다
+    const plan = state.inserts[0].plan as { steps: unknown[]; approvedAt: string | null };
+    expect(plan.steps.length).toBeGreaterThan(0);
+    expect(typeof plan.approvedAt).toBe("string");
   });
 
   it("최신 데이터로 다시 분석: 질문에 기간이 없었으면 AI 없이 오늘 기준 최근 N분기로 다시 잡는다", async () => {

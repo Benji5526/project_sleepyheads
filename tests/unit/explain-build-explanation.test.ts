@@ -238,6 +238,22 @@ describe("buildExplanation", () => {
     expect(result.insights[0].chartRef).toBeNull();
   });
 
+  it("서버의 계산 불가 사유 줄을 주의사항에 그대로 붙인다 (숫자가 있어도 서버 문장이라 검사하지 않는다)", () => {
+    const note = "계산 불가 (비교할 직전 기간 없음): 영업이익 QoQ 증감률 2025Q3";
+    const result = buildExplanation({
+      ai: baseAi(),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: [],
+      hasNews: false,
+      mixedScope: true,
+      unavailableNotes: [note],
+    });
+    expect(result.caveats).toContain(note);
+    // 섞인 질문 안내는 여전히 맨 끝
+    expect(result.caveats.indexOf(note)).toBeLessThan(result.caveats.length - 1);
+  });
+
   it("섞인 질문이면 안내 문구를 caveats 끝에 붙인다", () => {
     const result = buildExplanation({
       ai: baseAi(),

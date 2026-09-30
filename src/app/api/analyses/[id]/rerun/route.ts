@@ -18,6 +18,7 @@ import type { SessionClient } from "@/lib/supabase/server";
 import { sameNumbers } from "@/lib/versions/compare";
 import { isNewerDataAvailable, loadDataVersion } from "@/lib/versions/store";
 import { hashAnalysisRequest } from "@/lib/versions/version";
+import { buildStoredPlan } from "@/lib/runner/steps/plan";
 
 // API_SPEC §8.2
 export const maxDuration = 60;
@@ -155,6 +156,9 @@ export const POST = route(
 
     // 최신 데이터로 다시 분석: 질문 1회 (같은 멱등키 재요청은 DB 함수가 재차감하지 않는다)
     const latestRequest = withLatestDefaultPeriod(request);
+    // 사용자가 [최신 데이터로 다시 분석]을 눌러 이미 동의했다 — 복합 질문이어도 계획 카드를 다시 띄우지 않게
+    // 승인된 계획을 함께 넣는다 (트랙 A 부탁, 통합 검토). 질문 수 차감 전에 만들어 실패해도 차감되지 않게
+    const plan = { ...buildStoredPlan(latestRequest), approvedAt: new Date().toISOString() };
     try {
       const consumed = await consumeQuestionQuota(userId, idempotencyKey, admin);
       if (consumed.alreadyConsumed) {
@@ -172,7 +176,12 @@ export const POST = route(
 
     const { data: inserted, error: insertError } = await supabase
       .from("analyses")
-      .insert({ ...base, analysis_request: latestRequest, status: "queued" })
+      .insert({
+        ...base,
+        analysis_request: latestRequest,
+        status: "queued",
+        plan,
+      })
       .select("id")
       .single();
     if (insertError) {

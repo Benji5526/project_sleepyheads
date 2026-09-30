@@ -136,6 +136,31 @@ describe("generateExplanationWithUsage — 뉴스 입력·비용 (WU-305)", () =
   });
 });
 
+describe("계산 불가 사유 (WU-302·트랙 B 부탁)", () => {
+  it("result.basis.flags의 '계산 불가 (' 줄만 주의사항에 들어간다", async () => {
+    llmCallMock.mockResolvedValue({
+      output: {
+        conclusion: ["영업이익이 늘었습니다.", "수익성이 좋아지는 흐름입니다."],
+        insights: [],
+        evidence: [],
+        news_clues: [],
+        caveats: [],
+      },
+      usage: { inputTokens: 1, outputTokens: 1, costUsd: 0 },
+    });
+    const result = {
+      ...input.result,
+      basis: {
+        ...input.result.basis,
+        flags: ["금융업 포함 — 공통 지표로 변환", "계산 불가 (분모 0): 영업이익률 2026Q1"],
+      },
+    };
+    const { explanation } = await generateExplanationWithUsage({ ...input, result });
+    expect(explanation.caveats).toContain("계산 불가 (분모 0): 영업이익률 2026Q1");
+    expect(explanation.caveats).not.toContain("금융업 포함 — 공통 지표로 변환");
+  });
+});
+
 describe("분석 글 모델 (T4)", () => {
   const AI_OK = {
     conclusion: ["영업이익이 늘었습니다.", "수익성이 좋아지는 흐름입니다."],

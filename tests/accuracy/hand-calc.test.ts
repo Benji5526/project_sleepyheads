@@ -285,7 +285,7 @@ const itFor = (broken: boolean) => (broken ? it.fails : it);
 // ---------------------------------------------------------------------------
 
 // supabase/seed.sql의 sectors·sector_rules·sector_overrides 중 이 샘플에 필요한 행 (id = 섹터 이름)
-// WU-303 섹터 규칙 보강 반영 (seed.sql·migrations/20261001090000)
+// WU-303 섹터 규칙 보강 반영 (seed.sql·migrations/20260930190000)
 const FINANCIAL_SECTORS = new Set(["은행", "증권", "보험", "금융지주", "기타금융"]);
 const SECTORS = [
   "반도체",

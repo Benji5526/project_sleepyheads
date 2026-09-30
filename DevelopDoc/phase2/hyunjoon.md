@@ -21,7 +21,7 @@
 - 실제 API 비교 비용: 약 $0.30 (두 번, 비로그인 방식이라 회원 데이터 없음)
 
 ## 마이그레이션
-- 파일: `supabase/migrations/20260930180000_wu304_news_clues.sql` — **추가만** (`create table if not exists news_clues` + RLS 정책). 운영 미적용
+- 파일: `supabase/migrations/20260930200000_wu304_news_clues.sql` — **추가만** (`create table if not exists news_clues` + RLS 정책). 운영 미적용
 - 되돌리기: `drop table if exists news_clues;` (지금 코드는 저장 실패도 사유만 남기고 계속 간다)
 - 통합 담당: 병준·예림 마이그레이션과 시각 순서 맞춰 재번호
 

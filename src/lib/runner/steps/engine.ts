@@ -112,6 +112,9 @@ function limitReached(
   limits: EngineLimits,
 ): StopReason | null {
   if (next.seq > limits.maxSteps) return "STEP_LIMIT";
+  // build_result는 받아 둔 보고서로 계산만 한다(AI·외부 호출 없음) — 시간·비용 상한으로 여기서 멈추면
+  // 질문 수를 쓰고도 결과가 하나도 없다. 상한에 닿았으면 결과까지 만들고 분석 글 앞에서 멈춘다 (통합 검토)
+  if (next.tool === "build_result") return null;
   const cost = rows.reduce((sum, r) => sum + r.llmCostUsd, 0);
   if (cost >= limits.maxLlmCostUsd) return "COST_LIMIT";
   const ms = rows.reduce((sum, r) => sum + (r.durationMs ?? 0), 0);

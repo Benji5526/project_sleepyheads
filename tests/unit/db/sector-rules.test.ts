@@ -6,12 +6,12 @@ import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { beforeAll, describe, expect, it } from "vitest";
 
-// WU-303 섹터 규칙 보강 마이그레이션(20261001090000)을 실제 Postgres(PGlite)에서 확인한다.
+// WU-303 섹터 규칙 보강 마이그레이션(20260930190000)을 실제 Postgres(PGlite)에서 확인한다.
 // ① 빈 DB에 migrations 전체 + seed.sql이 충돌 없이 들어간다 ② 운영처럼 이미 잘못 분류된 기업이 있을 때
 // 마이그레이션을 (다시) 적용하면 바로잡히고, 두 번 적용해도 같다(추가만 하는 마이그레이션).
 
 const ROOT = join(__dirname, "../../../supabase");
-const MIGRATION = "20261001090000_wu303_sector_rules.sql";
+const MIGRATION = "20260930190000_wu303_sector_rules.sql";
 
 let db: PGlite;
 

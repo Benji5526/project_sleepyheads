@@ -1,7 +1,7 @@
 // WU-301 계획: 분석 요청 → 실행 단계(PlannedStep[]) + 복합 판별 + 계획 카드 (TECH §4.6, PHASE2_PLAN §3.2).
 // 순수 함수만 둔다 — DB·외부 호출 없음 (승인 전에는 아무것도 부르지 않는다).
 import type { AnalysisRequestView, Plan } from "@/contracts";
-import { quarterSpan } from "@/lib/ask/quarter";
+import { addQuarters, quarterSpan } from "@/lib/ask/quarter";
 import { METRIC_LABEL } from "@/lib/runner/metric-info";
 import type { PlannedStep, ToolName } from "@/lib/runner/tools/types";
 
@@ -35,9 +35,20 @@ function isComparison(request: AnalysisRequestView): boolean {
   );
 }
 
-/** 보고서 수(분기마다 1개) + 기업개황 1 — 캐시가 없을 때의 최대 호출 수 */
+/**
+ * 재무는 요청 시작보다 4분기 앞부터 받는다 — `runAnalysis`가 YoY·QoQ용으로 그만큼 앞을 읽는다
+ * (`execute.ts` CHANGE_LOOKBACK_QUARTERS). 안 받아 두면 build_result 단계 안에서 보고서를 받게 되어
+ * 실행 기록의 외부 호출 수·시간이 어긋난다 (통합 검토, 트랙 B 부탁)
+ */
+const LOOKBACK_QUARTERS = 4;
+
+function fetchFrom(request: AnalysisRequestView) {
+  return addQuarters(request.period.from, -LOOKBACK_QUARTERS);
+}
+
+/** 보고서 수(분기마다 1개, 앞 4분기 포함) + 기업개황 1 — 캐시가 없을 때의 최대 호출 수 */
 function reportCalls(request: AnalysisRequestView): number {
-  return quarterSpan(request.period.from, request.period.to) + 1;
+  return quarterSpan(fetchFrom(request), request.period.to) + 1;
 }
 
 /** 계획 규칙 (PHASE2_PLAN §3.2). 순서: 경쟁사 → 재무(대상) → 재무(경쟁사) → 공시 → 뉴스 → 결과 → 분석 글 */
@@ -45,6 +56,7 @@ export function planSteps(request: AnalysisRequestView): PlannedStep[] {
   const { target, period } = request;
   const steps: Omit<PlannedStep, "seq">[] = [];
   const range = `${period.from}~${period.to}`;
+  const from = fetchFrom(request);
   const autoPeers = isComparison(request) && request.peers.length === 0;
 
   if (autoPeers) {
@@ -57,19 +69,19 @@ export function planSteps(request: AnalysisRequestView): PlannedStep[] {
   steps.push({
     tool: "get_financials",
     label: `${target.name} 재무 수집 (${range})`,
-    input: { companies: [target], from: period.from, to: period.to },
+    input: { companies: [target], from, to: period.to },
   });
   if (request.peers.length > 0) {
     steps.push({
       tool: "get_financials",
       label: `${request.peers.map((p) => p.name).join("·")} 재무 수집`,
-      input: { companies: request.peers, from: period.from, to: period.to },
+      input: { companies: request.peers, from, to: period.to },
     });
   } else if (autoPeers) {
     steps.push({
       tool: "get_financials",
       label: "경쟁사 재무 수집",
-      input: { fromPeers: true, from: period.from, to: period.to },
+      input: { fromPeers: true, from, to: period.to },
     });
   }
   if (request.intent === "event") {

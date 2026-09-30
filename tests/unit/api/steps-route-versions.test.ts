@@ -64,12 +64,17 @@ vi.mock("@/lib/runner/execute", () => ({
     return state.outcome;
   },
 }));
-vi.mock("@/lib/explain/generate", () => ({
-  generateExplanation: async () => {
+// write_explanation(트랙 C)은 비용까지 받는 generateExplanationWithUsage를 부른다
+vi.mock("@/lib/explain/generate", () => {
+  const explain = () => {
     state.explainCalls += 1;
     return { status: "ready", label: "AI 작성", conclusion: ["새 설명"] };
-  },
-}));
+  };
+  return {
+    generateExplanation: async () => explain(),
+    generateExplanationWithUsage: async () => ({ explanation: explain(), llmCostUsd: 0 }),
+  };
+});
 
 const { POST } = await import("@/app/api/analyses/[id]/step/route");
 

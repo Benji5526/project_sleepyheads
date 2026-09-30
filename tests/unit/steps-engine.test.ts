@@ -235,16 +235,19 @@ describe("복합 질문 — 승인 전 0건, 승인 뒤 한 요청에 한 단계
     expect(calls[0].ctx.previous.map((p) => p.tool)).toEqual(["get_financials"]);
   });
 
-  it("실행 시간 상한(90초)에 닿으면 다음 단계 전에 멈추고 부분 결과(TIMEOUT), 멈춘 곳을 기록한다", async () => {
+  it("실행 시간 상한(90초)에 닿으면 결과(build_result)까지 만들고 분석 글 앞에서 멈춘다 — 부분 결과(TIMEOUT)", async () => {
     approve();
     toolMs = 50_000;
     await runStepRequest(ID, deps()); // 50초
-    await runStepRequest(ID, deps()); // 100초
+    await runStepRequest(ID, deps()); // 100초 — 상한 넘음
+    // 결과 계산은 받아 둔 보고서로만 해서(AI·외부 호출 없음) 상한과 상관없이 한다 — 질문 수를 쓰고 결과가 없으면 안 된다
+    await runStepRequest(ID, deps());
     const res = await runStepRequest(ID, deps());
     expect(res).toMatchObject({ status: "partial", next: "done" });
     expect(memory.analysis.stop_reason).toBe("TIMEOUT");
-    expect(calls).toHaveLength(2);
-    expect(memory.steps.find((s) => s.seq === 3)).toMatchObject({
+    expect(calls.map((c) => c.tool)).toEqual(["get_financials", "search_news", "build_result"]);
+    expect(memory.analysis.result).not.toBeNull();
+    expect(memory.steps.find((s) => s.tool === "write_explanation")).toMatchObject({
       status: "skipped",
       errorReason: "실행 시간 상한에 닿아 멈춤",
     });
@@ -445,7 +448,8 @@ describe("상한 (단계 수·AI 비용)", () => {
     const res = await runStepRequest(ID, deps());
     expect(res.status).toBe("partial");
     expect(memory.analysis.stop_reason).toBe("COST_LIMIT");
-    expect(calls).toHaveLength(1);
+    // 결과 계산(AI 비용 없음)까지는 하고 분석 글(AI) 앞에서 멈춘다
+    expect(calls.map((c) => c.tool)).toEqual(["get_financials", "build_result"]);
   });
 });
 

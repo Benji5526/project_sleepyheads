@@ -254,8 +254,10 @@ export function createSupabaseEngineStore(
       if (error) throw error;
       const value = (key: string, fallback: number) => {
         const found = (data ?? []).find((r: { key: string }) => r.key === key) as
-          { value: number | string } | undefined;
-        const n = Number(found?.value);
+          { value: number | string | null } | undefined;
+        // Number(null)·Number("")은 0이라 "상한 0"이 되어 모든 질문이 바로 멈춘다 — 값이 없으면 기본값
+        if (found?.value == null || found.value === "") return fallback;
+        const n = Number(found.value);
         return Number.isFinite(n) ? n : fallback;
       };
       return {

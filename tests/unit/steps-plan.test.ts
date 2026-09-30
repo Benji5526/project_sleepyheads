@@ -24,6 +24,19 @@ describe("planSteps — 순서와 조건", () => {
     expect(planSteps(base).map((s) => s.seq)).toEqual([1, 2, 3]);
   });
 
+  it("재무는 요청 시작보다 4분기 앞부터 받는다 — YoY·QoQ용 보고서를 build_result 안에서 받지 않게 (통합 검토)", () => {
+    const request = {
+      ...base,
+      period: { ...base.period, from: "2025Q3", to: "2026Q2" },
+    } as AnalysisRequestView;
+    const auto = planSteps({ ...request, intent: "compare", groupBy: "company", peers: [] });
+    for (const step of auto.filter((s) => s.tool === "get_financials")) {
+      expect(step.input).toMatchObject({ from: "2024Q3", to: "2026Q2" });
+    }
+    // 이름표는 사용자가 물은 기간 그대로
+    expect(planSteps(request)[0].label).toContain("2025Q3~2026Q2");
+  });
+
   it("질문에 경쟁사가 있으면 대상·경쟁사 재무를 묶음마다 한 단계, 경쟁사 고르기는 없음", () => {
     const steps = planSteps({ ...base, intent: "compare", groupBy: "company", peers: [samsung] });
     expect(steps.map((s) => s.tool)).toEqual([

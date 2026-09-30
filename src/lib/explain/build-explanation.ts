@@ -50,6 +50,11 @@ export interface BuildExplanationInput {
   newsClues: NewsClue[];
   hasNews: boolean;
   mixedScope: boolean;
+  /**
+   * 서버가 만든 "계산 불가 (사유): 지표 분기" 줄 (`result.basis.flags`, 트랙 B `unavailableFlags`) — 그대로 주의사항에.
+   * AI는 값이 비어 있는 숫자를 쓸 수 없어(자리표시자 검사) 사유를 글에 못 쓰므로 서버가 붙인다 (WU-302·TECH §6.4)
+   */
+  unavailableNotes?: string[];
 }
 
 export function buildExplanation(input: BuildExplanationInput): Explanation {
@@ -133,6 +138,7 @@ export function buildExplanation(input: BuildExplanationInput): Explanation {
     ...input.ai.caveats
       .map((raw) => resolveText(raw, input.figures))
       .filter((text): text is string => text !== null && !containsBannedWord(text)),
+    ...(input.unavailableNotes ?? []),
     ...(input.mixedScope ? [MIXED_SCOPE_NOTICE] : []),
   ];
 

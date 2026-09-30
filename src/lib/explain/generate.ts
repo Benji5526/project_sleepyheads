@@ -20,6 +20,9 @@ export interface GenerateExplanationInput {
   analysisId?: string | null;
 }
 
+/** 트랙 B `unavailableFlags`(src/lib/runner/present.ts)가 만드는 줄의 머리말 */
+const UNAVAILABLE_PREFIX = "계산 불가 (";
+
 export interface GeneratedExplanation {
   explanation: Explanation;
   /** 이번 설명 작성 AI 비용 (부르기 전에 실패했으면 0) — 질문당 상한 max_llm_cost_usd_per_question 판정용 */
@@ -76,6 +79,9 @@ export async function generateExplanationWithUsage(
       newsClues,
       hasNews: newsClues.length > 0,
       mixedScope: input.mixedScope,
+      unavailableNotes: (input.result.basis?.flags ?? []).filter((f) =>
+        f.startsWith(UNAVAILABLE_PREFIX),
+      ),
     });
     return { explanation, llmCostUsd };
   } catch (err) {
