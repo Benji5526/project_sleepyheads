@@ -29,6 +29,15 @@ export function SiteHeader() {
               </span>
             </p>
           )}
+          {status === "ready" && (
+            <Link
+              href="/me"
+              aria-current={pathname === "/me" ? "page" : undefined}
+              className="rounded-md px-2 py-1 text-muted hover:bg-paper hover:text-ink aria-[current=page]:font-semibold aria-[current=page]:text-ink"
+            >
+              내 분석
+            </Link>
+          )}
           {(status === "ready" || status === "needs_terms") && (
             <button
               type="button"

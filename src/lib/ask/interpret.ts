@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AnalysisRequestView, Clarification, CompanyRef, Decline } from "@/contracts";
 import { llmCall } from "@/lib/llm/client";
+import { fetchPreviousRequest } from "@/lib/projects/follow-up-context";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   AI_ANALYSIS_REQUEST_JSON_SCHEMA,
@@ -39,6 +40,8 @@ export interface InterpretQuestionInput {
   /** null = 회원 없는 시스템 호출 (비로그인 예시 생성, WU-115) — 회원별 거절 수를 올리지 않는다 */
   userId: string | null;
   analysisId?: string | null;
+  /** 후속 질문이면 프로젝트 ID — 직전 분석 요청 하나만 문맥으로 넘긴다 (WU-201). 소유자 검사는 부르는 쪽 몫 */
+  projectId?: string | null;
   client?: SupabaseClient;
 }
 
@@ -61,10 +64,14 @@ export async function interpretQuestion(input: InterpretQuestionInput): Promise<
   }
 
   // ① AI 판정 + 분석 요청
+  const previous =
+    input.projectId && input.userId
+      ? await fetchPreviousRequest(client, input.userId, input.projectId)
+      : null;
   const { output } = await llmCall<unknown>({
     userId: input.userId,
     analysisId: input.analysisId ?? null,
-    input: buildInterpretPrompt(input.question),
+    input: buildInterpretPrompt(input.question, previous),
     schema: { name: "analysis_request", schema: AI_ANALYSIS_REQUEST_JSON_SCHEMA, strict: true },
   });
 

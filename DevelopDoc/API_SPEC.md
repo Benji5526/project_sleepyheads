@@ -501,6 +501,10 @@ interface Analysis {
 ```
 응답 `204`. 삭제 대상: `profiles`, `projects`, `analyses`, `analysis_steps`, `dataset_versions`, `boards`, `news_clues`, `usage_daily`, Supabase Auth 사용자. `confirm` 값이 다르면 `400`.
 
+- 처리 순서 (WU-204): ① 모든 기기 세션 끊기(`signOut({scope:"global"})`, 실패해도 계속) → ② Supabase Auth 사용자 삭제(관리자 클라이언트) → 회원 데이터 표는 모두 `profiles`/`auth.users`에 **연쇄 삭제**로 묶여 있어 이것만으로 지워진다 → ③ `delete_my_data` 뒷정리(실패해도 204, 서버 로그만).
+- ②가 실패하면 `500`이고 데이터는 그대로다 (다시 시도 가능). 데이터를 먼저 지우면 `profiles`가 없어 재시도가 `403`으로 막히기 때문에 계정을 먼저 지운다.
+- 회원을 가리키는 새 표는 반드시 `on delete cascade`로 만든다 — `tests/unit/api/owner-rls.test.ts`가 빠진 표를 잡는다.
+
 ---
 
 ### S1 `GET /api/search?q=` 🔑
@@ -686,6 +690,8 @@ interface Analysis {
               "analysisCount": 3, "updatedAt": "2026-09-28T15:00:00+09:00" } ],
   "nextCursor": null }
 ```
+- 내 프로젝트만, **최근 활동순**(`projects.updated_at` 내림차순 — 후속 질문을 저장하면 Q1이 올린다). `?limit`(기본 20, 최대 50, 1 미만·정수 아님은 `400`), `?cursor`(이전 응답의 `nextCursor`, 조작된 값은 `400`) (§1.8).
+- `title`: 프로젝트 제목, 없으면 **첫 질문**(거절된 질문 포함). `targetName`: 대상 기업이 있는 **첫 분석**의 기업 이름(거절·되묻기만 있으면 `null`). `updatedAt`: 한국 시간.
 
 ### P2 `GET /api/projects/:id` 🛡️ (Step 2)
 응답 `200`
@@ -695,6 +701,8 @@ interface Analysis {
                             "dataVersionId": "d1…", "newerDataVersionAvailable": false,
                             "createdAt": "…" } ] } }
 ```
+- 남의 것·없는 것 모두 `404`. `analyses`는 **오래된 순**(질문한 순서), `status: "declined"`는 화면에 `답변 불가`.
+- `dataVersionId`·`newerDataVersionAvailable`은 `analyses.result->basis`에서 읽는다 (결과가 없으면 `null`·`false`). WU-202가 basis를 채운다.
 
 ---
 
