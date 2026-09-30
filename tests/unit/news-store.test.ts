@@ -15,7 +15,7 @@ const CLUE: NewsClue = {
   gist: "연합뉴스는 2분기 실적 발표를 보도했다.",
 };
 
-type Call = { op: string; table: string; filters?: [string, unknown][]; rows?: unknown };
+type Call = { op: string; table: string; filters?: unknown[][]; rows?: unknown; options?: unknown };
 
 function fakeClient(
   options: { deleteError?: boolean; insertError?: boolean; throws?: boolean } = {},
@@ -30,7 +30,11 @@ function fakeClient(
           calls.push(call);
           const chain = {
             eq(column: string, value: unknown) {
-              call.filters!.push([column, value]);
+              call.filters!.push(["eq", column, value]);
+              return chain;
+            },
+            not(column: string, operator: string, value: unknown) {
+              call.filters!.push(["not", column, operator, value]);
               return chain;
             },
             then(resolve: (v: unknown) => void) {
@@ -39,8 +43,8 @@ function fakeClient(
           };
           return chain;
         },
-        insert(rows: unknown) {
-          calls.push({ op: "insert", table, rows });
+        upsert(rows: unknown, upsertOptions: unknown) {
+          calls.push({ op: "upsert", table, rows, options: upsertOptions });
           return Promise.resolve({ error: options.insertError ? { message: "x" } : null });
         },
       };
@@ -50,22 +54,14 @@ function fakeClient(
 }
 
 describe("saveNewsClues (WU-304)", () => {
-  it("그 분석의 앞 기록을 지우고(재시도·이어서 실행 대비) 제목·언론사·발행일·링크·요지만 넣는다", async () => {
+  it("이번 단서를 먼저 넣고(같은 ID는 덮어쓰기) 이번에 없는 옛 기록만 지운다 — 제목·언론사·발행일·링크·요지만", async () => {
     const { client, calls } = fakeClient();
 
     const ok = await saveNewsClues(client, { ownerId: "u1", analysisId: "a1", clues: [CLUE] });
 
     expect(ok).toBe(true);
     expect(calls[0]).toEqual({
-      op: "delete",
-      table: "news_clues",
-      filters: [
-        ["analysis_id", "a1"],
-        ["owner_id", "u1"],
-      ],
-    });
-    expect(calls[1]).toEqual({
-      op: "insert",
+      op: "upsert",
       table: "news_clues",
       rows: [
         {
@@ -79,13 +75,32 @@ describe("saveNewsClues (WU-304)", () => {
           gist: CLUE.gist,
         },
       ],
+      options: { onConflict: "analysis_id,news_id" },
+    });
+    expect(calls[1]).toEqual({
+      op: "delete",
+      table: "news_clues",
+      filters: [
+        ["eq", "analysis_id", "a1"],
+        ["eq", "owner_id", "u1"],
+        ["not", "news_id", "in", '("n1")'],
+      ],
     });
   });
 
-  it("단서가 0건이면 지우기만 한다", async () => {
+  it("넣기가 실패하면 옛 기록을 지우지 않는다 (앞 기록이 먼저 사라지지 않게)", async () => {
+    const { client, calls } = fakeClient({ insertError: true });
+    expect(await saveNewsClues(client, { ownerId: "u1", analysisId: "a1", clues: [CLUE] })).toBe(
+      false,
+    );
+    expect(calls.map((c) => c.op)).toEqual(["upsert"]);
+  });
+
+  it("단서가 0건이면 그 분석의 기록을 지우기만 한다", async () => {
     const { client, calls } = fakeClient();
     expect(await saveNewsClues(client, { ownerId: "u1", analysisId: "a1", clues: [] })).toBe(true);
     expect(calls.map((c) => c.op)).toEqual(["delete"]);
+    expect(calls[0].filters).toHaveLength(2);
   });
 
   it("DB 오류·예외에도 던지지 않고 false", async () => {

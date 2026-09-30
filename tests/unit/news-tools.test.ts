@@ -239,6 +239,20 @@ describe("write_explanation (WU-305)", () => {
     });
   });
 
+  it("뉴스 단계가 둘이라 ID가 겹치면 앞 단계 것만 넘긴다 (인용 링크가 엇갈리지 않게)", async () => {
+    generateMock.mockResolvedValue({ explanation: { status: "ready" }, llmCostUsd: 0 });
+    const other = { ...CLUES[0], title: "다른 기업 기사" };
+    const previous = [
+      { seq: 3, tool: "search_news", output: { clues: CLUES, notes: [] } },
+      { seq: 4, tool: "search_news", output: { clues: [other], notes: [] } },
+      built,
+    ];
+
+    await writeExplanation({} as never, ctx({ previous }));
+
+    expect(generateMock.mock.calls[0][0].newsClues).toEqual(CLUES);
+  });
+
   it("설명 작성이 실패해도 단계는 성공(차트·표는 그대로) — 요약에 실패를 적는다", async () => {
     generateMock.mockResolvedValue({
       explanation: { status: "failed", label: "AI 작성", failureMessage: "설명 생성 실패" },

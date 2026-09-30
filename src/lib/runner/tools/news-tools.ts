@@ -66,7 +66,11 @@ export const writeExplanation: Tool<"write_explanation"> = async (_input, ctx) =
       errorReason: "앞 단계에 결과(build_result)가 없습니다",
     };
   }
-  const newsClues = outputsOf(ctx.previous, "search_news").flatMap((o) => o.clues);
+  // 뉴스 ID(n1~n5)는 단계마다 새로 매긴다 — 같은 ID가 겹치면 앞 단계 것만 쓴다 (인용 링크가 엇갈리지 않게)
+  const seen = new Set<string>();
+  const newsClues = outputsOf(ctx.previous, "search_news")
+    .flatMap((o) => o.clues)
+    .filter((clue) => !seen.has(clue.newsId) && Boolean(seen.add(clue.newsId)));
   // 던지지 않는다 — 실패하면 status: "failed" 설명(차트·표는 그대로)
   const { explanation, llmCostUsd } = await generateExplanationWithUsage({
     question: ctx.question,

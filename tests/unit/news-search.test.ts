@@ -172,6 +172,9 @@ describe("제목이 이 기업을 말하는가 (titleMentionsCompany)", () => {
     ["SK하이닉스發 훈풍", "SK하이닉스"],
     ["삼성전자와 SK하이닉스 비교", "삼성전자"],
     ["카카오", "카카오"],
+    ["SK하이닉스에서도 HBM 증설", "SK하이닉스"],
+    ["삼성전자와도 협력", "삼성전자"],
+    ["하이브로부터 독립", "하이브"],
   ])("'%s' → %s 기사", (title, name) => {
     expect(titleMentionsCompany(title, name)).toBe(true);
   });

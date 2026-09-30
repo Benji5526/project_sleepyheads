@@ -11,9 +11,10 @@ export function normalizeTitle(title: string): string {
 }
 
 // 기업명 바로 뒤에 올 수 있는 조사 — 그 뒤는 끝이거나 한글이 아니어야 한다 ("하이브로 품었지만" ○, "하이브로자임" ×)
+// 조사는 두 개까지 겹칠 수 있다 ("에서도"·"와도"·"로부터"·"에게는")
 const PARTICLE =
-  "(?:으로|에서|에게|까지|부터|보다|처럼|이나|과의|와의|에는|에도|로는|은|는|이|가|을|를|의|와|과|도|로|에|만|나|랑|엔|측)";
-const AFTER_NAME_RE = new RegExp(`^(?:$|[^가-힣]|${PARTICLE}(?:$|[^가-힣]))`);
+  "(?:으로|에서|에게|까지|부터|보다|처럼|이나|은|는|이|가|을|를|의|와|과|도|로|에|만|나|랑|엔|측)";
+const AFTER_NAME_RE = new RegExp(`^(?:$|[^가-힣]|${PARTICLE}{1,2}(?:$|[^가-힣]))`);
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -64,14 +65,14 @@ export function rankNewsItems(
   items: RssItem[],
   input: { companyName: string; keywords: string[] },
 ): RssItem[] {
-  const company = normalizeTitle(input.companyName);
   const keywords = input.keywords.map(normalizeTitle).filter(Boolean);
 
   const scored = items.map((item) => {
     const title = normalizeTitle(item.title);
     return {
       item,
-      hasCompany: company !== "" && title.includes(company),
+      // 거르기(index.ts)와 같은 기준 — 기업명이 다른 낱말의 앞부분이면 기업 기사로 치지 않는다
+      hasCompany: titleMentionsCompany(item.title, input.companyName),
       keywordHits: keywords.filter((k) => title.includes(k)).length,
       time: Date.parse(item.publishedAt),
     };
