@@ -53,7 +53,10 @@ describe("자유 코드·SQL 실행 경로 없음 (WU-199)", () => {
 
   it("DB 함수 호출(.rpc)은 정해 둔 이름만, 이름은 코드에 고정된 문자열로만 쓴다", () => {
     const calls = files.flatMap((f) =>
-      [...f.text.matchAll(/\.rpc\(\s*([^,)]+)/g)].map((m) => ({ path: f.path, arg: m[1].trim() })),
+      [...f.text.matchAll(/\.rpc(?:<[^>]*>)?\(\s*([^,)]+)/g)].map((m) => ({
+        path: f.path,
+        arg: m[1].trim(),
+      })),
     );
     expect(calls.length).toBeGreaterThan(0);
     for (const { path, arg } of calls) {

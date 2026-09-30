@@ -54,20 +54,20 @@ function reportKey(ref: ReportRef): string {
  * "연간 − 3분기 누적"으로 계산하므로(WU-106), 두 보고서를 모두 모아야 한다.
  */
 export function reportsForFiscalQuarter(
-  bsnsYear: number,
+  fiscalYear: number,
   quarter: FiscalQuarter,
   accMt = 12,
 ): ReportRef[] {
-  // bsnsYear = 엔진의 회계연도(시작한 해). 돌려주는 ReportRef.bsnsYear는 OpenDART 요청용 연도다
+  // fiscalYear = 엔진의 회계연도(시작한 해). 돌려주는 ReportRef.bsnsYear는 OpenDART 요청용 연도다
   if (quarter === 4) {
     return [
-      { bsnsYear: dartBsnsYear(bsnsYear, 4, accMt), reprtCode: "11011" },
-      { bsnsYear: dartBsnsYear(bsnsYear, 3, accMt), reprtCode: "11014" },
+      { bsnsYear: dartBsnsYear(fiscalYear, 4, accMt), reprtCode: "11011" },
+      { bsnsYear: dartBsnsYear(fiscalYear, 3, accMt), reprtCode: "11014" },
     ];
   }
   return [
     {
-      bsnsYear: dartBsnsYear(bsnsYear, quarter, accMt),
+      bsnsYear: dartBsnsYear(fiscalYear, quarter, accMt),
       reprtCode: REPRT_CODE_BY_FISCAL_QUARTER[quarter],
     },
   ];

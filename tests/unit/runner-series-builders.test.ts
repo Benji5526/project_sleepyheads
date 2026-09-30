@@ -7,6 +7,8 @@ import { createFigureAllocator } from "@/lib/runner/figures";
 import {
   buildAnnualSeries,
   buildCompanyComparisonSeries,
+  buildSumSeries,
+  sumPeriods,
   buildQuarterlySeries,
   quartersInRange,
 } from "@/lib/runner/series-builders";
@@ -350,5 +352,113 @@ describe("buildCompanyComparisonSeries", () => {
     );
 
     expect(series[0].footnoteMark).toBe("※");
+  });
+});
+
+describe("buildSumSeries — 합계 (PRD F-N3)", () => {
+  const ref = (name: string, sector = "기타") => ({
+    corpCode: name,
+    stockCode: name,
+    name,
+    market: "KOSPI" as const,
+    sector: { name: sector, source: "manual" as const, isFinancial: false },
+    fiscalMonth: 12,
+  });
+  const revenueRows = (values: Record<string, bigint | null>) =>
+    financialsFromRows(
+      Object.entries(values).map(([q, v]) => {
+        const [y, n] = q.split("Q").map(Number);
+        return row(
+          y,
+          n as 1 | 2 | 3 | 4,
+          baseMetrics({
+            revenue: v === null ? { value: null, reason: "MISSING_ACCOUNT" } : { value: v },
+          }),
+        );
+      }),
+    );
+  const quarters = ["2025Q1", "2025Q2", "2025Q3", "2025Q4"] as Quarter[];
+
+  it("일부 분기만 비는 기업이 있으면 그 분기 합계는 계산 불가 (기간마다 더한 기업이 달라지지 않게)", () => {
+    const a = revenueRows({
+      "2025Q1": BigInt(10),
+      "2025Q2": BigInt(10),
+      "2025Q3": BigInt(10),
+      "2025Q4": BigInt(10),
+    });
+    const b = revenueRows({
+      "2025Q1": null,
+      "2025Q2": BigInt(5),
+      "2025Q3": BigInt(5),
+      "2025Q4": BigInt(5),
+    });
+    const allocator = createFigureAllocator();
+    const result = buildSumSeries(
+      [
+        { company: ref("A"), financials: a, fsDiv: "CFS" },
+        { company: ref("B"), financials: b, fsDiv: "CFS" },
+      ],
+      sumPeriods(quarters, false),
+      ["revenue"],
+      false,
+      allocator,
+    );
+    const values = result.series[0].points.map((p) => allocator.figures[p.figureId].value);
+    expect(values).toEqual([null, 15, 15, 15]);
+    expect(result.excluded).toEqual([]);
+  });
+
+  it("모든 기간에 값이 없는 기업(금융사 매출 등)만 빼고 더하고 알린다", () => {
+    const a = revenueRows({
+      "2025Q1": BigInt(10),
+      "2025Q2": BigInt(10),
+      "2025Q3": BigInt(10),
+      "2025Q4": BigInt(10),
+    });
+    const bank = revenueRows({ "2025Q1": null, "2025Q2": null, "2025Q3": null, "2025Q4": null });
+    const allocator = createFigureAllocator();
+    const result = buildSumSeries(
+      [
+        { company: ref("A"), financials: a, fsDiv: "CFS" },
+        { company: ref("은행"), financials: bank, fsDiv: "CFS" },
+      ],
+      sumPeriods(quarters, false),
+      ["revenue"],
+      false,
+      allocator,
+    );
+    expect(result.series[0].points.map((p) => allocator.figures[p.figureId].value)).toEqual([
+      10, 10, 10, 10,
+    ]);
+    expect(result.excluded).toEqual(["은행 매출"]);
+  });
+
+  it("연도별 합계는 1~4분기를 다 더한 해마다 한 칸", () => {
+    const a = revenueRows({
+      "2025Q1": BigInt(1),
+      "2025Q2": BigInt(2),
+      "2025Q3": BigInt(3),
+      "2025Q4": BigInt(4),
+    });
+    const b = revenueRows({
+      "2025Q1": BigInt(10),
+      "2025Q2": BigInt(20),
+      "2025Q3": BigInt(30),
+      "2025Q4": BigInt(40),
+    });
+    const allocator = createFigureAllocator();
+    const result = buildSumSeries(
+      [
+        { company: ref("A", "반도체"), financials: a, fsDiv: "CFS" },
+        { company: ref("B", "반도체"), financials: b, fsDiv: "CFS" },
+      ],
+      sumPeriods(quarters, true),
+      ["revenue"],
+      true,
+      allocator,
+    );
+    expect(result.series.map((s) => s.key)).toEqual(["revenue:반도체"]);
+    expect(result.series[0].points.map((p) => p.x)).toEqual(["2025"]);
+    expect(allocator.figures[result.series[0].points[0].figureId].value).toBe(110);
   });
 });

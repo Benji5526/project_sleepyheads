@@ -18,6 +18,7 @@ import {
   buildAnnualSeries,
   buildQuarterlySeries,
   buildSumSeries,
+  sumPeriods,
 } from "@/lib/runner/series-builders";
 import { ACCOUNT_MAP_SEED_ROWS } from "../fixtures/mock/account-map";
 import { createFakeFinancialsDb } from "../unit/helpers/fake-financials-db";
@@ -652,7 +653,7 @@ describe("⑤ 엔진 합계 기능 — 전체 매출(합계)·섹터별 합계 (
     const allocator = createFigureAllocator();
     const result = buildSumSeries(
       NON_FINANCIAL.map((key) => sample(key)),
-      LATEST_FOUR,
+      sumPeriods(LATEST_FOUR, false),
       ["revenue"],
       false,
       allocator,
@@ -670,7 +671,7 @@ describe("⑤ 엔진 합계 기능 — 전체 매출(합계)·섹터별 합계 (
     const allocator = createFigureAllocator();
     const result = buildSumSeries(
       [...NON_FINANCIAL, "kb" as SampleKey].map((key) => sample(key)),
-      ["2026Q2"],
+      sumPeriods(["2026Q2"], false),
       ["revenue"],
       false,
       allocator,
@@ -685,7 +686,7 @@ describe("⑤ 엔진 합계 기능 — 전체 매출(합계)·섹터별 합계 (
       const allocator = createFigureAllocator();
       const result = buildSumSeries(
         NON_FINANCIAL.map((key) => sample(key, EXPECTED_SECTOR[key])),
-        [quarter as Quarter],
+        sumPeriods([quarter as Quarter], false),
         ["revenue"],
         true,
         allocator,

@@ -8,7 +8,6 @@ import type {
   DataBasis,
   Figure,
   PeriodRange,
-  Quarter,
   Series,
   Unit,
 } from "@/contracts";
@@ -76,17 +75,19 @@ export interface ChartOptions {
 export function sumChartOptions(
   request: AnalysisRequestView,
   companies: readonly CompanyRef[],
-  quarters: readonly Quarter[],
+  periodCount: number,
   excluded: readonly string[],
 ): ChartOptions {
   const range = `${request.period.from}~${request.period.to}`;
   const subject = request.groupBy === "sector" ? "섹터별 합계" : `${companies.length}개 기업 합계`;
   return {
     title: `${subject} (${range})`,
-    type: request.groupBy === "sector" || quarters.length < 3 ? "bar" : "line",
+    type: request.groupBy === "sector" || periodCount < 3 ? "bar" : "line",
     footnotes: [
       `더한 기업: ${companies.map((c) => c.name).join(", ")}`,
-      ...(excluded.length > 0 ? [`값이 없어 합계에서 뺀 항목: ${excluded.join(", ")}`] : []),
+      ...(excluded.length > 0
+        ? [`모든 기간에 값이 없어 합계에서 뺀 항목: ${excluded.join(", ")}`]
+        : []),
     ],
   };
 }
@@ -190,7 +191,9 @@ export function buildUsedData(input: UsedDataInput): {
     const record: Record<string, string | number | null> = { [input.rowLabelColumn.name]: rowKey };
     for (const s of input.series) {
       const point = s.points.find((p) => p.x === rowKey);
-      record[s.label] = point ? (input.figures[point.figureId]?.value ?? null) : null;
+      const figure = point ? input.figures[point.figureId] : undefined;
+      // 부호 전환("흑자전환" 등)은 숫자 대신 글자가 값이다
+      record[s.label] = figure ? (figure.value ?? (figure.reason ? null : figure.display)) : null;
     }
     return record;
   });

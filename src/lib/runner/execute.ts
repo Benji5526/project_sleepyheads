@@ -16,6 +16,7 @@ import {
   buildCompanyComparisonSeries,
   buildQuarterlySeries,
   buildSumSeries,
+  sumPeriods,
   quartersInRange,
   type CompanyMetricSample,
 } from "./series-builders";
@@ -70,14 +71,11 @@ export async function executeAnalysis(
     financials: financialsByCorp.get(company.corpCode)!,
     fsDiv: fsDivByCorp.get(company.corpCode)!,
   }));
+  // 연도별 합계면 1~4분기가 다 있는 해마다, 아니면 분기마다 한 칸
+  const periods = isSum ? sumPeriods(requestedQuarters, request.groupBy === "year") : [];
+  const sumByYear = periods.length > 0 && periods[0].quarters.length === 4;
   const sumResult = isSum
-    ? buildSumSeries(
-        samples,
-        requestedQuarters,
-        request.metrics,
-        request.groupBy === "sector",
-        allocator,
-      )
+    ? buildSumSeries(samples, periods, request.metrics, request.groupBy === "sector", allocator)
     : null;
   const latestRequestedQuarter =
     requestedQuarters[requestedQuarters.length - 1] ?? request.period.to;
@@ -107,9 +105,7 @@ export async function executeAnalysis(
     series,
     allocator.figures,
     reportsUsed,
-    sumResult
-      ? sumChartOptions(request, companies, requestedQuarters, sumResult.excluded)
-      : undefined,
+    sumResult ? sumChartOptions(request, companies, periods.length, sumResult.excluded) : undefined,
   );
 
   const disclosures =
@@ -122,7 +118,7 @@ export async function executeAnalysis(
     basis.flags.push(`합계: ${companies.map((c) => c.name).join("·")} ${companies.length}곳`);
 
   const rowKeys = isSum
-    ? requestedQuarters
+    ? periods.map((p) => p.x)
     : isComparison
       ? companies.map((c) => c.name)
       : request.groupBy === "year"
@@ -130,7 +126,9 @@ export async function executeAnalysis(
         : requestedQuarters;
 
   const rowLabelColumn = isSum
-    ? ({ name: "분기", type: "quarter" } as const)
+    ? sumByYear
+      ? ({ name: "연도", type: "text" } as const)
+      : ({ name: "분기", type: "quarter" } as const)
     : isComparison
       ? ({ name: "기업", type: "text" } as const)
       : request.groupBy === "year"

@@ -314,74 +314,117 @@ export function buildCompanyComparisonSeries(
 }
 
 export interface BuildSumResult extends BuildQuarterlyResult {
-  /** 값이 없어 합계에서 뺀 기업·지표 ("KB금융 매출") — 차트 주석으로 알린다 */
+  /** 모든 기간에 값이 없어 합계에서 뺀 기업·지표 ("KB금융 매출" — 금융사는 매출 계정이 없다) */
   excluded: string[];
+}
+
+/** 합계의 한 칸: 분기 하나("2026Q2") 또는 연도 하나("2025" = 그 해 1~4분기) */
+export interface SumPeriod {
+  x: string;
+  quarters: Quarter[];
+}
+
+/** 분기별 합계는 분기마다, 연도별 합계는 1~4분기가 다 요청된 해마다 한 칸 */
+export function sumPeriods(quarters: Quarter[], byYear: boolean): SumPeriod[] {
+  if (!byYear) return quarters.map((q) => ({ x: q, quarters: [q] }));
+  const years = [...new Set(quarters.map((q) => parseQuarter(q).year))];
+  const complete = years.filter((y) =>
+    ([1, 2, 3, 4] as const).every((n) => quarters.includes(`${y}Q${n}` as Quarter)),
+  );
+  if (complete.length === 0) return quarters.map((q) => ({ x: q, quarters: [q] }));
+  return complete.map((y) => ({
+    x: String(y),
+    quarters: ([1, 2, 3, 4] as const).map((n) => `${y}Q${n}` as Quarter),
+  }));
 }
 
 /**
  * 합계 (PRD F-N3, WU-199 "전체 매출(합계)·섹터별 합계"): 질문에 나온 기업들의 흐름 지표
- * (매출·영업이익·순이익)를 분기마다 더한다. `bySector`면 기업의 섹터별로 따로 더한다.
+ * (매출·영업이익·순이익)를 기간마다 더한다. `bySector`면 기업의 섹터별로 따로 더한다.
  * - 비율 지표(이익률·ROE·부채비율 등)는 더하면 뜻이 없어 넣지 않는다.
- * - 값이 없는 기업(예: 금융사 매출)은 빼고 더한 뒤 `excluded`로 알린다 — 조용히 0으로 치지 않는다.
- * - 한 그룹의 기업이 모두 비어 있으면 합계도 계산 불가다.
+ * - **모든 기간에** 값이 없는 기업(예: 금융사 매출)만 빼고 `excluded`로 알린다 — 0으로 치지 않는다.
+ * - 일부 기간만 비는 기업(보고서 제출 전 등)이 있으면 그 기간 합계는 계산 불가로 둔다. 기간마다 더한
+ *   기업이 달라지면 추이가 뛰는 것처럼 잘못 읽히기 때문이다.
  */
 export function buildSumSeries(
   samples: CompanyMetricSample[],
-  quarters: Quarter[],
+  periods: SumPeriod[],
   metrics: MetricId[],
   bySector: boolean,
   allocator: FigureAllocator,
 ): BuildSumResult {
   const series: Series[] = [];
   const reportsUsed = new Set<string>();
-  const excluded = new Set<string>();
+  const excluded: string[] = [];
   const flowMetrics = (FLOW_METRICS as readonly MetricId[]).filter((m) => metrics.includes(m));
   const summed = flowMetrics.length > 0 ? (flowMetrics as FlowMetricId[]) : (["revenue"] as const);
 
-  const groups = new Map<string, CompanyMetricSample[]>();
   for (const sample of samples) {
-    const key = bySector ? sample.company.sector.name || "기타" : "합계";
-    groups.set(key, [...(groups.get(key) ?? []), sample]);
+    for (const period of periods) {
+      for (const q of period.quarters) {
+        reportsUsed.add(`${sample.company.name} ${reportBasis(q, sample.financials)}`);
+      }
+    }
   }
 
+  const periodValue = (
+    sample: CompanyMetricSample,
+    period: SumPeriod,
+    metric: FlowMetricId,
+  ): Computed<bigint> => {
+    let total = BigInt(0);
+    for (const q of period.quarters) {
+      const computed = metricAt(sample.financials, q, metric);
+      if (computed.value === null) return computed;
+      total += computed.value;
+    }
+    return { value: total };
+  };
+
   for (const metric of summed) {
+    const groups = new Map<string, CompanyMetricSample[]>();
+    for (const sample of samples) {
+      const values = periods.map((period) => periodValue(sample, period, metric));
+      if (values.every((v) => v.value === null)) {
+        excluded.push(`${sample.company.name} ${METRIC_LABEL[metric]}`);
+        continue;
+      }
+      const key = bySector ? sample.company.sector.name || "기타" : "합계";
+      groups.set(key, [...(groups.get(key) ?? []), sample]);
+    }
+
     for (const [group, members] of groups) {
+      const label = bySector ? `${group} ${METRIC_LABEL[metric]}` : `${METRIC_LABEL[metric]} 합계`;
       const points: Series["points"] = [];
-      for (const quarter of quarters) {
-        let total = BigInt(0);
-        let counted = 0;
-        let emptyReason: NullReason = "MISSING_ACCOUNT";
+      for (const period of periods) {
+        let total: bigint | null = BigInt(0);
+        let reason: NullReason | undefined;
         for (const sample of members) {
-          reportsUsed.add(`${sample.company.name} ${reportBasis(quarter, sample.financials)}`);
-          const computed = metricAt(sample.financials, quarter, metric);
-          if (computed.value === null) {
-            emptyReason = computed.reason;
-            excluded.add(`${sample.company.name} ${METRIC_LABEL[metric]}`);
-            continue;
+          const value = periodValue(sample, period, metric);
+          if (value.value === null) {
+            total = null;
+            reason = value.reason;
+            break;
           }
-          total += computed.value;
-          counted += 1;
+          total += value.value;
         }
-        const label = bySector
-          ? `${group} ${METRIC_LABEL[metric]}`
-          : `${METRIC_LABEL[metric]} 합계`;
         const figure = allocator.add({
-          label: `${label} ${quarter} (${counted}곳 합산)`,
+          label: `${label} ${period.x} (${members.length}곳 합산)`,
           unit: "KRW",
-          value: counted > 0 ? total : null,
-          reason: counted > 0 ? undefined : emptyReason,
-          basis: { report: `기업별 보고서 ${counted}곳 합산`, fsDiv: members[0].fsDiv },
+          value: total,
+          reason,
+          basis: { report: `기업별 보고서 ${members.length}곳 합산`, fsDiv: members[0].fsDiv },
         });
-        points.push({ x: quarter, figureId: figure.id });
+        points.push({ x: period.x, figureId: figure.id });
       }
       series.push({
         key: bySector ? `${metric}:${group}` : `${metric}_sum`,
-        label: bySector ? `${group} ${METRIC_LABEL[metric]}` : `${METRIC_LABEL[metric]} 합계`,
+        label,
         unit: "KRW",
         points,
       });
     }
   }
 
-  return { series, reportsUsed, excluded: [...excluded] };
+  return { series, reportsUsed, excluded };
 }

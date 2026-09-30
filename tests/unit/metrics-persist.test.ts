@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeCalendarQuarterMetrics, saveCalendarQuarterMetrics } from "@/lib/metrics/persist";
+import { CALC_VERSION } from "@/lib/metrics/types";
 import { ACCOUNT_MAP_SEED_ROWS } from "../fixtures/mock/account-map";
 import { createFakeFinancialsDb } from "./helpers/fake-financials-db";
 
@@ -82,7 +83,7 @@ describe("computeCalendarQuarterMetrics (WU-106, TECH §6.2~6.4)", () => {
     expect(q4.metrics.operating_income).toEqual({ value: BigInt(240) }); // 900-660
     expect(q4.metrics.assets).toEqual({ value: BigInt(11500) }); // 재무상태표는 분기말 값 그대로
 
-    for (const row of rows) expect(row.calc_version).toBe("v1");
+    for (const row of rows) expect(row.calc_version).toBe(CALC_VERSION);
   });
 
   it("2분기 보고서가 없어 2분기 값을 계산할 수 없으면 NO_PREV_PERIOD/MISSING_ACCOUNT로 표시된다", async () => {
@@ -94,7 +95,7 @@ describe("computeCalendarQuarterMetrics (WU-106, TECH §6.2~6.4)", () => {
   });
 });
 
-describe("saveCalendarQuarterMetrics (완료조건: 저장된 모든 행에 calc_version = v1)", () => {
+describe("saveCalendarQuarterMetrics (완료조건: 저장된 모든 행에 현재 calc_version)", () => {
   it("calendar_quarter_metrics에 upsert하고, 다시 저장해도 행이 늘지 않는다", async () => {
     const { client, tables } = dbWithData();
 
@@ -103,7 +104,7 @@ describe("saveCalendarQuarterMetrics (완료조건: 저장된 모든 행에 calc
 
     const savedRows = tables.calendar_quarter_metrics ?? [];
     expect(savedRows.length).toBe(first.savedCount);
-    for (const row of savedRows) expect(row.calc_version).toBe("v1");
+    for (const row of savedRows) expect(row.calc_version).toBe(CALC_VERSION);
 
     await saveCalendarQuarterMetrics(CORP_CODE, { client });
     expect((tables.calendar_quarter_metrics ?? []).length).toBe(first.savedCount); // upsert, 중복 없음

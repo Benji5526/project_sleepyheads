@@ -170,6 +170,51 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
     expect(one.type === "resolved" && one.request.aggregate).toBeUndefined();
   });
 
+  it("대상 표시 없는 'A와 B 합계'에서 같은 기업을 두 번 더하지 않는다", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX, HYUNDAI_MOTOR]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({
+        companies: [
+          { query: "SK하이닉스", role: "peer" },
+          { query: "현대차", role: "peer" },
+        ],
+        operations: [{ op: "sum", metric: "revenue", base: null, peers: null }],
+      }),
+      { client },
+    );
+    expect(result.type).toBe("resolved");
+    if (result.type !== "resolved") return;
+    expect(result.request.target.name).toBe("SK하이닉스");
+    expect(result.request.peers.map((p) => p.name)).toEqual(["현대차"]);
+    expect(result.request.aggregate).toBe("sum");
+  });
+
+  it("대상 표시 없이 6곳을 물으면 초과가 아니다 (첫 기업이 대상, 나머지 5곳이 비교)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const names = ["SK하이닉스", "A", "B", "C", "D", "E"];
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ companies: names.map((query) => ({ query, role: "peer" as const })) }),
+      { client },
+    );
+    expect(result.type).not.toBe("too_large");
+  });
+
+  it("합계에 넣을 기업을 못 찾으면 빼고 더하지 않고 다시 물어 달라고 안내한다", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({
+        companies: [
+          { query: "SK하이닉스", role: "target" },
+          { query: "없는회사", role: "peer" },
+        ],
+        operations: [{ op: "sum", metric: "revenue", base: null, peers: null }],
+      }),
+      { client },
+    );
+    expect(result.type).toBe("unsupported_question");
+    if (result.type === "unsupported_question") expect(result.message).toContain("없는회사");
+  });
+
   it("'2013년 매출'은 기간 밖", async () => {
     const { client } = createFakeCompaniesClient([SK_HYNIX]);
     const result = await validateAnalysisRequest(

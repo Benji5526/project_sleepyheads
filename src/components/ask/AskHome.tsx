@@ -57,9 +57,12 @@ export function AskHome() {
         return;
       }
       const code = error instanceof ApiRequestError ? error.code : null;
-      // 연결 끊김·"같은 질문 처리 중"(409)이면 다음에 누를 때도 같은 키를 보낸다 — 새 키면 질문 수가 또 차감된다
-      retryKey.current =
-        code === "NETWORK_ERROR" || code === "INVALID_STATE" ? { question: trimmed, key } : null;
+      const status = error instanceof ApiRequestError ? error.httpStatus : null;
+      // 연결 끊김·"같은 질문 처리 중"(409)·서버 오류(5xx, Vercel 시간 초과 504 포함)면 다음에 누를 때도
+      // 같은 키를 보낸다 — 새 키면 질문 수가 또 차감되고, 서버가 끊긴 질문을 이어받을 수 없다 (PR #26)
+      const keepKey =
+        code === "NETWORK_ERROR" || code === "INVALID_STATE" || (status !== null && status >= 500);
+      retryKey.current = keepKey ? { question: trimmed, key } : null;
       setNotice(
         code === "INVALID_STATE"
           ? {
