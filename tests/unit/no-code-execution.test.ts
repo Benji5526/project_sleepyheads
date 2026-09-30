@@ -37,6 +37,7 @@ const ALLOWED_RPC = new Set([
   "check_and_record_api_usage",
   "check_request_rate",
   "consume_quota",
+  "delete_my_data",
   "record_decline",
   "refund_quota",
 ]);

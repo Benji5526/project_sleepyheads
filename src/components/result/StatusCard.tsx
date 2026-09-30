@@ -35,7 +35,8 @@ export function describeStatus(
   if (status === "canceled") {
     return { title: "취소한 분석입니다", body: "새로 질문하면 다시 분석합니다." };
   }
-  if (status === "awaiting_approval" || status === "awaiting_preprocess") {
+  // awaiting_preprocess는 전처리 진단 카드(DiagnosisPanel, WU-203)가 안내한다
+  if (status === "awaiting_approval") {
     return {
       title: "아직 지원하지 않는 분석 방식입니다",
       body: "여러 단계로 나눠 계산해야 하는 질문은 다음 업데이트에서 지원합니다. 기업 하나와 지표 하나로 나눠 물어봐 주세요.",

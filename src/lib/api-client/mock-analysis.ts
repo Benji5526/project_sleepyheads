@@ -7,6 +7,7 @@
 //   주식과 무관           → 범위 밖 거절            … 2013년            → 조회 기간 밖(422)
 //   … 직원 만족도         → 지원하지 않는 지표(422)  … AI 장애          → AI 장애(503, 차감 없음)
 //   … 서버 오류           → 예상 못 한 서버 오류(500, 요청 ID 안내)
+//   SK하이닉스 … 뉴스      → 최근 실적 + 뉴스 단서 (WU-305)
 import type { Analysis, CompanyRef } from "@/contracts";
 import { MOCK_COMPANIES, findMockCompany } from "../../../tests/fixtures/mock/companies";
 import {
@@ -14,6 +15,7 @@ import {
   OUT_OF_SCOPE_DECLINE,
   adviceDecline,
 } from "../../../tests/fixtures/mock/declines";
+import { withMockNewsClues } from "../../../tests/fixtures/mock/news-clues";
 import { samsungRevenueTrend } from "../../../tests/fixtures/mock/samsung-revenue-trend";
 import { skhynixRecent } from "../../../tests/fixtures/mock/skhynix-recent";
 import { ApiRequestError } from "./errors";
@@ -75,6 +77,9 @@ function withResult(base: Analysis, company: CompanyRef): Analysis {
     };
   } else if (OFF_TOPIC_PART.test(question) && analysis.explanation) {
     analysis.explanation.caveats.push(MIXED_QUESTION_CAVEAT);
+  } else if (/뉴스/.test(question) && company.name === "SK하이닉스" && analysis.explanation) {
+    analysis.explanation = withMockNewsClues(analysis.explanation);
+    if (analysis.request) analysis.request = { ...analysis.request, needsNews: true };
   }
   return analysis;
 }

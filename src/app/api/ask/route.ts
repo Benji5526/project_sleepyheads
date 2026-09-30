@@ -97,7 +97,12 @@ export const POST = route(
 
     let result: PersistableResult;
     try {
-      const interpreted = await interpretQuestion({ question, userId, client: admin });
+      const interpreted = await interpretQuestion({
+        question,
+        userId,
+        projectId: requestedProjectId,
+        client: admin,
+      });
       if (interpreted.type === "unsupported_question") {
         throw new HttpError("UNSUPPORTED_QUESTION", interpreted.message);
       }
@@ -159,6 +164,15 @@ export const POST = route(
       return created(await toAskResponseData(winner, admin));
     }
     if (insertError) throw insertError;
+
+    // 후속 질문이면 프로젝트의 최근 활동 시각을 올린다 — 내 프로젝트 목록(P1)이 최근 활동순 (WU-201)
+    if (requestedProjectId) {
+      const { error: touchError } = await supabase
+        .from("projects")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", projectId);
+      if (touchError) console.warn(`[${ctx.requestId}] 프로젝트 활동 시각 갱신 실패:`, touchError);
+    }
 
     return created(await toAskResponseData(insertedRow, admin));
   },

@@ -1,5 +1,6 @@
 // AI 호출 ①(TECH §11.2 ①) 지시문. §4.11.1 판정 기준표를 그대로 넣는다 — 문구를 바꾸면
 // 판정 정확도가 달라지므로 표 내용과 예시는 TECH_SPEC.md와 같게 유지한다.
+import type { PreviousRequestContext } from "@/lib/projects/follow-up-context";
 
 const SCOPE_TABLE = `
 | scope | 기준 | 예 |
@@ -36,9 +37,23 @@ ${SCOPE_TABLE}
 - charts: 화면에 보여줄 차트 후보 1개 이상.
 `.trim();
 
-export function buildInterpretPrompt(question: string): unknown {
+// 후속 질문 문맥 (WU-201). 첫 질문에는 붙이지 않아 Step 1 해석 결과가 달라지지 않는다.
+const FOLLOW_UP_INSTRUCTIONS = `
+이 질문은 같은 대화의 후속 질문이다. 아래는 직전 질문을 해석한 분석 요청이다(JSON).
+- 이번 질문에 기업·지표·기간·묶음 기준이 빠져 있으면 직전 값을 이어 쓴다 (기업은 companies.query에 이름을 적는다).
+- 이번 질문에 새로 나온 값이 있으면 그 값이 우선한다. 직전 요청은 문맥일 뿐, 그대로 복사하라는 뜻이 아니다.
+- scope 판정은 이번 질문 기준이다. 직전 질문이 범위 안이었다고 이번 질문을 범위 안으로 보지 않는다.
+`.trim();
+
+export function buildInterpretPrompt(
+  question: string,
+  previous: PreviousRequestContext | null = null,
+): unknown {
   return [
     { role: "system", content: INSTRUCTIONS },
+    ...(previous
+      ? [{ role: "system", content: `${FOLLOW_UP_INSTRUCTIONS}\n${JSON.stringify(previous)}` }]
+      : []),
     { role: "user", content: question },
   ];
 }
