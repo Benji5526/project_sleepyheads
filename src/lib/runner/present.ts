@@ -107,6 +107,12 @@ export function buildDataBasis(
   }
   if (targetFsDiv === "OFS") flags.push("별도 기준");
   if (request.peers.length > 0) flags.push("기준 분기 다름 가능 — 각 기업의 최신 보고서 기준");
+  if (
+    request.groupBy === "year" &&
+    (request.metrics.includes("yoy") || request.metrics.includes("qoq"))
+  ) {
+    flags.push("연도별 보기에서는 증감률(YoY·QoQ)을 표시하지 않습니다 — 분기별로 봐 주세요");
+  }
 
   return {
     target: request.target,

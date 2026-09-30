@@ -46,11 +46,13 @@ export async function getOwnProfile(
 }
 
 // 약관 동의 시각을 기록한다. 이미 동의했으면 처음 동의한 시각을 유지한다.
+// profiles UPDATE는 RLS로 막혀 있어 (회원 본인이 email 등을 직접 바꾸지 못하게, WU-101 RLS 검토 수정)
+// 관리자 클라이언트로 쓴다. 조회는 그대로 회원 세션(RLS: id = auth.uid())으로 한다.
 export async function recordTermsAgreement(
   supabase: SessionClient,
   userId: string,
 ): Promise<ProfileRow | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseAdmin()
     .from("profiles")
     .update({ agreed_terms_at: new Date().toISOString() })
     .eq("id", userId)

@@ -43,6 +43,7 @@ function baseAiRequest(overrides: Partial<AiAnalysisRequest> = {}): AiAnalysisRe
     intent: "recent",
     companies: [{ query: "SK하이닉스", role: "target" }],
     metrics: [],
+    unsupported_metric_requested: false,
     period: { specified: false, from: null, to: null, text: null },
     group_by: "quarter",
     operations: [],
@@ -103,6 +104,38 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
     const { client } = createFakeCompaniesClient([SK_HYNIX]);
     const result = await validateAnalysisRequest(baseAiRequest({ metrics: ["per"] }), { client });
     expect(result.type).toBe("unsupported_question");
+  });
+
+  it("목록에 아예 없는 지표(예: 직원 만족도)를 물으면 기본 지표로 조용히 대체하지 않고 지원 불가로 거절한다", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    // AI는 이런 지표를 metrics 배열로 표현할 수 없어 metrics: []를 내고 대신 이 플래그로 알린다
+    // (실측 회귀에서 이 플래그가 없어 "SK하이닉스 직원 만족도 어때?"가 매출·영업이익·순이익으로
+    // 조용히 대체된 문제를 확인했다).
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ metrics: [], unsupported_metric_requested: true }),
+      { client },
+    );
+    expect(result.type).toBe("unsupported_question");
+  });
+
+  it("지원하는 지표와 목록 밖 지표를 함께 물으면 지원하는 부분은 답한다 (매출 + 시장점유율)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ metrics: ["revenue"], unsupported_metric_requested: true }),
+      { client },
+    );
+    expect(result.type).toBe("resolved");
+    if (result.type === "resolved") expect(result.request.metrics).toEqual(["revenue"]);
+  });
+
+  it("지원 불가 안내는 영문 지표 ID 대신 한글 이름으로 보여 준다", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ metrics: [], unsupported_metric_requested: true }),
+      { client },
+    );
+    expect(result.type === "unsupported_question" && result.message).toContain("영업이익");
+    expect(result.type === "unsupported_question" && result.message).not.toContain("revenue");
   });
 
   it("'2013년 매출'은 기간 밖", async () => {

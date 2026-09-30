@@ -49,12 +49,13 @@ test.describe("대기화면", () => {
     await expect(input).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("비로그인이면 질문 대신 로그인 화면으로 보낸다", async ({ page }) => {
+  test("비로그인이면 질문 대신 로그인 안내 → 로그인 화면으로 보낸다", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "로그아웃" }).click();
-    await expect(page.getByRole("link", { name: "로그인" })).toBeVisible();
-    await page.getByRole("combobox").fill("삼성전자 매출 알려줘");
+    await expect(page.getByRole("link", { name: "로그인", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "질문하기" }).click();
+    const prompt = page.getByRole("dialog", { name: "로그인이 필요합니다" });
+    await prompt.getByRole("link", { name: "로그인하러 가기" }).click();
     await expect(page).toHaveURL(/\/login\?next=/);
   });
 });

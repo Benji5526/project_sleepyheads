@@ -35,7 +35,8 @@ export type InterpretResult =
 
 export interface InterpretQuestionInput {
   question: string;
-  userId: string;
+  /** null = 회원 없는 시스템 호출 (비로그인 예시 생성, WU-115) — 회원별 거절 수를 올리지 않는다 */
+  userId: string | null;
   analysisId?: string | null;
   client?: SupabaseClient;
 }
@@ -100,11 +101,11 @@ export async function resumeAfterClarification(
 }
 
 async function declinedResult(
-  userId: string,
+  userId: string | null,
   category: InternalDeclineCategory,
   client: SupabaseClient,
 ): Promise<InterpretResult> {
   const decline = await fetchDeclineMessage(category, client);
-  await recordDecline(userId, category, client);
+  if (userId) await recordDecline(userId, category, client);
   return { type: "declined", category, decline };
 }
