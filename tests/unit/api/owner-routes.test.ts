@@ -104,6 +104,19 @@ describe("회원 B가 A의 ID로 부르면 404 — 구현된 경로", () => {
       "Q4 POST /api/analyses/:id/step",
       () => call(routes.Q4.POST, "POST", "/api/analyses/x/step", A_ANALYSIS),
     ],
+    // Phase 2에서 구현됨 (2026-09-30 통합 뒤 "구현 전" 묶음에서 옮김 — 이제 404만 허용)
+    [
+      "Q5 preprocess",
+      () =>
+        call(routes.Q5.POST, "POST", "/api/analyses/x/preprocess", A_ANALYSIS, { decisions: [] }),
+    ],
+    [
+      "Q6 rerun",
+      () =>
+        call(routes.Q6.POST, "POST", "/api/analyses/x/rerun", A_ANALYSIS, { useLatestData: false }),
+    ],
+    ["Q7 approve", () => call(routes.Q7.POST, "POST", "/api/analyses/x/approve", A_ANALYSIS)],
+    ["Q8 cancel", () => call(routes.Q8.POST, "POST", "/api/analyses/x/cancel", A_ANALYSIS)],
   ])("%s", async (_name, send) => {
     const res = await send();
     expect(res.status).toBe(404);
@@ -129,20 +142,8 @@ describe("회원 B가 A의 ID로 부르면 404 — 구현된 경로", () => {
   });
 });
 
-describe("아직 구현 전인 경로 — 남의 ID에 절대 200대로 답하지 않는다 (지금 501, 구현 후 404여야 함)", () => {
+describe("아직 구현 전인 경로(Phase 3) — 남의 ID에 절대 200대로 답하지 않는다 (지금 501, 구현 후 404여야 함)", () => {
   it.each([
-    [
-      "Q5 preprocess",
-      () =>
-        call(routes.Q5.POST, "POST", "/api/analyses/x/preprocess", A_ANALYSIS, { decisions: [] }),
-    ],
-    [
-      "Q6 rerun",
-      () =>
-        call(routes.Q6.POST, "POST", "/api/analyses/x/rerun", A_ANALYSIS, { useLatestData: false }),
-    ],
-    ["Q7 approve", () => call(routes.Q7.POST, "POST", "/api/analyses/x/approve", A_ANALYSIS)],
-    ["Q8 cancel", () => call(routes.Q8.POST, "POST", "/api/analyses/x/cancel", A_ANALYSIS)],
     ["Q9 rewrite", () => call(routes.Q9.POST, "POST", "/api/analyses/x/rewrite", A_ANALYSIS)],
     ["B1 GET boards", () => call(routes.B.GET, "GET", "/api/boards/x", A_BOARD)],
     ["B2 PATCH boards", () => call(routes.B.PATCH, "PATCH", "/api/boards/x", A_BOARD, {})],
