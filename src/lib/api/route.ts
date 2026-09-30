@@ -30,6 +30,9 @@ export interface RouteOptions {
   access: Access;
   questionRequest?: boolean; // §1.6 질문 관련 요청 (분당 10회, quota_config)
   idempotent?: boolean; // §1.5 Idempotency-Key 필수
+  // §1.6 분당 요청 제한을 걸지 않는다. 구글 로그인 콜백처럼 일회용 코드가 있어야만 쓸모 있는 주소에만 쓴다
+  // (수업 시연 등에서 같은 와이파이·같은 IP로 여러 명이 동시에 로그인해도 막히지 않게)
+  skipRateLimit?: boolean;
 }
 
 export interface ApiContext {
@@ -64,11 +67,13 @@ export function route(options: RouteOptions, handler: Handler) {
       if (options.access === "cron") {
         requireCronSecret(req, process.env.CRON_SECRET);
       } else if (options.access === "public") {
-        await rateLimit(clientIp(req), "guest");
+        if (!options.skipRateLimit) await rateLimit(clientIp(req), "guest");
       } else {
         supabase = await createSessionClient();
         userId = await authenticate(supabase);
-        await rateLimit(userId, options.questionRequest ? "question" : "member");
+        if (!options.skipRateLimit) {
+          await rateLimit(userId, options.questionRequest ? "question" : "member");
+        }
         if (options.access === "member") await requireTermsAgreed(supabase, userId);
       }
 

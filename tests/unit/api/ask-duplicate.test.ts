@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const KEY = "33333333-3333-4333-8333-333333333333";
+const MINE = { id: "a-mine", project_id: "p-mine", status: "succeeded", decline_category: null };
 const WINNER = {
   id: "a-first",
   project_id: "p-first",
@@ -20,6 +21,11 @@ const state = vi.hoisted(() => ({
   consumed: 0,
   winnerSaved: false,
   alreadyConsumed: false,
+  alreadyConsumedSeq: [] as boolean[],
+  consumptionState: "fresh" as "fresh" | "stale" | "missing",
+  interpretResult: { type: "analysis" } as { type: string; message?: string },
+  settled: 0,
+  settleFails: false,
   interpreted: 0,
 }));
 
@@ -42,8 +48,11 @@ vi.mock("@/lib/supabase/server", () => ({
           select: () => ({
             single: async () => {
               if (table !== "analyses") return { data: { id: "p-mine" }, error: null };
-              if (state.analysesInsertError) state.winnerSaved = true;
-              return { data: null, error: state.analysesInsertError };
+              if (state.analysesInsertError) {
+                state.winnerSaved = true;
+                return { data: null, error: state.analysesInsertError };
+              }
+              return { data: MINE, error: null };
             },
           }),
         }),
@@ -68,16 +77,24 @@ vi.mock("@/lib/quota/question-quota", async (importOriginal) => ({
     return {
       remaining: 19,
       resetAt: "2026-10-01T00:00:00+09:00",
-      alreadyConsumed: state.alreadyConsumed,
+      alreadyConsumed:
+        state.alreadyConsumedSeq.length > 0
+          ? state.alreadyConsumedSeq.shift()!
+          : state.alreadyConsumed,
     };
   },
   refundQuestionQuota: async () => {},
+  getConsumptionState: async () => state.consumptionState,
+  settleQuestionQuota: async () => {
+    state.settled += 1;
+    if (state.settleFails) throw new Error("db down");
+  },
 }));
 vi.mock("@/lib/ask/interpret", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/ask/interpret")>()),
   interpretQuestion: async () => {
     state.interpreted += 1;
-    return { type: "analysis" };
+    return state.interpretResult;
   },
 }));
 vi.mock("@/lib/ask/persist", () => ({
@@ -112,6 +129,11 @@ beforeEach(() => {
   state.consumed = 0;
   state.winnerSaved = false;
   state.alreadyConsumed = false;
+  state.alreadyConsumedSeq = [];
+  state.consumptionState = "fresh";
+  state.interpretResult = { type: "analysis" };
+  state.settled = 0;
+  state.settleFails = false;
   state.interpreted = 0;
 });
 
@@ -154,5 +176,51 @@ describe("POST /api/ask 동시 중복 요청", () => {
     const res = await ask();
     expect(res.status).toBe(201);
     expect((await res.json()).data.analysisId).toBe("a-first");
+  });
+
+  it("차감한 지 오래됐는데 분석이 없으면(먼저 보낸 요청이 끊김) 409 대신 다시 처리한다", async () => {
+    state.alreadyConsumed = true;
+    state.consumptionState = "stale";
+    state.analysesInsertError = null;
+    const res = await ask();
+    expect(res.status).toBe(201);
+    expect((await res.json()).data.analysisId).toBe("a-mine");
+    expect(state.interpreted).toBe(1);
+    expect(state.consumed).toBe(1); // 다시 차감하지 않는다 (consume_quota가 already_consumed로 알려 줌)
+  });
+
+  it("그사이 기록이 사라졌으면(먼저 요청이 환불) 공짜로 처리하지 않고 다시 차감한다", async () => {
+    state.alreadyConsumedSeq = [true, false]; // 처음엔 이미 차감됨 → 다시 차감하니 새로 차감됨
+    state.consumptionState = "missing";
+    state.analysesInsertError = null;
+    const res = await ask();
+    expect(res.status).toBe(201);
+    expect(state.consumed).toBe(2);
+    expect(state.interpreted).toBe(1);
+  });
+
+  it("다시 차감했는데도 다른 요청이 먼저 차감했으면 409", async () => {
+    state.alreadyConsumedSeq = [true, true];
+    state.consumptionState = "missing";
+    const res = await ask();
+    expect(res.status).toBe(409);
+    expect(state.interpreted).toBe(0);
+  });
+
+  it("지원하지 않는 질문(422)은 차감한 채로 두고 멱등키 기록만 정리한다", async () => {
+    state.interpretResult = { type: "unsupported_question", message: "지원하지 않는 질문" };
+    const res = await ask();
+    expect(res.status).toBe(422);
+    expect(state.settled).toBe(1);
+  });
+
+  it("422 뒤 기록 정리가 실패해도 500이 아니라 원래 422를 돌려준다", async () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    state.interpretResult = { type: "unsupported_question", message: "지원하지 않는 질문" };
+    state.settleFails = true;
+    const res = await ask();
+    expect(res.status).toBe(422);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
