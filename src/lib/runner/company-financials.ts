@@ -30,6 +30,8 @@ export interface CompanyFinancials {
    * "보고서 없음"으로 안내한다 (WU-199 "데이터 없음·계정 값 없음 각각 안내").
    */
   quartersWithoutReport?: ReadonlySet<Quarter>;
+  /** 결산월 — 근거 보고서 이름을 OpenDART 연도로 보여 줄 때 쓴다 (없으면 12월) */
+  accMt?: number;
 }
 
 export interface EnsureCompanyFinancialsOptions {
@@ -49,7 +51,7 @@ export async function ensureCompanyFinancials(
   options: EnsureCompanyFinancialsOptions = {},
 ): Promise<CompanyFinancials> {
   const fiscalRefByQuarter = mapCalendarRangeToFiscalQuarters(company.fiscalMonth, from, to);
-  const reports = reportsForCalendarRange(fiscalRefByQuarter);
+  const reports = reportsForCalendarRange(fiscalRefByQuarter, company.fiscalMonth);
 
   // 처음 조회하는 기업은 보고서가 20개 넘게 필요하다(5년 추이 + 증감률용 앞 분기). 하나씩 받으면
   // 60초를 넘겨 Vercel이 끊으므로 몇 개씩 동시에 받는다 (OpenDART 동시 호출 상한 5개 안쪽).
@@ -72,7 +74,7 @@ export async function ensureCompanyFinancials(
   const quartersWithoutReport = new Set<Quarter>();
   for (const [quarter, ref] of fiscalRefByQuarter) {
     // 4분기는 사업보고서와 3분기보고서가 둘 다 있어야 계산된다 — 하나라도 없으면 보고서 없음
-    const needed = reportsNeededForFiscalQuarters([ref]);
+    const needed = reportsNeededForFiscalQuarters([ref], company.fiscalMonth);
     if (needed.some((r) => missingReports.has(`${r.bsnsYear}-${r.reprtCode}`))) {
       quartersWithoutReport.add(quarter);
     }
@@ -84,5 +86,10 @@ export async function ensureCompanyFinancials(
     metricsByQuarter.set(formatQuarter(row.cal_year, row.cal_quarter), row);
   }
 
-  return { metricsByQuarter, fiscalRefByQuarter, quartersWithoutReport };
+  return {
+    metricsByQuarter,
+    fiscalRefByQuarter,
+    quartersWithoutReport,
+    accMt: company.fiscalMonth,
+  };
 }

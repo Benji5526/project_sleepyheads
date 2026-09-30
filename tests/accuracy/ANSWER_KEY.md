@@ -601,7 +601,10 @@
 
 `it.fails`는 "지금 엔진이 틀린다는 것을 확인하는 테스트"다. 정답이나 `src/` 코드를 고쳐 맞추지 않았다. 엔진을 고치면 이 테스트가 실패로 바뀌므로 그때 `it`으로 바꾸면 된다.
 
-### 6.1 12월 외 결산 기업의 `bsns_year` 해석 오류 (가장 중요)
+### 6.1 12월 외 결산 기업의 `bsns_year` 해석 오류 (가장 중요) — ✅ 2026-09-30 수정
+
+> **수정됨**: `src/lib/financials/period.ts`의 `dartBsnsYear`(엔진 회계연도 → OpenDART 연도)·`fiscalYearOfReport`(반대)로 보고서를 부르고 읽을 때 연도를 바꾼다. 아래 16건은 이제 손 계산과 같고, 테스트의 `it.fails` 표시를 뗐다. 아래 설명은 기록용.
+
 
 - **원인**: `mapFiscalQuarterToCalendar(bsnsYear, quarter, accMt)`(`src/lib/metrics/calendar-quarter.ts`)와 그 역방향인 `mapCalendarRangeToFiscalQuarters`(`src/lib/runner/quarter-reports.ts`), 그리고 `computeCalendarQuarterMetrics`(`src/lib/metrics/persist.ts`)의 "같은 `bsns_year` 안에서 4분기 = 연간 − 3분기 누적" 묶음이 모두 **"bsns_year = 회계연도가 시작한 해이고, 한 bsns_year 안에 회계 1~4분기 보고서가 다 있다"**고 가정한다. 실제 OpenDART는 §1.1처럼 **보고서 기간이 끝난 해**를 `bsns_year`로 쓴다.
 - **영향**: 12월 결산은 두 해석이 같아 문제없다. 3월 결산은 회계 4분기(1~3월)가, 6월 결산은 회계 3·4분기(1~6월)가 틀린다.

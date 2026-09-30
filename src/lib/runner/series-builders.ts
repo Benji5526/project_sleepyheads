@@ -8,7 +8,8 @@ import type { CalendarQuarterMetricsRow } from "@/lib/metrics/persist";
 import type { Computed } from "@/lib/metrics/types";
 import { addQuarters, compareQuarters, parseQuarter } from "@/lib/ask/quarter";
 import type { CompanyFinancials } from "./company-financials";
-import { fourthQuarterReportDisplayName, reportDisplayName } from "./format";
+import { reportsForFiscalQuarter } from "@/lib/financials/period";
+import { reportDisplayName } from "./format";
 import type { FigureAllocator } from "./figures";
 import {
   FLOW_METRICS,
@@ -35,16 +36,12 @@ export function quartersInRange(period: PeriodRange): Quarter[] {
   return quarters;
 }
 
-const REPRT_CODE_BY_QUARTER = { 1: "11013", 2: "11012", 3: "11014" } as const;
-
-function reportBasis(
-  quarter: Quarter,
-  fiscalRefByQuarter: CompanyFinancials["fiscalRefByQuarter"],
-): string {
-  const ref = fiscalRefByQuarter.get(quarter);
+/** 달력 분기 값의 근거 보고서 이름. 연도는 OpenDART 연도(보고서 기간이 끝난 해)로 보여 준다 */
+function reportBasis(quarter: Quarter, financials: CompanyFinancials): string {
+  const ref = financials.fiscalRefByQuarter.get(quarter);
   if (!ref) return "알 수 없음";
-  if (ref.quarter === 4) return fourthQuarterReportDisplayName(ref.bsnsYear);
-  return reportDisplayName(ref.bsnsYear, REPRT_CODE_BY_QUARTER[ref.quarter as 1 | 2 | 3]);
+  const reports = reportsForFiscalQuarter(ref.bsnsYear, ref.quarter, financials.accMt ?? 12);
+  return reports.map((r) => reportDisplayName(r.bsnsYear, r.reprtCode)).join("·");
 }
 
 export interface BuildQuarterlyResult {
@@ -73,7 +70,7 @@ export function buildQuarterlySeries(
 
     for (const quarter of quarters) {
       const computed = metricAt(financials, quarter, metric);
-      const report = reportBasis(quarter, financials.fiscalRefByQuarter);
+      const report = reportBasis(quarter, financials);
       reportsUsed.add(report);
       const footnote = (computed as { footnoteMark?: "※" }).footnoteMark;
       if (footnote) footnoteMark = footnote;
@@ -107,7 +104,7 @@ export function buildQuarterlySeries(
       const previous = financials.metricsByQuarter.get(addQuarters(quarter, -lag))?.metrics[base];
       const computed: Computed<number> =
         changeOp === "yoy" ? computeYoy(current, previous) : computeQoq(current, previous);
-      const report = reportBasis(quarter, financials.fiscalRefByQuarter);
+      const report = reportBasis(quarter, financials);
 
       const figure = allocator.add({
         label: `${METRIC_LABEL[base]} ${METRIC_LABEL[changeOp]} ${quarter}`,
@@ -170,7 +167,7 @@ export function buildAnnualSeries(
   const flowValueByYear = (year: number, metric: FlowMetricId): Computed<bigint> => {
     const values = ([1, 2, 3, 4] as const).map((q) => {
       const key = `${year}Q${q}` as Quarter;
-      reportsUsed.add(reportBasis(key, financials.fiscalRefByQuarter));
+      reportsUsed.add(reportBasis(key, financials));
       return metricAt(financials, key, metric);
     });
     const total = calendarAnnualFlow(values.map((v) => v.value));
@@ -234,7 +231,7 @@ export function buildAnnualSeries(
         unit: METRIC_UNIT[metric],
         value: computed.value,
         reason: computed.reason,
-        basis: { report: reportBasis(key, financials.fiscalRefByQuarter), fsDiv },
+        basis: { report: reportBasis(key, financials), fsDiv },
       });
       points.push({ x: `${year}`, figureId: figure.id });
     }
@@ -287,7 +284,7 @@ export function buildCompanyComparisonSeries(
       const computed = metricAt(sample.financials, quarter, metric);
       const footnote = (computed as { footnoteMark?: "※" }).footnoteMark;
       if (footnote) footnoteMark = footnote;
-      const report = reportBasis(quarter, sample.financials.fiscalRefByQuarter);
+      const report = reportBasis(quarter, sample.financials);
       reportsUsed.add(`${sample.company.name} ${report}`);
 
       const figure = allocator.add({

@@ -260,20 +260,13 @@ const EXPECTED_CALENDAR_2025: Record<SampleKey, Triple> = {
 };
 
 /**
- * 엔진이 손 계산과 다르게 나오는 경우 (ANSWER_KEY.md §6). 원인: OpenDART의 `bsns_year`는 **그 보고서 기간이
- * 끝난 해**인데(실측: 동원모빌리티 bsns_year=2026 사업보고서 = 제41기 2025.04~2026.03, bsns_year=2025 3분기
- * = 제41기 2025.10~12), 엔진(`mapFiscalQuarterToCalendar`·`persist.ts`의 연도 묶음·`quarter-reports.ts`)은
- * "bsns_year = 회계연도 시작 해, 한 bsns_year 안에 회계 1~4분기가 다 있다"고 가정한다. 12월 결산은 두 해석이
- * 같아서 문제없고, 12월 외 결산만 틀린다.
+ * 엔진이 손 계산과 다르게 나오는 경우 (ANSWER_KEY.md §6). 지금은 비어 있다.
+ * 2026-09-30 처음 만들 때 12월 외 결산 6건(동원모빌리티·세원정공)이 1년 어긋났다 — OpenDART의 `bsns_year`는
+ * 보고서 기간이 **끝난 해**인데 엔진이 "회계연도 시작 해"로 읽었다. `src/lib/financials/period.ts`의
+ * `dartBsnsYear`·`fiscalYearOfReport`로 고쳐 모두 손 계산과 같아졌다. 새로 틀리는 경우가 생기면
+ * 정답을 고치지 말고 여기 넣어 `it.fails`로 표시한 뒤 원인을 적는다.
  */
-const KNOWN_ENGINE_BUGS = new Set<string>([
-  "dongwonMobility:2025Q1", // 엔진: 제39기 연간 − 제40기 3분기 누적 (서로 다른 회계연도)
-  "dongwonMobility:2026Q1", // 엔진: 제40기 연간 − 제41기 3분기 누적
-  "sewonPrecision:2025Q1", // 엔진: 제35기 3분기(2024.01~03)를 1년 늦게 배정
-  "sewonPrecision:2025Q2", // 엔진: 제35기 4분기(2024.04~06)를 1년 늦게 배정
-  "sewonPrecision:2026Q1", // 엔진: 제36기 3분기(2025.01~03)를 1년 늦게 배정
-  "sewonPrecision:2026Q2", // 엔진: 제36기 4분기(2025.04~06)를 1년 늦게 배정
-]);
+const KNOWN_ENGINE_BUGS = new Set<string>([]);
 const isKnownBug = (key: SampleKey, quarter: string) => KNOWN_ENGINE_BUGS.has(`${key}:${quarter}`);
 const itFor = (broken: boolean) => (broken ? it.fails : it);
 
