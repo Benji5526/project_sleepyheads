@@ -123,7 +123,7 @@ describe("buildQuarterlySeries", () => {
     expect(series.map((s) => s.key)).toEqual(["revenue"]);
   });
 
-  it("yoy는 요청 지표 중 우선순위(영업이익>매출>순이익)가 가장 높은 지표를 기준으로 계산한다", () => {
+  it("yoy는 요청 지표 중 우선순위(매출>영업이익>순이익)가 가장 높은 지표를 기준으로 계산한다", () => {
     const financials = financialsFromRows([
       row(2025, 2, baseMetrics({ operating_income: { value: BigInt(100) } })),
       row(2026, 2, baseMetrics({ operating_income: { value: BigInt(112) } })),
@@ -142,6 +142,35 @@ describe("buildQuarterlySeries", () => {
     const figureId = yoySeries.points[0].figureId;
     expect(allocator.figures[figureId].value).toBeCloseTo(12, 5);
     expect(allocator.figures[figureId].display).toBe("+12.0%");
+  });
+
+  it("매출·영업이익을 함께 요청하면 yoy는 매출을 기준으로 계산한다 (우선순위: 매출>영업이익>순이익)", () => {
+    const financials = financialsFromRows([
+      row(
+        2025,
+        2,
+        baseMetrics({ revenue: { value: BigInt(1000) }, operating_income: { value: BigInt(100) } }),
+      ),
+      row(
+        2026,
+        2,
+        baseMetrics({ revenue: { value: BigInt(1100) }, operating_income: { value: BigInt(112) } }),
+      ),
+    ]);
+    const allocator = createFigureAllocator();
+
+    const { series } = buildQuarterlySeries(
+      financials,
+      "CFS",
+      ["2026Q2"] as Quarter[],
+      ["revenue", "operating_income", "yoy"],
+      allocator,
+    );
+
+    const yoySeries = series.find((s) => s.key === "yoy")!;
+    expect(yoySeries.label).toBe("매출 YoY 증감률");
+    const figureId = yoySeries.points[0].figureId;
+    expect(allocator.figures[figureId].value).toBeCloseTo(10, 5);
   });
 
   it("직전 분기 데이터가 없으면 yoy는 계산 불가(NO_PREV_PERIOD)다", () => {
@@ -216,6 +245,29 @@ describe("buildAnnualSeries", () => {
 
     const figureId = series[0].points[0].figureId;
     expect(allocator.figures[figureId].value).toBeNull();
+  });
+
+  it("금융업 부채비율은 분기말(4분기) 각주(※)가 연간 Series에도 붙는다", () => {
+    const financials = financialsFromRows([
+      row(2025, 4, baseMetrics({ debt_ratio: { value: 900, footnoteMark: "※" } })),
+    ]);
+    const allocator = createFigureAllocator();
+
+    const { series } = buildAnnualSeries(
+      financials,
+      "CFS",
+      quartersInRange({
+        from: "2025Q1",
+        to: "2025Q4",
+        specified: false,
+        reason: "",
+        clipped: false,
+      }),
+      ["debt_ratio"],
+      allocator,
+    );
+
+    expect(series[0].footnoteMark).toBe("※");
   });
 });
 
