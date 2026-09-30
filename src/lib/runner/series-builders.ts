@@ -271,9 +271,13 @@ export function buildCompanyComparisonSeries(
 
   for (const metric of directMetrics) {
     const points: Series["points"] = [];
+    // 비교 기업 중 금융업이 있으면 부채비율 등에 ※를 단다 (분기·연도별 경로와 같게)
+    let footnoteMark: "※" | undefined;
     for (const sample of samples) {
       const row = sample.financials.metricsByQuarter.get(quarter);
       const computed = row?.metrics[metric] ?? { value: null, reason: "MISSING_ACCOUNT" as const };
+      const footnote = (computed as { footnoteMark?: "※" }).footnoteMark;
+      if (footnote) footnoteMark = footnote;
       const report = reportBasis(quarter, sample.financials.fiscalRefByQuarter);
       reportsUsed.add(`${sample.company.name} ${report}`);
 
@@ -286,7 +290,13 @@ export function buildCompanyComparisonSeries(
       });
       points.push({ x: sample.company.name, figureId: figure.id });
     }
-    series.push({ key: metric, label: METRIC_LABEL[metric], unit: METRIC_UNIT[metric], points });
+    series.push({
+      key: metric,
+      label: METRIC_LABEL[metric],
+      unit: METRIC_UNIT[metric],
+      points,
+      footnoteMark,
+    });
   }
 
   return { series, reportsUsed };

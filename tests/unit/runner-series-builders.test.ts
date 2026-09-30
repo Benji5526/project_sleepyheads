@@ -300,4 +300,31 @@ describe("buildCompanyComparisonSeries", () => {
     expect(allocator.figures[series[0].points[0].figureId].value).toBe(15);
     expect(allocator.figures[series[0].points[1].figureId].value).toBe(8);
   });
+
+  it("비교 기업 중 금융업이 있으면 부채비율 Series에 ※가 붙는다", () => {
+    const bank = financialsFromRows([
+      row(2026, 2, baseMetrics({ debt_ratio: { value: 900, footnoteMark: "※" } })),
+    ]);
+    const maker = financialsFromRows([row(2026, 2, baseMetrics({ debt_ratio: { value: 40 } }))]);
+    const ref = (name: string) => ({
+      corpCode: name,
+      stockCode: name,
+      name,
+      market: "KOSPI" as const,
+      sector: { name: "기타", source: "manual" as const, isFinancial: false },
+      fiscalMonth: 12,
+    });
+
+    const { series } = buildCompanyComparisonSeries(
+      [
+        { company: ref("삼성전자"), financials: maker, fsDiv: "CFS" },
+        { company: ref("KB금융"), financials: bank, fsDiv: "CFS" },
+      ],
+      "2026Q2" as Quarter,
+      ["debt_ratio"],
+      createFigureAllocator(),
+    );
+
+    expect(series[0].footnoteMark).toBe("※");
+  });
 });

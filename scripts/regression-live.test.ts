@@ -239,6 +239,8 @@ describe("실제 API 회귀 질문 10개 (WU-109~111)", () => {
         report.explainTokens = diff(beforeExecute, afterExplain);
         report.conclusion = explanation.conclusion;
         report.insights = explanation.insights.map((i) => i.text);
+        // 해석이 맞아도 분석 글이 실패하면 사용자는 차트만 본다 — 통과로 치지 않는다
+        report.passed = report.passed && explanation.status === "ready";
         report.detail =
           explanation.status === "ready"
             ? `투자 포인트 ${explanation.insights.length}개`

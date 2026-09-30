@@ -118,6 +118,26 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
     expect(result.type).toBe("unsupported_question");
   });
 
+  it("지원하는 지표와 목록 밖 지표를 함께 물으면 지원하는 부분은 답한다 (매출 + 시장점유율)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ metrics: ["revenue"], unsupported_metric_requested: true }),
+      { client },
+    );
+    expect(result.type).toBe("resolved");
+    if (result.type === "resolved") expect(result.request.metrics).toEqual(["revenue"]);
+  });
+
+  it("지원 불가 안내는 영문 지표 ID 대신 한글 이름으로 보여 준다", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ metrics: [], unsupported_metric_requested: true }),
+      { client },
+    );
+    expect(result.type === "unsupported_question" && result.message).toContain("영업이익");
+    expect(result.type === "unsupported_question" && result.message).not.toContain("revenue");
+  });
+
   it("'2013년 매출'은 기간 밖", async () => {
     const { client } = createFakeCompaniesClient([SK_HYNIX]);
     const result = await validateAnalysisRequest(

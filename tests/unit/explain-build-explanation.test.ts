@@ -168,6 +168,29 @@ describe("buildExplanation", () => {
     expect(result.insights).toHaveLength(0);
   });
 
+  it("'원인을 확인할 필요'처럼 원인을 단정하지 않는 확인할 점은 뉴스 없이도 남는다", () => {
+    const result = buildExplanation({
+      ai: baseAi({
+        insights: [
+          {
+            kind: "watch",
+            text: "영업이익이 크게 줄어든 원인을 다음 보고서에서 확인할 필요가 있습니다.",
+            figure_ids: ["f1"],
+            news_ids: [],
+            chart_ref: null,
+            inferred: false,
+          },
+        ],
+      }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: [],
+      hasNews: false,
+      mixedScope: false,
+    });
+    expect(result.insights).toHaveLength(1);
+  });
+
   it("숫자 사이의 관계 해석(원인 주장 아님)은 뉴스 없이도 통과한다", () => {
     const result = buildExplanation({
       ai: baseAi({
