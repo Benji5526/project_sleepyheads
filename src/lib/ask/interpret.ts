@@ -52,7 +52,12 @@ export async function interpretQuestion(input: InterpretQuestionInput): Promise<
   const blockPatterns = await fetchScopeBlockPatterns(client);
   const blockedCategory = matchScopeBlockPattern(input.question, blockPatterns);
   if (blockedCategory) {
-    return declinedResult(input.userId, blockedCategory as InternalDeclineCategory, client);
+    return declinedResult(
+      input.userId,
+      blockedCategory as InternalDeclineCategory,
+      client,
+      input.question,
+    );
   }
 
   // ① AI 판정 + 분석 요청
@@ -67,11 +72,11 @@ export async function interpretQuestion(input: InterpretQuestionInput): Promise<
   if (!parsed.success) {
     throw new AiResponseInvalidError(parsed.error.message);
   }
-  const ai = parsed.data;
+  const ai = withSumFromWording(parsed.data, input.question);
 
   // ② 범위 후검사: in_scope가 아니면 거절
   if (ai.scope !== "in_scope") {
-    return declinedResult(input.userId, ai.scope, client);
+    return declinedResult(input.userId, ai.scope, client, input.question);
   }
 
   const validated = await validateAnalysisRequest(ai, { client });
@@ -101,12 +106,26 @@ export async function resumeAfterClarification(
   });
 }
 
+/**
+ * "합계·합산·총합"을 분명히 물었는데 AI가 합계 연산(op "sum")을 빠뜨리면 서버가 채운다 (2026-09-30 실측:
+ * "삼성전자와 SK하이닉스 매출 합계 알려줘"가 비교로만 해석됨). 기업이 2곳 이상인지는 검사(validate)가 본다.
+ */
+const SUM_WORDING_RE = /합계|합산|총합|더한\s?값|더하면|합쳐/;
+function withSumFromWording(ai: AiAnalysisRequest, question: string): AiAnalysisRequest {
+  if (!SUM_WORDING_RE.test(question) || ai.operations.some((o) => o.op === "sum")) return ai;
+  const metric =
+    ai.metrics.find((m) => m === "revenue" || m === "operating_income" || m === "net_income") ??
+    "revenue";
+  return { ...ai, operations: [...ai.operations, { op: "sum", metric, base: null, peers: null }] };
+}
+
 async function declinedResult(
   userId: string | null,
   category: InternalDeclineCategory,
   client: SupabaseClient,
+  question?: string,
 ): Promise<InterpretResult> {
-  const decline = await fetchDeclineMessage(category, client);
+  const decline = await fetchDeclineMessage(category, client, question);
   if (userId) await recordDecline(userId, category, client);
   return { type: "declined", category, decline };
 }

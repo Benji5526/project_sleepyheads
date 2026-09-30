@@ -18,9 +18,43 @@ interface DeclineMessageRow {
   suggestions: string[];
 }
 
+/** 추천 질문의 기업 자리. 투자 권유 거절은 "같은 기업의 사실 분석 예시"를 보여 준다 (PRD §6.3.1) */
+const COMPANY_SLOT = "○○";
+const FALLBACK_COMPANY = "삼성전자";
+// "삼성전자는", "SK하이닉스를"처럼 이름 뒤에 붙는 조사·말
+const TRAILING_PARTICLE_RE = /(은|는|이|가|을|를|의|도|랑|이랑|하고|에서|주식|주가|주)$/;
+
+/**
+ * 질문에 들어 있는 상장사 이름을 찾는다 (정확히 같은 이름만, 외부 호출 없음). 못 찾으면 null.
+ * 거절된 질문은 AI가 기업을 뽑지 않으므로 질문 글자에서 직접 찾는다.
+ */
+export async function findCompanyNameInQuestion(
+  question: string,
+  client: SupabaseClient = getSupabaseAdmin(),
+): Promise<string | null> {
+  const words = question
+    .split(/[\s,.?!·~"'()]+/)
+    .filter(Boolean)
+    .slice(0, 12);
+  const candidates = [
+    ...new Set(words.flatMap((w) => [w, w.replace(TRAILING_PARTICLE_RE, "")])),
+  ].filter((w) => w.length >= 2);
+  if (candidates.length === 0) return null;
+  const { data, error } = await client
+    .from("companies")
+    .select("corp_name")
+    .in("corp_name", candidates)
+    .limit(5);
+  if (error) return null; // 예시 문구용이라 실패해도 기본 기업으로 둔다
+  const names = new Set((data as { corp_name: string }[] | null)?.map((r) => r.corp_name) ?? []);
+  return candidates.find((c) => names.has(c)) ?? null;
+}
+
 export async function fetchDeclineMessage(
   category: InternalDeclineCategory,
   client: SupabaseClient = getSupabaseAdmin(),
+  /** 주면 추천 질문의 "○○"를 질문 속 기업 이름(없으면 삼성전자)으로 바꾼다 */
+  question?: string,
 ): Promise<Decline> {
   const { data, error } = await client
     .from("decline_messages")
@@ -32,10 +66,19 @@ export async function fetchDeclineMessage(
   if (!data) throw new Error(`거절 문구가 없습니다: ${category}`);
 
   const row = data as DeclineMessageRow;
+  let suggestions = row.suggestions ?? [];
+  if (suggestions.some((s) => s.includes(COMPANY_SLOT))) {
+    // 예시 문구용이라 이름 찾기가 실패해도 거절 안내 자체는 그대로 보여 준다
+    const found = question
+      ? await findCompanyNameInQuestion(question, client).catch(() => null)
+      : null;
+    const company = found ?? FALLBACK_COMPANY;
+    suggestions = suggestions.map((s) => s.replaceAll(COMPANY_SLOT, company));
+  }
   return {
     category: toPublicCategory(category),
     message: row.message,
-    suggestions: row.suggestions ?? [],
+    suggestions,
     questionCharged: true,
   };
 }

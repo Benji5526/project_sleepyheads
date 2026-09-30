@@ -95,7 +95,7 @@ export function AskHome() {
             aria-hidden="true"
             className="size-4 animate-spin rounded-full border-2 border-line border-t-accent"
           />
-          질문을 해석하고 공시 데이터로 계산하는 중입니다. 보통 10초 안에 끝납니다.
+          질문을 해석하고 공시 데이터로 계산하는 중입니다. 보통 20~30초 걸립니다.
         </p>
       ) : (
         // 칩은 입력창만 채운다. 바로 보내면 누를 때마다 질문 수가 차감되기 때문

@@ -15,6 +15,8 @@ export interface AskResponseData {
 interface AnalysesRow {
   id: string;
   project_id: string;
+  /** 거절 추천 질문의 "○○"에 넣을 기업을 찾는 데 쓴다 (없으면 기본 기업) */
+  question?: string;
   status: AnalysisStatus;
   decline_category: InternalDeclineCategory | null;
 }
@@ -83,7 +85,7 @@ export async function toAskResponseData(
     status: row.status,
   };
   if (row.status === "declined" && row.decline_category) {
-    data.decline = await fetchDeclineMessage(row.decline_category, client);
+    data.decline = await fetchDeclineMessage(row.decline_category, client, row.question);
   }
   return data;
 }

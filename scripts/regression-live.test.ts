@@ -6,7 +6,7 @@
 //   이 파일은 --config로 vitest.regression.config.ts를 명시할 때만 실행된다.
 // - 실제 비용이 드는 라이브 호출이다 (팀 공유 OpenAI 예산). 반복 실행하지 말고 검증이 필요할 때만 돌린다.
 // - 공유 Supabase(`sleepyhead`) DB에 테스트 계정을 하나 만들어 쓰고, 끝나면 삭제한다(usage_daily는 cascade).
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 function loadEnvLocal(path = ".env.local") {
@@ -61,6 +61,19 @@ interface QuestionCase {
   question: string;
   category: string;
   expectType: string;
+  /** 결과 종류뿐 아니라 해석 내용까지 본다 (WU-109 "기대한 분석 요청으로 바뀐다") */
+  expect?: {
+    target?: string;
+    peers?: string[];
+    from?: string;
+    to?: string;
+    reason?: string;
+    metricsInclude?: string[];
+    groupBy?: string;
+    aggregate?: "sum";
+    /** 거절 카드 추천 질문에 들어가야 할 글자 (투자 권유 → 같은 기업) */
+    suggestionIncludes?: string;
+  };
 }
 
 // DevelopDoc/WORK_UNITS.md WU-109 완료조건에 나열된 예시 질문 그대로 + 필수 유형 6종 전부 포함.
@@ -70,12 +83,20 @@ const QUESTIONS: QuestionCase[] = [
     question: "SK하이닉스 최근 실적 어때?",
     category: "일반 분석 (기간 미지정)",
     expectType: "resolved",
+    expect: { target: "SK하이닉스", reason: "기간 미지정 → 최근 4개 분기", groupBy: "quarter" },
   },
   {
     id: "Q2",
     question: "삼성전자 2023년 분기별 영업이익 알려줘",
     category: "일반 분석 (기간 지정)",
     expectType: "resolved",
+    expect: {
+      target: "삼성전자",
+      from: "2023Q1",
+      to: "2023Q4",
+      metricsInclude: ["operating_income"],
+      groupBy: "quarter",
+    },
   },
   {
     id: "Q3",
@@ -106,6 +127,7 @@ const QUESTIONS: QuestionCase[] = [
     question: "삼성전자 지금 사도 돼?",
     category: "투자 권유 요청",
     expectType: "declined:advice_request",
+    expect: { suggestionIncludes: "삼성전자" },
   },
   {
     id: "Q8",
@@ -118,6 +140,7 @@ const QUESTIONS: QuestionCase[] = [
     question: "SK하이닉스 실적이랑 저녁 메뉴 추천해줘",
     category: "섞인 질문",
     expectType: "resolved:mixed",
+    expect: { target: "SK하이닉스" },
   },
   {
     id: "Q10",
@@ -125,7 +148,68 @@ const QUESTIONS: QuestionCase[] = [
     category: "기업 없는 주식 질문 → 되묻기(오거절 없음)",
     expectType: "needs_clarification",
   },
+  // WU-109 완료조건의 나머지 예시 (범위 밖 4종·투자 권유 2종 모두)
+  {
+    id: "Q11",
+    question: "파이썬 코드 짜줘",
+    category: "범위 밖 (코딩)",
+    expectType: "declined:out_of_scope",
+  },
+  {
+    id: "Q12",
+    question: "비트코인 전망 알려줘",
+    category: "범위 밖 (암호화폐)",
+    expectType: "declined:out_of_scope",
+  },
+  {
+    id: "Q13",
+    question: "이 문장 영어로 번역해줘",
+    category: "범위 밖 (번역)",
+    expectType: "declined:out_of_scope",
+  },
+  {
+    id: "Q14",
+    question: "SK하이닉스 목표주가 얼마야?",
+    category: "투자 권유 (목표주가)",
+    expectType: "declined:advice_request",
+    expect: { suggestionIncludes: "SK하이닉스" },
+  },
+  {
+    id: "Q15",
+    question: "삼성전자와 SK하이닉스 매출 합계 알려줘",
+    category: "합계 (PRD F-N3)",
+    expectType: "resolved",
+    expect: { aggregate: "sum", metricsInclude: ["revenue"] },
+  },
 ];
+
+/** 기대한 해석과 다른 점 (없으면 빈 배열) */
+function expectationMismatches(
+  qc: QuestionCase,
+  request: import("@/contracts").AnalysisRequestView | null,
+  suggestions: string[] = [],
+): string[] {
+  const e = qc.expect;
+  if (!e) return [];
+  const problems: string[] = [];
+  const companies = request ? [request.target.name, ...request.peers.map((p) => p.name)] : [];
+  if (e.target && request?.target.name !== e.target) problems.push(`대상 ${request?.target.name}`);
+  if (e.from && request?.period.from !== e.from) problems.push(`시작 ${request?.period.from}`);
+  if (e.to && request?.period.to !== e.to) problems.push(`끝 ${request?.period.to}`);
+  if (e.reason && request?.period.reason !== e.reason)
+    problems.push(`기간 이유 ${request?.period.reason}`);
+  for (const m of e.metricsInclude ?? []) {
+    if (!request?.metrics.includes(m as never)) problems.push(`지표 ${m} 없음`);
+  }
+  if (e.groupBy && request?.groupBy !== e.groupBy) problems.push(`묶음 ${request?.groupBy}`);
+  if (e.aggregate && request?.aggregate !== e.aggregate) problems.push(`합계 아님`);
+  if (e.aggregate === "sum" && new Set(companies).size !== companies.length)
+    problems.push(`기업 중복`);
+  if (e.suggestionIncludes && !suggestions.some((x) => x.includes(e.suggestionIncludes!))) {
+    problems.push(`추천 질문에 ${e.suggestionIncludes} 없음: ${suggestions.join(" / ")}`);
+  }
+  return problems;
+}
 
 interface QuestionReport {
   id: string;
@@ -137,7 +221,10 @@ interface QuestionReport {
   interpretMs: number;
   interpretTokens: { inputTokens: number; outputTokens: number; costUsd: number };
   detail: string;
+  executeMs?: number;
   explainMs?: number;
+  totalMs?: number;
+  mismatches?: string[];
   explainTokens?: { inputTokens: number; outputTokens: number; costUsd: number };
   insights?: string[];
   conclusion?: string[];
@@ -145,7 +232,7 @@ interface QuestionReport {
 
 const reports: QuestionReport[] = [];
 
-describe("실제 API 회귀 질문 10개 (WU-109~111)", () => {
+describe(`실제 API 회귀 질문 ${QUESTIONS.length}개 (WU-109~111)`, () => {
   beforeAll(async () => {
     const admin = getSupabaseAdmin();
     const { data, error } = await admin.auth.admin.createUser({
@@ -163,12 +250,23 @@ describe("실제 API 회귀 질문 10개 (WU-109~111)", () => {
 
   afterAll(async () => {
     const admin = getSupabaseAdmin();
-    if (userId) await admin.auth.admin.deleteUser(userId); // profiles·usage_daily는 FK cascade로 같이 지워진다
-    writeFileSync(
-      `tests/regression/live-run-${new Date().toISOString().slice(0, 10)}.json`,
-      JSON.stringify(reports, null, 2),
+    if (userId) {
+      // profiles·usage_daily는 FK cascade로 같이 지워진다. 실패하면 공유 DB에 시험 계정이 남으니 알린다
+      const { error } = await admin.auth.admin.deleteUser(userId);
+      if (error) console.error(`시험 계정 삭제 실패 — 직접 지워 주세요: ${TEST_EMAIL}`, error);
+    }
+    // 일부 질문만 다시 돌려도(-t) 그날 기록이 지워지지 않게, 같은 날 파일에 질문 ID별로 덮어쓴다
+    const path = `tests/regression/live-run-${new Date().toISOString().slice(0, 10)}.json`;
+    const previous: QuestionReport[] = existsSync(path)
+      ? JSON.parse(readFileSync(path, "utf8"))
+      : [];
+    const merged = new Map(previous.map((r) => [r.id, r]));
+    for (const r of reports) merged.set(r.id, r);
+    const ordered = [...merged.values()].sort(
+      (x, y) => Number(x.id.slice(1)) - Number(y.id.slice(1)),
     );
-    console.log("\n=== 회귀 질문 10개 요약 ===");
+    writeFileSync(path, JSON.stringify(ordered, null, 2));
+    console.log("\n=== 회귀 질문 요약 ===");
     for (const r of reports) {
       console.log(
         `[${r.passed ? "PASS" : "FAIL"}] ${r.id} ${r.category} — ${r.actualType} (해석 입력토큰 ${r.interpretTokens.inputTokens}${r.explainTokens ? `, 설명 입력토큰 ${r.explainTokens.inputTokens}` : ""})`,
@@ -211,7 +309,9 @@ describe("실제 API 회귀 질문 10개 (WU-109~111)", () => {
         // decline.category(공개용, manipulation도 out_of_scope로 보임)를 써야 한다.
         report.actualType = `declined:${interpreted.decline.category}`;
         report.detail = interpreted.decline.message;
-        report.passed = report.actualType === qc.expectType;
+        const problems = expectationMismatches(qc, null, interpreted.decline.suggestions);
+        report.passed = report.actualType === qc.expectType && problems.length === 0;
+        if (problems.length > 0) report.detail += ` [기대와 다름: ${problems.join(", ")}]`;
       } else if (interpreted.type === "needs_clarification") {
         report.detail = interpreted.clarification.question;
         report.passed = qc.expectType === "needs_clarification";
@@ -225,8 +325,14 @@ describe("실제 API 회귀 질문 10개 (WU-109~111)", () => {
         report.actualType = interpreted.hasOutOfScopePart ? "resolved:mixed" : "resolved";
         report.passed = report.actualType === qc.expectType || qc.expectType === "resolved";
 
+        const problems = expectationMismatches(qc, interpreted.request);
+        report.passed = report.passed && problems.length === 0;
+        report.mismatches = problems;
+
         const beforeExecute = await snapshotLlmUsage(); // executeAnalysis는 AI 호출이 없어 참고용
+        const tExecuteStart = Date.now();
         const result = await executeAnalysis(interpreted.request, { userId });
+        report.executeMs = Date.now() - tExecuteStart;
         const tExplainStart = Date.now();
         const explanation = await generateExplanation({
           question: qc.question,
@@ -235,6 +341,8 @@ describe("실제 API 회귀 질문 10개 (WU-109~111)", () => {
           userId,
         });
         report.explainMs = Date.now() - tExplainStart;
+        // 질문 하나가 화면에 답을 내기까지 서버가 쓴 시간 (해석 + 계산 + 설명)
+        report.totalMs = report.interpretMs + report.executeMs + report.explainMs;
         const afterExplain = await snapshotLlmUsage();
         report.explainTokens = diff(beforeExecute, afterExplain);
         report.conclusion = explanation.conclusion;

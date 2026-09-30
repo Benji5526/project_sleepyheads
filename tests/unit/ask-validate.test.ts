@@ -189,6 +189,24 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
     expect(result.request.aggregate).toBe("sum");
   });
 
+  it("AI가 두 기업을 모두 대상(target)으로 내도 두 번째 기업을 빠뜨리지 않는다 (합계 실측)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX, HYUNDAI_MOTOR]);
+    const result = await validateAnalysisRequest(
+      baseAiRequest({
+        companies: [
+          { query: "SK하이닉스", role: "target" },
+          { query: "현대차", role: "target" },
+        ],
+        operations: [{ op: "sum", metric: "revenue", base: null, peers: null }],
+      }),
+      { client },
+    );
+    expect(result.type === "resolved" && result.request.peers.map((p) => p.name)).toEqual([
+      "현대차",
+    ]);
+    expect(result.type === "resolved" && result.request.aggregate).toBe("sum");
+  });
+
   it("대상 표시 없이 6곳을 물으면 초과가 아니다 (첫 기업이 대상, 나머지 5곳이 비교)", async () => {
     const { client } = createFakeCompaniesClient([SK_HYNIX]);
     const names = ["SK하이닉스", "A", "B", "C", "D", "E"];

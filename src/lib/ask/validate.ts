@@ -110,7 +110,10 @@ export async function finishValidation(
   const isSum = ai.operations.some((o) => o.op === "sum");
   const peers: CompanyRef[] = [];
   const unresolved: string[] = [];
-  for (const peerQuery of ai.companies.filter((c) => c.role === "peer")) {
+  // 대상은 validateAnalysisRequest와 같은 규칙(첫 target, 없으면 첫 기업)으로 정하고, 나머지는 role과
+  // 상관없이 모두 비교 기업으로 쓴다 — AI가 "A와 B 합계"에서 두 기업을 다 target으로 내면 B가 빠졌다
+  const targetQuery = ai.companies.find((c) => c.role === "target") ?? ai.companies[0];
+  for (const peerQuery of ai.companies.filter((c) => c !== targetQuery)) {
     if (peers.length + 1 >= MAX_COMPANIES) break;
     const resolved = await resolveCompany(peerQuery.query, options);
     if (resolved.type !== "resolved") {
