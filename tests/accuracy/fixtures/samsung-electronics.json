@@ -1,0 +1,324 @@
+{
+  "_source": "OpenDART fnlttSinglAcntAll.json 원문에서 매출·영업이익·순이익 행만 옮김 (2026-09-30 조회). 원본 응답 전체는 저장하지 않는다.",
+  "corp_code": "00126380",
+  "corp_name": "삼성전자",
+  "stock_code": "005930",
+  "market": "KOSPI",
+  "acc_mt": 12,
+  "induty_code": "264",
+  "is_financial": false,
+  "reports": [
+    {
+      "bsns_year": "2024",
+      "reprt_code": "11014",
+      "fs_div": "CFS",
+      "rcept_no": "20241114002642",
+      "report_nm": "3분기보고서 (2024.09)",
+      "thstrm_nm": "제 56 기 3분기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "IS",
+          "account_id": "dart_OperatingIncomeLoss",
+          "account_nm": "영업이익",
+          "thstrm_amount": "9183371000000",
+          "thstrm_add_amount": "26233258000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "10100904000000",
+          "thstrm_add_amount": "26696957000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "79098731000000",
+          "thstrm_add_amount": "225082634000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "10100904000000",
+          "thstrm_add_amount": "26696957000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2024",
+      "reprt_code": "11011",
+      "fs_div": "CFS",
+      "rcept_no": "20250311001085",
+      "report_nm": "사업보고서 (2024.12)",
+      "thstrm_nm": "제 56 기",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "IS",
+          "account_id": "dart_OperatingIncomeLoss",
+          "account_nm": "영업이익",
+          "thstrm_amount": "32725961000000",
+          "thstrm_add_amount": ""
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "당기순이익",
+          "thstrm_amount": "34451351000000",
+          "thstrm_add_amount": ""
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "300870903000000",
+          "thstrm_add_amount": ""
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "당기순이익",
+          "thstrm_amount": "34451351000000",
+          "thstrm_add_amount": ""
+        }
+      ]
+    },
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11013",
+      "fs_div": "CFS",
+      "rcept_no": "20250515001922",
+      "report_nm": "1분기보고서 (2025.03)",
+      "thstrm_nm": "제 57 기 1분기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "IS",
+          "account_id": "dart_OperatingIncomeLoss",
+          "account_nm": "영업이익",
+          "thstrm_amount": "6685272000000",
+          "thstrm_add_amount": "6685272000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "8222878000000",
+          "thstrm_add_amount": "8222878000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "79140503000000",
+          "thstrm_add_amount": "79140503000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "8222878000000",
+          "thstrm_add_amount": "8222878000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11012",
+      "fs_div": "CFS",
+      "rcept_no": "20250814003156",
+      "report_nm": "반기보고서 (2025.06)",
+      "thstrm_nm": "제 57 기 반기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "IS",
+          "account_id": "dart_OperatingIncomeLoss",
+          "account_nm": "영업이익",
+          "thstrm_amount": "4676057000000",
+          "thstrm_add_amount": "11361329000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "반기순이익",
+          "thstrm_amount": "5116435000000",
+          "thstrm_add_amount": "13339313000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "74566317000000",
+          "thstrm_add_amount": "153706820000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "반기순이익",
+          "thstrm_amount": "5116435000000",
+          "thstrm_add_amount": "13339313000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11014",
+      "fs_div": "CFS",
+      "rcept_no": "20251114002447",
+      "report_nm": "3분기보고서 (2025.09)",
+      "thstrm_nm": "제 57 기 3분기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "IS",
+          "account_id": "dart_OperatingIncomeLoss",
+          "account_nm": "영업이익",
+          "thstrm_amount": "12166062000000",
+          "thstrm_add_amount": "23527391000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "12225747000000",
+          "thstrm_add_amount": "25565060000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "86061747000000",
+          "thstrm_add_amount": "239768567000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "12225747000000",
+          "thstrm_add_amount": "25565060000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11011",
+      "fs_div": "CFS",
+      "rcept_no": "20260310002820",
+      "report_nm": "사업보고서 (2025.12)",
+      "thstrm_nm": "제 57 기",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "IS",
+          "account_id": "dart_OperatingIncomeLoss",
+          "account_nm": "영업이익",
+          "thstrm_amount": "43601051000000",
+          "thstrm_add_amount": ""
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "당기순이익",
+          "thstrm_amount": "45206805000000",
+          "thstrm_add_amount": ""
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "333605938000000",
+          "thstrm_add_amount": ""
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "당기순이익",
+          "thstrm_amount": "45206805000000",
+          "thstrm_add_amount": ""
+        }
+      ]
+    },
+    {
+      "bsns_year": "2026",
+      "reprt_code": "11013",
+      "fs_div": "CFS",
+      "rcept_no": "20260515002181",
+      "report_nm": "1분기보고서 (2026.03)",
+      "thstrm_nm": "제 58 기 1분기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "IS",
+          "account_id": "dart_OperatingIncomeLoss",
+          "account_nm": "영업이익",
+          "thstrm_amount": "57232797000000",
+          "thstrm_add_amount": "57232797000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "47225272000000",
+          "thstrm_add_amount": "47225272000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "133873444000000",
+          "thstrm_add_amount": "133873444000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "분기순이익",
+          "thstrm_amount": "47225272000000",
+          "thstrm_add_amount": "47225272000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2026",
+      "reprt_code": "11012",
+      "fs_div": "CFS",
+      "rcept_no": "20260814003699",
+      "report_nm": "반기보고서 (2026.06)",
+      "thstrm_nm": "제 58 기 반기말",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "IS",
+          "account_id": "dart_OperatingIncomeLoss",
+          "account_nm": "영업이익",
+          "thstrm_amount": "89492412000000",
+          "thstrm_add_amount": "146725209000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "반기순이익",
+          "thstrm_amount": "71624461000000",
+          "thstrm_add_amount": "118849733000000"
+        },
+        {
+          "sj_div": "IS",
+          "account_id": "ifrs-full_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "171499470000000",
+          "thstrm_add_amount": "305372914000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLoss",
+          "account_nm": "반기순이익",
+          "thstrm_amount": "71624461000000",
+          "thstrm_add_amount": "118849733000000"
+        }
+      ]
+    }
+  ]
+}
