@@ -271,7 +271,9 @@ async function loadPinnedReportValues(
   const { data, error } = await admin
     .from("report_values")
     .select("bsns_year, reprt_code, fs_div, account_id, amount_3m, amount_cum, source_rcept_no")
-    .eq("corp_code", corpCode);
+    .eq("corp_code", corpCode)
+    // 필요한 연도만 — 회사 전체 행을 읽으면 정정·별도 행이 쌓였을 때 조회 상한(1,000행)에 걸린다
+    .in("bsns_year", [...new Set(pins.map((p) => p.bsnsYear))]);
   if (error) throw new Error(`report_values 조회 실패: ${error.message}`);
   const wanted = new Set(pins.map(pinKey));
   return ((data ?? []) as unknown as ReportValueDbRow[]).filter((row) =>

@@ -641,6 +641,8 @@ interface Analysis {
                  { "diagnosisId": "dg2", "optionId": "latest_correction" } ] }
 ```
 - 확인이 필요한 진단(`needsConfirmation: true`)은 **모두** 포함해야 한다. 빠지면 `400`.
+- 진단 `id`는 진단 종류(`kind`)와 같다 (종류마다 카드 1장). 선택지 id: 결측 `exclude_quarter`★/`show_blank`, 정정 중복 `latest_correction`★/`first_filing`, 연결·별도 혼재 `unify_ofs`★/`keep_mixed` (★ 기본값, TECH §9). 없는 진단·선택지도 `400`. 상태가 `awaiting_preprocess`가 아니면 `409 INVALID_STATE`.
+- 행 = 결과 표의 한 줄(기업 × 분기), 미리보기 합계 = 대표 지표(매출 > 영업이익 > 당기순이익 중 요청된 첫 번째). 정정 중복의 "처리 전"은 두 공시 값을 모두 센 행 수·합계. 연결·별도 혼재는 합계 미리보기 없음(별도 값은 고른 뒤에 받는다).
 
 응답 `200` → `{ "data": { "status": "queued" } }` → 화면은 Q4로 이어서 실행
 
@@ -658,6 +660,8 @@ interface Analysis {
 
 응답 `201` → `{ "data": { "analysisId": "a2…", "status": "succeeded", "sameNumbers": true } }`
 - `sameNumbers`: `false` 재실행에서 모든 숫자가 원래 결과와 같은지 서버가 확인한 값 (재현성 확인용).
+- 두 경우 모두 **같은 프로젝트에 새 분석**이 생긴다(이전 분석은 그대로). `useLatestData=true`는 `status: "queued"`로 돌려주고 화면이 Q4를 불러 계산·설명 작성을 이어 간다 (`sameNumbers: null`). 분석 요청(기간 포함)은 원래 해석을 그대로 쓴다.
+- `409 INVALID_STATE`: 결과가 없는 분석, 데이터 버전 기록(WU-202) 전에 만든 분석, 계산식 버전(`calcVersion`)이 바뀐 데이터 버전의 `useLatestData=false` — 이때는 `true`로 다시 분석하도록 안내한다.
 
 ### Q7 `POST /api/analyses/:id/approve` 🛡️ (Step 3)
 - 상태가 `awaiting_approval`일 때만. **승인 전에는 외부 호출·계산을 하지 않는다.**

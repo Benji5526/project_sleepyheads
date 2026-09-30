@@ -78,7 +78,9 @@ export function findMissingQuarters(
     const present = withReport.filter((q) => valueAt(financials, q, field)?.value != null);
     if (present.length === 0) continue;
     for (const q of withReport) {
-      if (valueAt(financials, q, field)?.value == null) {
+      const computed = valueAt(financials, q, field);
+      // 계정 값 자체가 빈 경우만 — 직전 누적이 없어 계산 못 한 것(NO_PREV_PERIOD) 등은 결측이 아니다
+      if (!computed || (computed.value == null && computed.reason === "MISSING_ACCOUNT")) {
         missingQuarters.add(q);
         missingFields.add(field);
       }
@@ -125,10 +127,14 @@ export async function findFirstFilings(
   const result = new Map<string, string>();
   const corpCodes = [...new Set(sources.filter((s) => s.rceptNo).map((s) => s.corpCode))];
   for (const corpCode of corpCodes) {
+    const years = [
+      ...new Set(sources.filter((s) => s.corpCode === corpCode).map((s) => s.bsnsYear)),
+    ];
     const { data, error } = await client
       .from("report_values")
       .select("bsns_year, reprt_code, fs_div, source_rcept_no")
-      .eq("corp_code", corpCode);
+      .eq("corp_code", corpCode)
+      .in("bsns_year", years);
     if (error) throw new Error(`report_values 조회 실패: ${error.message}`);
     const filings = new Map<string, Set<string>>();
     for (const row of (data ?? []) as {
