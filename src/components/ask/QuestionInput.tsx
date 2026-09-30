@@ -18,17 +18,31 @@ export function wordBeforeCaret(
   return { word: match[1], start: caret - match[1].length };
 }
 
+/**
+ * 글자를 넣으려는 키인가 (비로그인 잠금용). 새로고침(F5·Ctrl+R)·찾기·화살표·Esc 같은 키는 브라우저·화면 읽기
+ * 프로그램 동작 그대로 둔다. "Process"는 한글 입력기가 조합 중에 보내는 키 이름이다
+ */
+function isTypingKey(event: React.KeyboardEvent): boolean {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return event.key.length === 1 || ["Enter", "Backspace", "Delete", "Process"].includes(event.key);
+}
+
 export function QuestionInput({
   value,
   onChange,
   onSubmit,
   disabled,
+  locked,
+  onLocked,
   label,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
   disabled?: boolean;
+  /** 비로그인: 입력 대신 onLocked를 부른다 (PRD F-G3). 키보드로 옮겨 다니는 Tab은 그대로 둔다 */
+  locked?: boolean;
+  onLocked?: () => void;
   label: string;
 }) {
   const inputId = useId();
@@ -82,6 +96,13 @@ export function QuestionInput({
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (locked) {
+      if (isTypingKey(event)) {
+        event.preventDefault();
+        onLocked?.();
+      }
+      return;
+    }
     // 한글 조합 중 Enter는 글자 확정용이므로 무시한다
     if (event.nativeEvent.isComposing) return;
 
@@ -134,13 +155,14 @@ export function QuestionInput({
           maxLength={MAX_LENGTH}
           rows={2}
           disabled={disabled}
+          readOnly={locked}
           placeholder="예: 삼성전자의 최근 5년 매출액 추이를 보여줘"
           onChange={(e) => {
             onChange(e.target.value);
             setCaret(e.target.selectionStart);
           }}
           onSelect={syncCaret}
-          onClick={syncCaret}
+          onClick={locked ? onLocked : syncCaret}
           onKeyDown={handleKeyDown}
           onBlur={() => setTimeout(() => setResults([]), 120)}
           className="block w-full resize-none rounded-2xl bg-transparent px-5 pt-4 text-lg leading-8 outline-none placeholder:text-muted/70 disabled:opacity-60"
@@ -151,8 +173,8 @@ export function QuestionInput({
           </span>
           <button
             type="button"
-            onClick={onSubmit}
-            disabled={disabled || !value.trim()}
+            onClick={locked ? onLocked : onSubmit}
+            disabled={disabled || (!locked && !value.trim())}
             className="h-10 rounded-lg bg-accent px-5 font-medium text-accent-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             질문하기
