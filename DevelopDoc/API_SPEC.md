@@ -712,6 +712,7 @@ interface Analysis {
 ### G1 `GET /api/guest/example` 🔓
 - 미리 만들어 둔 SK하이닉스 예시 (`guest_examples`의 가장 최근 행). **외부 API·AI 호출 없음.** 응답 타입 `GuestExample` (`src/contracts/guest.ts`)
 - 예시를 아직 한 번도 만들지 않았으면 `404 NOT_FOUND` → 화면은 예시 없이 입력창만 보여준다.
+- 응답 헤더 `Cache-Control: public, s-maxage=600, stale-while-revalidate=86400` — Vercel CDN이 10분 보관 (예시는 분기에 한 번 바뀜).
 
 응답 `200`
 ```json
@@ -730,7 +731,7 @@ interface Analysis {
 
 ### C2 `GET /api/cron/refresh-guest-example` ⚙️
 - 하루 1회. SK하이닉스에 **새 정기보고서가 있을 때만** 예시를 다시 만든다 (시스템 예약 한도 사용).
-  - 판정: 마지막 예시를 만든 날 다음 날부터 오늘까지 OpenDART `list.json`(`pblntf_ty=A` 정기공시)을 1회 조회. 예시가 없으면 바로 만든다.
+  - 판정: 마지막 예시를 만든 날부터 오늘까지(한국 날짜, 만든 날 접수분 포함) OpenDART `list.json`(`pblntf_ty=A` 정기공시)을 1회 조회. 예시가 없으면 바로 만든다.
   - 만들기: 회원 질문과 같은 순서(해석 → 실행 → 설명 작성, AI 2회). 되묻기·거절·**설명 작성 실패**면 저장하지 않고 기존 예시를 유지한다 (`502 UPSTREAM_ERROR`).
   - 관리자가 손으로 다시 만들 때: `?force=1` (같은 `CRON_SECRET` 필요). 응답 `reason: "forced"`.
 - 함수 최대 실행 시간: 300초 (처음이면 보고서 수집 + AI 2회)
