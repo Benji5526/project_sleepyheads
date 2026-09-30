@@ -337,6 +337,47 @@ describe("재시도 (최대 2회, 외부 API 오류·시간 초과만)", () => {
   });
 });
 
+describe("리뷰 반영 — 끊긴 단계", () => {
+  function staleRow(retries: number) {
+    return {
+      seq: 1,
+      tool: "get_financials" as const,
+      status: "running" as const,
+      retries,
+      inputSummary: "",
+      outputSummary: null,
+      output: null,
+      durationMs: 5000,
+      errorReason: null,
+      externalCalls: 0,
+      llmCostUsd: 0,
+      startedAt: new Date(clock - STALE_RUNNING_MS - 1).toISOString(),
+    };
+  }
+
+  it("재시도를 다 쓴 끊긴 단계라도 다른 요청이 먼저 다시 맡았으면 분석을 실패로 끝내지 않는다", async () => {
+    memory.steps.push(staleRow(2));
+    memory.analysis.status = "running";
+    // 이 요청이 실패로 표시하려는 순간 다른 요청이 이미 맡아 시작 시각이 바뀐 것과 같다
+    const original = store.updateStep;
+    store.updateStep = async (id, seq, patch, expect) => {
+      memory.steps[0].startedAt = new Date(clock).toISOString();
+      return original(id, seq, patch, expect);
+    };
+    const res = await runOneStep(ID, deps());
+    expect(res).toMatchObject({ status: "running", next: "step" });
+    expect(memory.analysis.status).toBe("running");
+  });
+
+  it("끊긴 시도가 쓴 시간도 실행 기록 시간·실행 시간 상한에 더한다", async () => {
+    memory.steps.push(staleRow(0));
+    memory.analysis.status = "running";
+    await runOneStep(ID, deps());
+    // 앞선 기록 5초 + 끊긴 시도(STALE_RUNNING_MS 이상) + 이번 시도 1초
+    expect(memory.steps[0].durationMs).toBeGreaterThanOrEqual(5000 + STALE_RUNNING_MS + 1000);
+  });
+});
+
 describe("동시 요청 — 같은 단계는 하나만", () => {
   it("다른 요청이 방금 맡은 단계면 실행하지 않고 진행 상태만 (next: step)", async () => {
     memory.steps.push({

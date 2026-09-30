@@ -38,7 +38,14 @@ export async function loadFlowView(
   const active = ACTIVE.has(status);
   const steps: StepRecord[] = plan.steps.map((step) => {
     const row = bySeq.get(step.seq);
-    if (row) return toStepRecord(row);
+    if (row) {
+      const record = toStepRecord(row);
+      // 끝난 분석에 남은 대기(재시도·전처리 대기)·실행 중 줄은 "실행하지 않음"으로 보여 준다
+      if (!active && (record.status === "pending" || record.status === "running")) {
+        return { ...record, status: "skipped" };
+      }
+      return record;
+    }
     return {
       seq: step.seq,
       tool: step.tool,

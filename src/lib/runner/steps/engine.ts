@@ -169,6 +169,8 @@ export async function runOneStep(analysisId: string, deps: EngineDeps): Promise<
   const existing = bySeq.get(next.seq);
   const startedAt = new Date(now()).toISOString();
   let retries = existing?.retries ?? 0;
+  // 이 단계에 이미 쓴 시간 (앞선 시도들). 실행 기록의 시간과 실행 시간 상한은 모든 시도를 합한다
+  let priorMs = existing?.durationMs ?? 0;
   if (!existing) {
     const claimed = await store.insertStep(analysis.id, analysis.ownerId, {
       seq: next.seq,
@@ -188,18 +190,23 @@ export async function runOneStep(analysisId: string, deps: EngineDeps): Promise<
   } else if (existing.status === "running") {
     const stale = !existing.startedAt || now() - Date.parse(existing.startedAt) > STALE_RUNNING_MS;
     if (!stale) return busy(plan, analysis.id, deps, existing);
-    // 맡았던 요청이 끊겼다(시간 초과 등) → 재시도 1회로 센다
+    // 맡았던 요청이 끊겼다(시간 초과 등) → 재시도 1회로 센다. 끊긴 시도가 쓴 시간도 더한다
+    const killedMs = existing.startedAt ? now() - Date.parse(existing.startedAt) : 0;
+    priorMs += Math.max(0, Math.round(killedMs));
     if (existing.retries >= limits.maxRetries) {
-      await store.updateStep(
+      const marked = await store.updateStep(
         analysis.id,
         next.seq,
         {
           status: "failed",
           errorReason: `시간 초과 — 재시도 ${existing.retries}회 후 중단`,
+          durationMs: priorMs,
           finishedAt: startedAt,
         },
         { status: "running", startedAt: existing.startedAt },
       );
+      // 다른 요청이 먼저 이 단계를 다시 맡았으면 실패로 끝내지 않는다
+      if (!marked) return busy(plan, analysis.id, deps);
       if (OPTIONAL_TOOLS.has(next.tool)) return afterProgress(analysis.id, deps);
       return afterFinalFailure(analysis, plan, next, deps, true);
     }
@@ -207,7 +214,7 @@ export async function runOneStep(analysisId: string, deps: EngineDeps): Promise<
     const claimed = await store.updateStep(
       analysis.id,
       next.seq,
-      { startedAt, retries, errorReason: "요청이 끊겨 다시 실행" },
+      { startedAt, retries, durationMs: priorMs, errorReason: "요청이 끊겨 다시 실행" },
       { status: "running", startedAt: existing.startedAt },
     );
     if (!claimed) return busy(plan, analysis.id, deps);
@@ -226,7 +233,7 @@ export async function runOneStep(analysisId: string, deps: EngineDeps): Promise<
   const previous = completedSteps(rows);
   const t0 = now();
   const outcome = await executeTool(next, analysis, previous, deps);
-  const durationMs = Math.max(0, Math.round(now() - t0));
+  const durationMs = priorMs + Math.max(0, Math.round(now() - t0));
   const finishedAt = new Date(now()).toISOString();
 
   // 실행 중에 취소됐으면 결과를 버린다 (API_SPEC Q8)
