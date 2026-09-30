@@ -37,8 +37,9 @@ export function fillPlaceholders(rawText: string, figures: Record<string, Figure
   let ok = true;
   const text = rawText.replace(PLACEHOLDER_RE, (_match, id: string) => {
     const figure = figures[id];
-    // 없는 ID, 또는 값이 없는 숫자("계산 불가")를 가리키는 문장은 버린다 — "계산 불가 증가" 같은 문장 방지
-    if (!figure || figure.value === null) {
+    // 없는 ID, 또는 값이 없는 숫자("계산 불가")를 가리키는 문장은 버린다 — "계산 불가 증가" 같은 문장 방지.
+    // 부호 전환("흑자전환" 등)은 value가 null이어도 사유가 없고 글자가 곧 값이라 그대로 쓴다
+    if (!figure || (figure.value === null && (figure.reason || !figure.display))) {
       ok = false;
       return "";
     }

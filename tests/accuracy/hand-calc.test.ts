@@ -203,7 +203,11 @@ const EXPECTED: Record<SampleKey, Record<string, Triple>> = {
 };
 
 /** YoY % (ANSWER_KEY.md §3, 소수점 넷째 자리 반올림). [매출, 영업이익, 순이익], 금융사 매출 null. */
-const EXPECTED_YOY: Record<SampleKey, Record<string, [number | null, number, number]>> = {
+// 부호가 바뀐 이익 지표는 TECH §6.4대로 비율 대신 글자 ("흑자전환" 등)가 정답이다
+const EXPECTED_YOY: Record<
+  SampleKey,
+  Record<string, [number | null, number | string, number | string]>
+> = {
   skHynix: {
     "2025Q3": [39.1273, 61.9269, 118.9592],
     "2025Q4": [66.0677, 137.1651, 90.42],
@@ -230,14 +234,14 @@ const EXPECTED_YOY: Record<SampleKey, Record<string, [number | null, number, num
   },
   dongwonMobility: {
     "2025Q3": [4.206, 85.2735, 2634.416],
-    "2025Q4": [4.7401, 11.9498, 5671.9934], // 순이익은 부호가 바뀐 경우 → 화면엔 "흑자전환" (아래 별도 테스트)
+    "2025Q4": [4.7401, 11.9498, "흑자전환"], // 순이익 전년 −190,210,855 → 이번 10,598,536,367 (비율로는 +5671.9934%)
     "2026Q1": [9.5863, -60.6983, -0.2732],
     "2026Q2": [15.2713, 10.4331, 154.4937],
   },
   sewonPrecision: {
     "2025Q3": [14.3893, 116.2232, 29.4425],
     "2025Q4": [18.4974, 1.692, -24.9051],
-    "2026Q1": [-21.7857, -421.034, -37.9988], // 영업이익은 부호가 바뀐 경우 → 화면엔 "적자전환"
+    "2026Q1": [-21.7857, "적자전환", -37.9988], // 영업이익 전년 흑자 → 이번 적자 (비율로는 −421.034%)
     "2026Q2": [-3.5204, 38.7595, 57.7714],
   },
   leeno: {
@@ -440,6 +444,10 @@ describe("② YoY % = 손 계산 (TECH §6.4, 최근 4개 분기)", () => {
             if (expected === null) {
               expect(figure.value).toBeNull();
               expect(figure.reason).toBe("MISSING_ACCOUNT");
+            } else if (typeof expected === "string") {
+              expect(figure.value).toBeNull();
+              expect(figure.reason).toBeUndefined();
+              expect(figure.display).toBe(expected);
             } else {
               expect(figure.value).not.toBeNull();
               expect(figure.value!).toBeCloseTo(expected, 3);
@@ -450,14 +458,11 @@ describe("② YoY % = 손 계산 (TECH §6.4, 최근 4개 분기)", () => {
     }
   }
 
-  // TECH §6.4: 부호가 바뀐 경우 비율 대신 글자로 표시한다. 현재 src 어디에도 "흑자전환" 처리 코드가 없다.
-  it.fails(
-    "부호 변경 표시: 동원모빌리티 2025Q4 순이익 YoY는 '흑자전환'으로 표시된다 — 미구현(ANSWER_KEY §6)",
-    () => {
-      const figure = engineYoy("dongwonMobility", "net_income", "2025Q4");
-      expect(figure.display).toBe("흑자전환");
-    },
-  );
+  // TECH §6.4: 부호가 바뀐 경우 비율 대신 글자로 표시한다 (2026-09-30 구현)
+  it("부호 변경 표시: 동원모빌리티 2025Q4 순이익 YoY는 '흑자전환'으로 표시된다", () => {
+    const figure = engineYoy("dongwonMobility", "net_income", "2025Q4");
+    expect(figure.display).toBe("흑자전환");
+  });
 });
 
 describe("③ 달력 연간 2025 = 달력 1Q~4Q 합 (TECH §6.3)", () => {

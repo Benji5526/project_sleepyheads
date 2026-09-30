@@ -3,7 +3,7 @@
 import type { CompanyRef, MetricId, PeriodRange, Quarter, Series } from "@/contracts";
 import type { FsDiv } from "@/lib/financials/types";
 import { calendarAnnualFlow } from "@/lib/metrics/calendar-quarter";
-import { qoq as computeQoq, yoy as computeYoy } from "@/lib/metrics/formulas";
+import { type ChangeComputed, qoq as computeQoq, yoy as computeYoy } from "@/lib/metrics/formulas";
 import type { CalendarQuarterMetricsRow } from "@/lib/metrics/persist";
 import type { Computed } from "@/lib/metrics/types";
 import { addQuarters, compareQuarters, parseQuarter } from "@/lib/ask/quarter";
@@ -102,8 +102,12 @@ export function buildQuarterlySeries(
     for (const quarter of quarters) {
       const current = metricAt(financials, quarter, base);
       const previous = financials.metricsByQuarter.get(addQuarters(quarter, -lag))?.metrics[base];
-      const computed: Computed<number> =
-        changeOp === "yoy" ? computeYoy(current, previous) : computeQoq(current, previous);
+      // 흑자전환·적자전환 글자는 이익 지표에만 (매출이 0으로 줄어든 것은 적자전환이 아니다)
+      const isProfit = base !== "revenue";
+      const computed: ChangeComputed =
+        changeOp === "yoy"
+          ? computeYoy(current, previous, isProfit)
+          : computeQoq(current, previous, isProfit);
       const report = reportBasis(quarter, financials);
 
       const figure = allocator.add({
@@ -111,6 +115,7 @@ export function buildQuarterlySeries(
         unit: "PERCENT",
         value: computed.value,
         reason: computed.reason,
+        displayText: "signChange" in computed ? computed.signChange : undefined,
         basis: { report, fsDiv },
       });
       points.push({ x: quarter, figureId: figure.id });
