@@ -12,6 +12,7 @@ import {
 } from "@/lib/quota/question-quota";
 import { CALC_VERSION } from "@/lib/metrics/types";
 import { runAnalysis } from "@/lib/runner/execute";
+import { withLatestDefaultPeriod } from "@/lib/runner/latest-request";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { SessionClient } from "@/lib/supabase/server";
 import { sameNumbers } from "@/lib/versions/compare";
@@ -40,7 +41,8 @@ interface OriginalRow {
 // Q6 POST /api/analyses/:id/rerun 🔑 🛡️ — API_SPEC §4 (WU-202)
 // useLatestData=false: 같은 데이터 버전(출처 접수번호·전처리 선택)으로 다시 계산해 새 분석으로 저장한다.
 //   AI 호출 없음·질문 0회·저장된 설명 재사용. 숫자가 원래와 같은지(sameNumbers) 서버가 확인한다.
-// useLatestData=true: 같은 분석 요청으로 새 분석을 만든다(질문 1회). 상태 queued로 돌려주면 화면이
+// useLatestData=true: 같은 분석 요청으로 새 분석을 만든다(질문 1회). 질문에 기간이 없었으면(기본 기간)
+//   오늘 기준 최근 N분기로 다시 잡는다(AI 없이, withLatestDefaultPeriod). 상태 queued로 돌려주면 화면이
 //   Q4를 불러 최신 보고서로 계산하고 설명을 새로 쓴다. 두 경우 모두 이전 분석은 그대로 남는다.
 export const POST = route(
   { access: "member", questionRequest: true, idempotent: true },
@@ -152,6 +154,7 @@ export const POST = route(
     }
 
     // 최신 데이터로 다시 분석: 질문 1회 (같은 멱등키 재요청은 DB 함수가 재차감하지 않는다)
+    const latestRequest = withLatestDefaultPeriod(request);
     try {
       const consumed = await consumeQuestionQuota(userId, idempotencyKey, admin);
       if (consumed.alreadyConsumed) {
@@ -169,7 +172,7 @@ export const POST = route(
 
     const { data: inserted, error: insertError } = await supabase
       .from("analyses")
-      .insert({ ...base, status: "queued" })
+      .insert({ ...base, analysis_request: latestRequest, status: "queued" })
       .select("id")
       .single();
     if (insertError) {

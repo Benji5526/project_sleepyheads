@@ -16,6 +16,7 @@ import { ensureCompanyFinancials, type CompanyFinancials } from "@/lib/runner/co
 import { createFigureAllocator } from "@/lib/runner/figures";
 import {
   buildAnnualSeries,
+  buildCompanyComparisonSeries,
   buildQuarterlySeries,
   buildSumSeries,
   sumPeriods,
@@ -284,24 +285,45 @@ const itFor = (broken: boolean) => (broken ? it.fails : it);
 // ---------------------------------------------------------------------------
 
 // supabase/seed.sql의 sectors·sector_rules·sector_overrides 중 이 샘플에 필요한 행 (id = 섹터 이름)
-const SECTORS = ["반도체", "자동차/부품", "은행", "보험", "제약", "조선", "금융지주", "기타"].map(
-  (name) => ({
-    id: name,
-    name,
-    is_financial: name === "은행" || name === "보험" || name === "금융지주",
-  }),
-);
+// WU-303 섹터 규칙 보강 반영 (seed.sql·migrations/20261001090000)
+const FINANCIAL_SECTORS = new Set(["은행", "증권", "보험", "금융지주", "기타금융"]);
+const SECTORS = [
+  "반도체",
+  "디스플레이",
+  "전자부품·장비",
+  "2차전지",
+  "자동차/부품",
+  "은행",
+  "증권",
+  "보험",
+  "제약",
+  "조선",
+  "금융지주",
+  "기타금융",
+  "기타",
+].map((name) => ({ id: name, name, is_financial: FINANCIAL_SECTORS.has(name) }));
 const SECTOR_RULES = [
   { induty_prefix: "261", sector_id: "반도체" },
+  { induty_prefix: "2621", sector_id: "디스플레이" },
+  { induty_prefix: "262", sector_id: "전자부품·장비" },
+  { induty_prefix: "26", sector_id: "전자부품·장비" },
+  { induty_prefix: "282", sector_id: "2차전지" },
   { induty_prefix: "21", sector_id: "제약" },
   { induty_prefix: "30", sector_id: "자동차/부품" },
   { induty_prefix: "311", sector_id: "조선" },
   { induty_prefix: "64", sector_id: "은행" },
+  { induty_prefix: "641", sector_id: "은행" },
+  { induty_prefix: "649", sector_id: "기타금융" },
+  { induty_prefix: "64992", sector_id: "금융지주" },
   { induty_prefix: "65", sector_id: "보험" },
+  { induty_prefix: "6612", sector_id: "증권" },
 ];
 const SECTOR_OVERRIDES = [
-  { corp_code: "00164779", sector_id: "반도체" },
-  { corp_code: "00688996", sector_id: "금융지주" },
+  { corp_code: "00164779", sector_id: "반도체" }, // SK하이닉스
+  { corp_code: "00688996", sector_id: "금융지주" }, // KB금융
+  { corp_code: "00126380", sector_id: "반도체" }, // 삼성전자
+  { corp_code: "00369657", sector_id: "반도체" }, // 리노공업
+  { corp_code: "00382199", sector_id: "금융지주" }, // 신한지주
 ];
 
 const db = createFakeFinancialsDb({
@@ -517,27 +539,25 @@ const EXPECTED_TOTAL_REVENUE: Record<string, string> = {
   "2026Q2": "251213562656206",
 };
 
-/** 섹터 분류 (TECH §8 순서를 seed 규칙에 손으로 적용, ANSWER_KEY §5.2) */
+/** 섹터 분류 (TECH §8 순서를 seed 규칙에 손으로 적용, ANSWER_KEY §5.2 — WU-303 보강 뒤) */
 const EXPECTED_SECTOR: Record<SampleKey, string> = {
   skHynix: "반도체", // 수동 지정
-  samsung: "기타", // 업종코드 264 — seed 규칙(261·21·30·311·64·65)에 해당 없음
+  samsung: "반도체", // 수동 지정 (업종코드 264만으로는 "26" → 전자부품·장비)
   kb: "금융지주", // 수동 지정
-  shinhan: "은행", // 업종코드 64992 → "64"
+  shinhan: "금융지주", // 수동 지정 (업종코드 64992 → "64992" 규칙으로도 금융지주)
   dongwonMobility: "자동차/부품", // 업종코드 303 → "30"
   sewonPrecision: "자동차/부품", // 업종코드 303 → "30"
-  leeno: "기타", // 업종코드 2629 — 해당 규칙 없음
+  leeno: "반도체", // 수동 지정 (업종코드 2629만으로는 "262" → 전자부품·장비)
 };
 
 /** 섹터별 매출 합계 (비금융, ANSWER_KEY §5.3) */
 const EXPECTED_SECTOR_REVENUE: Record<string, Record<string, string>> = {
   "2025Q4": {
-    반도체: "32826653000000",
-    기타: "93922130949290",
+    반도체: "126748783949290", // SK하이닉스 + 삼성전자 + 리노공업
     "자동차/부품": "199070158821",
   },
   "2026Q2": {
-    반도체: "79318746000000",
-    기타: "171642657426964",
+    반도체: "250961403426964",
     "자동차/부품": "252159229242",
   },
 };
@@ -698,4 +718,46 @@ describe("⑤ 엔진 합계 기능 — 전체 매출(합계)·섹터별 합계 (
       }
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// ⑥ WU-303 기업 비교 — 금융업 공통 지표 (TECH §7, ANSWER_KEY §8.2)
+// 금융사 영업이익률 = 영업이익 ÷ 영업수익. KB금융·신한지주 원문에는 영업수익 합계 행이 없어 계산 불가.
+// ---------------------------------------------------------------------------
+
+describe("⑥ WU-303 기업 비교 — 금융업 공통 지표 (2026Q2)", () => {
+  function compareAt(keys: SampleKey[]) {
+    const allocator = createFigureAllocator();
+    const result = buildCompanyComparisonSeries(
+      keys.map((key) => sample(key, EXPECTED_SECTOR[key])), // 금융업 여부는 fixture의 is_financial
+      "2026Q2",
+      ["operating_margin"],
+      allocator,
+    );
+    const figures = result.series[0].points.map((p) => allocator.figures[p.figureId]);
+    return { result, figures };
+  }
+
+  it("영업이익률: SK하이닉스·삼성전자는 영업이익 ÷ 매출 = 손 계산", () => {
+    const { figures } = compareAt(["skHynix", "samsung"]);
+    // 60,542,608,000,000 ÷ 79,318,746,000,000 × 100 · 89,492,412,000,000 ÷ 171,499,470,000,000 × 100
+    expect(figures[0].value).toBeCloseTo(76.3282465408619, 9);
+    expect(figures[1].value).toBeCloseTo(52.1823256946508, 9);
+  });
+
+  it("KB금융 영업이익률은 영업이익 ÷ 영업수익 — 영업수익 행이 없어 계산 불가(MISSING_ACCOUNT)이고, 라벨에 식이 보인다", () => {
+    const { figures, result } = compareAt(["skHynix", "kb", "shinhan"]);
+    expect(figures[1].label).toBe("KB금융 영업이익률(영업이익÷영업수익) 2026Q2");
+    expect(figures[1]).toMatchObject({
+      value: null,
+      reason: "MISSING_ACCOUNT",
+      display: "계산 불가",
+    });
+    expect(figures[2]).toMatchObject({ value: null, reason: "MISSING_ACCOUNT" });
+    expect(figures[0].label).toBe("SK하이닉스 영업이익률 2026Q2");
+    expect(result.hasFinancial).toBe(true);
+    // 안정성 지표를 묻지 않았으니 ※·그래프 전환은 없다
+    expect(result.financialFootnote).toBe(false);
+    expect(result.stabilitySwitched).toBe(false);
+  });
 });

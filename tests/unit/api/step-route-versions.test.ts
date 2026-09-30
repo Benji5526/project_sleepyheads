@@ -78,7 +78,7 @@ function step() {
 const DONE = {
   kind: "done",
   result: { basis: { dataVersionId: VERSION }, figures: {} },
-  version: { sources: [], calcVersion: "v2", priceDate: null, decisions: {} },
+  version: { sources: [], calcVersion: "v3", priceDate: null, decisions: {} },
   versionHash: "hash",
   diagnoses: [],
 };

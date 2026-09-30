@@ -2,6 +2,7 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Diagnosis, ResultObject } from "@/contracts";
+import { addQuarters, latestAvailableQuarter } from "@/lib/ask/quarter";
 
 // Q6 POST /api/analyses/:id/rerun · Q5 POST /api/analyses/:id/preprocess (WU-202·WU-203)
 // 같은 조건 재실행은 AI·질문 수를 쓰지 않고 새 분석으로 저장한다 / 최신 데이터 재분석은 질문 1회 /
@@ -26,7 +27,7 @@ function result(value: number): ResultObject {
       period: { from: "2025Q3", to: "2026Q2", specified: false, reason: "", clipped: false },
       reports: [],
       priceDate: null,
-      calcVersion: "v2",
+      calcVersion: "v3",
       dataVersionId: VERSION,
       newerDataVersionAvailable: false,
       flags: [],
@@ -94,7 +95,7 @@ const state = vi.hoisted(() => ({
   touchedTables: [] as string[],
   consumed: 0,
   rerunValue: 100,
-  calcVersion: "v2",
+  calcVersion: "v3",
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -176,7 +177,7 @@ vi.mock("@/lib/runner/execute", () => ({
   runAnalysis: vi.fn(async () => ({
     kind: "done",
     result: result(state.rerunValue),
-    version: { sources: [], calcVersion: "v2", priceDate: null, decisions: {} },
+    version: { sources: [], calcVersion: "v3", priceDate: null, decisions: {} },
     versionHash: "h",
     diagnoses: [],
   })),
@@ -228,7 +229,7 @@ beforeEach(() => {
   state.touchedTables = [];
   state.consumed = 0;
   state.rerunValue = 100;
-  state.calcVersion = "v2";
+  state.calcVersion = "v3";
 });
 
 describe("POST /api/analyses/:id/rerun (WU-202)", () => {
@@ -283,6 +284,38 @@ describe("POST /api/analyses/:id/rerun (WU-202)", () => {
     expect(state.inserts[0]).toMatchObject({ project_id: "p1", status: "queued" });
     expect(state.inserts[0].result).toBeUndefined();
     expect(state.updates).toHaveLength(0);
+  });
+
+  it("최신 데이터로 다시 분석: 질문에 기간이 없었으면 AI 없이 오늘 기준 최근 N분기로 다시 잡는다", async () => {
+    const period = {
+      from: "2024Q1",
+      to: "2024Q4",
+      specified: false,
+      reason: "기간 미지정",
+      clipped: false,
+    };
+    state.original!.analysis_request = {
+      ...(state.original!.analysis_request as object),
+      intent: "recent",
+      groupBy: "quarter",
+      period,
+    };
+    await rerun(true);
+    const saved = state.inserts[0].analysis_request as { period: typeof period };
+    expect(saved.period.to).toBe(latestAvailableQuarter());
+    expect(saved.period.from).toBe(addQuarters(latestAvailableQuarter(), -3));
+    expect(saved.period.specified).toBe(false);
+
+    // 질문에 기간이 있었으면 그대로
+    state.inserts = [];
+    state.original!.analysis_request = {
+      ...(state.original!.analysis_request as object),
+      period: { ...period, specified: true },
+    };
+    await rerun(true);
+    expect((state.inserts[0].analysis_request as { period: typeof period }).period.to).toBe(
+      "2024Q4",
+    );
   });
 
   it("같은 멱등키로 다시 보내면 새로 만들지 않고 먼저 만든 분석을 돌려준다", async () => {

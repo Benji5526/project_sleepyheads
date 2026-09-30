@@ -50,3 +50,17 @@ export const RATIO_METRIC_INPUTS: Partial<
   operating_margin: { numerator: "operating_income", denominator: "revenue" },
   net_margin: { numerator: "net_income", denominator: "revenue" },
 };
+
+/**
+ * 금융업 공통 지표 변환 (TECH §7): 계산식은 같고 계정만 다르다 — 매출 = 영업수익, 영업이익률 = 영업이익 ÷ 영업수익.
+ * 숫자 라벨(Figure.label)에 드러내 금융사 값이 무엇으로 계산됐는지 보이게 한다.
+ */
+const FINANCIAL_METRIC_LABEL: Partial<Record<MetricId, string>> = {
+  revenue: "매출(영업수익)",
+  operating_margin: "영업이익률(영업이익÷영업수익)",
+  net_margin: "순이익률(순이익÷영업수익)",
+};
+
+export function metricLabelFor(metric: MetricId, isFinancial: boolean): string {
+  return (isFinancial ? FINANCIAL_METRIC_LABEL[metric] : undefined) ?? METRIC_LABEL[metric];
+}

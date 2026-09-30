@@ -59,7 +59,7 @@ insert into scope_block_patterns (pattern, category) values
   ('api key', 'manipulation');
 
 -- ============================================================
--- sectors (TECH §8) — 금융 4개만 is_financial = true
+-- sectors (TECH §8) — 금융 5개만 is_financial = true (TECH §7 금융업 판정)
 -- ============================================================
 insert into sectors (name, is_financial) values
   ('반도체', false), ('디스플레이', false), ('전자부품·장비', false), ('2차전지', false),
@@ -69,24 +69,35 @@ insert into sectors (name, is_financial) values
   ('화학', false), ('철강/비철금속', false), ('정유/에너지', false), ('전력/유틸리티', false),
   ('제약', false), ('바이오', false), ('의료기기', false),
   ('음식료', false), ('화장품', false), ('유통', false), ('의류/생활', false), ('여행/레저', false),
-  ('은행', true), ('증권', true), ('보험', true), ('금융지주', true),
-  ('지주회사', false), ('기타', false);
+  ('은행', true), ('증권', true), ('보험', true), ('금융지주', true), ('기타금융', true),
+  ('지주회사', false), ('기타', false)
+-- 마이그레이션(20261001090000)이 '기타금융'을 먼저 넣었을 수 있다
+on conflict (name) do nothing;
 
 -- ============================================================
--- sector_rules (TECH §8 업종코드 앞자리 예시)
--- ⚠️ 초기 예시만 채움. 전체 KSIC 매핑표는 WU-104에서 보강한다.
+-- sector_rules (TECH §8 업종코드 앞자리) — 가장 긴 접두어가 이긴다 (classify-sector.ts)
+-- WU-303 보강: 26·262·2621·282·641·649·64992·6612 (운영 DB 보정은 migrations/20261001090000)
 -- ============================================================
 insert into sector_rules (induty_prefix, sector_id)
 select r.prefix, s.id
 from (values
   ('261', '반도체'),
+  ('2621', '디스플레이'),
+  ('262', '전자부품·장비'),
+  ('26', '전자부품·장비'),
+  ('282', '2차전지'),
   ('21', '제약'),
   ('30', '자동차/부품'),
   ('311', '조선'),
   ('64', '은행'),
-  ('65', '보험')
+  ('641', '은행'),
+  ('649', '기타금융'),
+  ('64992', '금융지주'),
+  ('65', '보험'),
+  ('6612', '증권')
 ) as r(prefix, sector_name)
-join sectors s on s.name = r.sector_name;
+join sectors s on s.name = r.sector_name
+on conflict (induty_prefix) do nothing;
 
 -- ============================================================
 -- sector_overrides (수동 지정, TECH §8 분류 순서 ①)
@@ -95,13 +106,31 @@ join sectors s on s.name = r.sector_name;
 -- (이 값들보다 먼저 시드가 적용돼도 문제없다 — sector_overrides는 companies를 FK로 참조하지 않는다).
 -- ============================================================
 insert into sector_overrides (corp_code, sector_id)
-values
+select o.corp_code, s.id
+from (values
   -- SK하이닉스: 업종코드(2612)로도 반도체로 분류되지만, "수동 지정이 규칙보다 우선"임을
   -- 보여주는 완료조건 샘플이라 여기 둔다 (WU-104 완료조건 "SK하이닉스 → 반도체(직접 지정)").
-  ('00164779', (select id from sectors where name = '반도체')),
-  -- KB금융지주: 업종코드 64992가 sector_rules의 "64" 규칙(은행)에 걸려 은행으로 잘못
-  -- 분류되는 걸 막는다 — 지주회사는 은행과 다른 섹터다.
-  ('00688996', (select id from sectors where name = '금융지주'));
+  ('00164779', '반도체'),
+  -- KB금융지주: 업종코드 64992 (지금은 "64992" 규칙으로도 금융지주 — 처음 샘플이라 그대로 둔다)
+  ('00688996', '금융지주'),
+  -- WU-303: 업종코드만으로는 틀리는 대표 기업 + 경쟁사 자동 선택(get_peers) 후보
+  ('00126380', '반도체'),        -- 삼성전자 (업종 264 통신장비)
+  ('00369657', '반도체'),        -- 리노공업 (반도체 검사용 소켓, 업종 2629)
+  ('00161383', '반도체'),        -- 한미반도체
+  ('00160843', '반도체'),        -- DB하이텍
+  ('00126371', '전자부품·장비'), -- 삼성전기
+  ('00382199', '금융지주'),      -- 신한지주
+  ('00547583', '금융지주'),      -- 하나금융지주
+  ('01350869', '금융지주'),      -- 우리금융지주
+  ('00149646', '은행'),          -- 기업은행
+  ('00126292', '기타금융'),      -- 삼성카드 (업종 64913)
+  ('01515323', '2차전지'),       -- LG에너지솔루션
+  ('00126362', '2차전지'),       -- 삼성SDI
+  ('00164742', '자동차/부품'),   -- 현대자동차
+  ('00106641', '자동차/부품')    -- 기아
+) as o(corp_code, sector_name)
+join sectors s on s.name = o.sector_name
+on conflict (corp_code) do nothing;
 
 -- ============================================================
 -- account_map (TECH §6.5 표준 계정 ID -> 계정명 대체 목록)

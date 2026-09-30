@@ -32,10 +32,21 @@ import {
 } from "./diagnostics";
 import { fetchEventDisclosures } from "./disclosures-tool";
 import { createFigureAllocator } from "./figures";
-import { buildCharts, buildDataBasis, buildUsedData, sumChartOptions } from "./present";
+import {
+  buildCharts,
+  buildDataBasis,
+  buildUsedData,
+  comparisonChartOptions,
+  comparisonFlags,
+  FINANCIAL_CONVERSION_FLAG,
+  FINANCIAL_FOOTNOTE,
+  sumChartOptions,
+  unavailableFlags,
+} from "./present";
 import {
   buildAnnualSeries,
   buildCompanyComparisonSeries,
+  comparisonQuarter,
   buildQuarterlySeries,
   buildSumSeries,
   sumPeriods,
@@ -162,18 +173,22 @@ export async function runAnalysis(
     }
   }
 
-  // 결측 "해당 분기 제외" — 같은 출처면 늘 같은 분기가 빠진다 (재실행에서도 다시 계산)
-  const excludedQuarters = new Set<Quarter>();
+  // 결측 "해당 분기 제외" — **기업별로** 뺀다. 같은 출처면 늘 같은 분기가 빠진다 (재실행에서도 다시 계산).
+  // 비교는 기업마다 자기 분기만 빠지고(한 기업 결측 때문에 다른 기업의 기준 분기가 밀리지 않게),
+  // 합계는 한 칸에 모든 기업이 있어야 해서 누구 하나라도 뺀 분기는 그 칸이 빠진다 (buildResult).
+  const excludedByCorp = new Map<string, Set<Quarter>>();
   if (decisions.missing_account === "exclude_quarter") {
     for (const company of companies) {
       const financials = financialsByCorp.get(company.corpCode)!;
-      for (const q of findMissingQuarters(financials, requestedQuarters, request.metrics)
-        .quarters) {
-        excludedQuarters.add(q);
-      }
+      const missing = findMissingQuarters(financials, requestedQuarters, request.metrics).quarters;
+      if (missing.length > 0) excludedByCorp.set(company.corpCode, new Set(missing));
     }
   }
-  const quarters = requestedQuarters.filter((q) => !excludedQuarters.has(q));
+  const excludedLabels = companies.flatMap((c) =>
+    [...(excludedByCorp.get(c.corpCode) ?? [])].map((q) =>
+      companies.length > 1 ? `${c.name} ${q}` : q,
+    ),
+  );
 
   const sources: DataSource[] = companies.flatMap(
     (c) => financialsByCorp.get(c.corpCode)!.sources ?? [],
@@ -190,10 +205,11 @@ export async function runAnalysis(
   const result = await buildResult(request, {
     companies,
     financialsByCorp,
-    quarters,
+    requestedQuarters,
+    excludedByCorp,
     dataVersionId,
     extraFlags: [
-      ...preprocessFlags(decisions, [...excludedQuarters]),
+      ...preprocessFlags(decisions, excludedLabels),
       ...(decisions.mixed_fs_div === "unify_ofs" && mixedFsDivCorps(sources).size > 0
         ? ["⚠ 별도 재무제표가 없는 보고서는 연결 기준 그대로 사용"]
         : []),
@@ -233,8 +249,10 @@ async function unifyToOfs(
 interface BuildResultInput {
   companies: AnalysisRequestView["peers"];
   financialsByCorp: Map<string, CompanyFinancials>;
-  /** 계산할 분기 (결측 제외 적용 후) */
-  quarters: Quarter[];
+  /** 요청 범위의 분기 */
+  requestedQuarters: Quarter[];
+  /** 기업(corpCode) → 결측 "해당 분기 제외"로 뺀 분기 */
+  excludedByCorp: ReadonlyMap<string, ReadonlySet<Quarter>>;
   dataVersionId: string;
   extraFlags: string[];
   toolOptions: { userId: string | null; analysisId: string | null; client: SupabaseClient };
@@ -245,13 +263,21 @@ async function buildResult(
   request: AnalysisRequestView,
   input: BuildResultInput,
 ): Promise<ResultObject> {
-  const { companies, financialsByCorp, quarters: requestedQuarters } = input;
+  const { companies, financialsByCorp } = input;
   const fsDivByCorp = new Map<string, FsDiv>();
   for (const company of companies) {
     const financials = financialsByCorp.get(company.corpCode)!;
     const anyRow = [...financials.metricsByQuarter.values()][0];
     fsDivByCorp.set(company.corpCode, anyRow?.fs_div ?? "CFS");
   }
+  const allowedFor = (corpCode: string) =>
+    input.requestedQuarters.filter((q) => !input.excludedByCorp.get(corpCode)?.has(q));
+  // 합계는 한 칸에 모든 기업이 있어야 한다 — 누구 하나라도 뺀 분기는 그 칸을 뺀다
+  const commonQuarters = input.requestedQuarters.filter((q) =>
+    companies.every((c) => !input.excludedByCorp.get(c.corpCode)?.has(q)),
+  );
+  // 분기·연도별은 대상 기업만 보여 주므로 대상 기업이 뺀 분기만 뺀다
+  const requestedQuarters = allowedFor(request.target.corpCode);
 
   const targetFinancials = financialsByCorp.get(request.target.corpCode)!;
   const targetFsDiv = fsDivByCorp.get(request.target.corpCode)!;
@@ -265,18 +291,30 @@ async function buildResult(
     fsDiv: fsDivByCorp.get(company.corpCode)!,
   }));
   // 연도별 합계면 1~4분기가 다 있는 해마다, 아니면 분기마다 한 칸
-  const periods = isSum ? sumPeriods(requestedQuarters, request.groupBy === "year") : [];
+  const periods = isSum ? sumPeriods(commonQuarters, request.groupBy === "year") : [];
   const sumByYear = periods.length > 0 && periods[0].quarters.length === 4;
   const sumResult = isSum
     ? buildSumSeries(samples, periods, request.metrics, request.groupBy === "sector", allocator)
     : null;
-  const latestRequestedQuarter =
-    requestedQuarters[requestedQuarters.length - 1] ?? request.period.to;
+
+  const comparison = isComparison
+    ? buildCompanyComparisonSeries(
+        samples,
+        new Map(
+          samples.map((s) => [
+            s.company.corpCode,
+            comparisonQuarter(s.financials, allowedFor(s.company.corpCode), request.period.to),
+          ]),
+        ),
+        request.metrics,
+        allocator,
+      )
+    : null;
 
   const { series, reportsUsed } = sumResult
     ? sumResult
-    : isComparison
-      ? buildCompanyComparisonSeries(samples, latestRequestedQuarter, request.metrics, allocator)
+    : comparison
+      ? comparison
       : request.groupBy === "year"
         ? buildAnnualSeries(
             targetFinancials,
@@ -295,10 +333,14 @@ async function buildResult(
 
   const charts = buildCharts(
     request,
-    series,
+    comparison?.chartSeries ?? series,
     allocator.figures,
     reportsUsed,
-    sumResult ? sumChartOptions(request, companies, periods.length, sumResult.excluded) : undefined,
+    sumResult
+      ? sumChartOptions(request, companies, periods.length, sumResult.excluded)
+      : comparison
+        ? comparisonChartOptions(comparison)
+        : undefined,
   );
 
   const disclosures =
@@ -309,12 +351,30 @@ async function buildResult(
   const basis = buildDataBasis(request, reportsUsed, targetFsDiv, input.dataVersionId);
   if (isSum)
     basis.flags.push(`합계: ${companies.map((c) => c.name).join("·")} ${companies.length}곳`);
+  // 여러 기업을 나란히 놓거나 더할 때 금융사가 섞이면 매출·영업이익률을 공통 지표로 바꿔 읽는다 (TECH §7).
+  // 분기·연도별은 대상 기업만 보여 주므로 붙이지 않는다
+  const mixesFinancial =
+    comparison?.hasFinancial ?? (isSum && samples.some((s) => s.company.sector.isFinancial));
+  if (companies.length > 1 && mixesFinancial) basis.flags.push(FINANCIAL_CONVERSION_FLAG);
+  if (comparison) {
+    basis.flags.push(
+      ...comparisonFlags(
+        samples,
+        comparison.quarterByCorp,
+        request.period.to,
+        input.excludedByCorp,
+      ),
+    );
+  }
   basis.flags.push(...input.extraFlags);
+  basis.flags.push(...unavailableFlags(allocator.figures));
+  // 표 아래 주석 (TECH §7 글자 그대로): 부채비율에 ※가 붙은 표
+  if (series.some((s) => s.footnoteMark === "※")) basis.flags.push(FINANCIAL_FOOTNOTE);
 
   const rowKeys = isSum
     ? periods.map((p) => p.x)
-    : isComparison
-      ? companies.map((c) => c.name)
+    : comparison
+      ? comparison.rowKeys
       : request.groupBy === "year"
         ? [...new Set(requestedQuarters.map((q) => `${parseQuarter(q).year}`))]
         : requestedQuarters;
