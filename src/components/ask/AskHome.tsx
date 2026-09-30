@@ -56,11 +56,20 @@ export function AskHome() {
         router.push(`/onboarding?next=${encodeURIComponent("/")}`);
         return;
       }
+      const code = error instanceof ApiRequestError ? error.code : null;
+      // 연결 끊김·"같은 질문 처리 중"(409)이면 다음에 누를 때도 같은 키를 보낸다 — 새 키면 질문 수가 또 차감된다
       retryKey.current =
-        error instanceof ApiRequestError && error.code === "NETWORK_ERROR"
-          ? { question: trimmed, key }
-          : null;
-      setNotice(describeError(error));
+        code === "NETWORK_ERROR" || code === "INVALID_STATE" ? { question: trimmed, key } : null;
+      setNotice(
+        code === "INVALID_STATE"
+          ? {
+              ...describeError(error),
+              title: "같은 질문을 처리하고 있습니다",
+              body: "앞서 보낸 질문이 아직 처리 중입니다. 잠시 후 다시 눌러 주세요. 질문 수는 한 번만 차감됩니다.",
+              requestId: null,
+            }
+          : describeError(error),
+      );
       void refresh();
     }
   }
@@ -106,22 +115,22 @@ export function AskHome() {
     </>
   );
 
-  if (!anonymous) {
-    return (
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-16 sm:py-24">
-        {askArea}
-      </main>
-    );
-  }
+  // 로그인 상태를 확인하는 동안에도 예시를 미리 받아 둔다 — 비로그인으로 판정되면 바로 보이게.
+  // 입력창은 어느 상태든 같은 자리에 두어, 판정이 끝날 때 다시 그려지며 입력 위치를 잃지 않게 한다
+  const guestPossible = status === "loading" || anonymous;
 
-  // 비로그인: 입력창은 위에 두고 그 아래로 예시 분석을 펼친다
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-      <div className="mx-auto max-w-2xl">{askArea}</div>
-      <div className="mt-14 border-t border-line pt-10 sm:mt-20">
-        <GuestExampleSection onBlocked={promptLogin} />
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 sm:px-6">
+      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center py-16 sm:py-24">
+        {askArea}
       </div>
-      <LoginPromptDialog open={loginPrompt} onClose={() => setLoginPrompt(false)} />
+      {guestPossible && (
+        // 비로그인: 입력창 아래로 예시 분석을 펼친다
+        <div hidden={!anonymous} className="border-t border-line pt-10 pb-16">
+          <GuestExampleSection onBlocked={promptLogin} />
+        </div>
+      )}
+      {anonymous && <LoginPromptDialog open={loginPrompt} onClose={() => setLoginPrompt(false)} />}
     </main>
   );
 }

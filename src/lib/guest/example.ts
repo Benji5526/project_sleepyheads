@@ -99,9 +99,10 @@ export async function hasNewRegularReport(
     { client },
   );
   if (res.status === "013") return false; // 조회된 공시 없음
-  const sinceDay = kstDartDate(since);
-  // 같은 날 접수된 보고서는 이미 예시에 들어갔을 수 있으므로 다음 날부터 새 것으로 본다
-  return (res.list ?? []).some((item) => item.rcept_dt > sinceDay);
+  // 목록 조회는 날짜 단위라, 만든 날 접수된 보고서도 새 것으로 본다. 예약 실행(04시)이 만든 예시라면
+  // 그날 접수분은 항상 그 뒤에 나온 것이고, 수동 생성 뒤 같은 날 나온 보고서도 놓치지 않는다.
+  // 그 결과 한 번 더 만들어도 generatedAt이 다음 날로 넘어가 반복되지 않는다
+  return (res.list ?? []).length > 0;
 }
 
 export type RefreshReason = "forced" | "no_example" | "new_report" | "no_new_report";

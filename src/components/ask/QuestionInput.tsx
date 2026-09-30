@@ -18,6 +18,15 @@ export function wordBeforeCaret(
   return { word: match[1], start: caret - match[1].length };
 }
 
+/**
+ * 글자를 넣으려는 키인가 (비로그인 잠금용). 새로고침(F5·Ctrl+R)·찾기·화살표·Esc 같은 키는 브라우저·화면 읽기
+ * 프로그램 동작 그대로 둔다. "Process"는 한글 입력기가 조합 중에 보내는 키 이름이다
+ */
+function isTypingKey(event: React.KeyboardEvent): boolean {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return event.key.length === 1 || ["Enter", "Backspace", "Delete", "Process"].includes(event.key);
+}
+
 export function QuestionInput({
   value,
   onChange,
@@ -88,7 +97,7 @@ export function QuestionInput({
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (locked) {
-      if (event.key !== "Tab" && event.key !== "Shift") {
+      if (isTypingKey(event)) {
         event.preventDefault();
         onLocked?.();
       }

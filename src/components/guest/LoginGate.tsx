@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
+import type { SyntheticEvent } from "react";
 
 // 누르면 로그인 안내를 띄울 요소: 버튼·링크·접기/펼치기·입력창 (PRD F-G3)
 const INTERACTIVE = "a, button, summary, textarea, input, select, [role='button'], [role='option']";
@@ -19,17 +20,22 @@ export function LoginGate({
   children: React.ReactNode;
   className?: string;
 }) {
+  // 캡처 단계에서 먼저 가로채야 안쪽 버튼의 onClick·링크 이동·접기가 실행되지 않는다
+  function block(event: SyntheticEvent<HTMLDivElement>) {
+    const el = (event.target as HTMLElement).closest(INTERACTIVE);
+    if (!el || !event.currentTarget.contains(el)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onBlocked();
+  }
+
   return (
     <div
       className={className}
-      // 캡처 단계에서 먼저 가로채야 안쪽 버튼의 onClick·링크 이동·접기가 실행되지 않는다
-      onClickCapture={(event) => {
-        const el = (event.target as HTMLElement).closest(INTERACTIVE);
-        if (!el || !event.currentTarget.contains(el)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        onBlocked();
-      }}
+      onClickCapture={block}
+      // 가운데 버튼 클릭(새 탭 열기)과 오른쪽 클릭 메뉴("새 탭에서 열기")도 막는다
+      onAuxClickCapture={block}
+      onContextMenuCapture={block}
     >
       {children}
     </div>
@@ -47,6 +53,8 @@ export function LoginPromptDialog({
   next?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // 창 안에서 누른 채(글자 선택 등) 바깥에서 뗀 경우는 닫지 않도록, 누른 곳을 기억한다
+  const pressedOnBackdrop = useRef(false);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -59,9 +67,13 @@ export function LoginPromptDialog({
     <dialog
       ref={ref}
       onClose={onClose}
-      // 창 바깥(어두운 배경)을 누르면 닫는다
+      // 창 바깥(어두운 배경)을 누르면 닫는다. 안쪽 여백은 모두 div라, dialog 자체가 눌렸다면 바깥이다
+      onMouseDown={(event) => {
+        pressedOnBackdrop.current = event.target === event.currentTarget;
+      }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (pressedOnBackdrop.current && event.target === event.currentTarget) onClose();
+        pressedOnBackdrop.current = false;
       }}
       aria-labelledby="login-prompt-title"
       className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-line bg-surface p-0 text-ink shadow-xl backdrop:bg-black/40"

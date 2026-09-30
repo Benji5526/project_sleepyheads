@@ -97,6 +97,7 @@ describe("G1 GET /api/guest/example", () => {
 
     const res = await guestGet(new NextRequest("http://localhost/api/guest/example"), noParams);
     expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toContain("s-maxage=600");
     const body = (await res.json()) as { data: { question: string; generatedAt: string } };
     expect(body.data.question).toBe(GUEST_EXAMPLE_QUESTION);
     expect(body.data.generatedAt).toBe(saved.generated_at);
@@ -149,14 +150,15 @@ describe("refreshGuestExample (C2)", () => {
     expect(db.rows).toHaveLength(1);
   });
 
-  it("만든 날 접수된 보고서는 새 것으로 보지 않는다", async () => {
+  it("만든 날 접수된 보고서도 새 것으로 본다 — 수동 생성 뒤 같은 날 나온 보고서를 놓치지 않게", async () => {
     const db = fakeDb([saved]);
     mocks.dartFetch.mockResolvedValue({
       status: "000",
       list: [{ rcept_dt: "20260820", report_nm: "반기보고서 (2026.06)" }],
     });
+    resolvedPipeline();
     const out = await refreshGuestExample({ client: db.client, now: NOW });
-    expect(out.regenerated).toBe(false);
+    expect(out).toEqual({ regenerated: true, reason: "new_report" });
   });
 
   it("새 정기보고서가 나왔으면 다시 만든다", async () => {

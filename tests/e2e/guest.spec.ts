@@ -64,6 +64,10 @@ test("입력창·예시 질문 칩·예시 안의 모든 버튼·링크가 로�
   await page.keyboard.press("a");
   await expectPromptThenClose(page, "입력창 글자 입력");
   await expect(input).toHaveValue("");
+  // 글자를 넣지 않는 키(화살표 등)는 안내 없이 브라우저 동작 그대로
+  await input.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(dialog(page)).toBeHidden();
 
   await page.getByRole("button", { name: "질문하기" }).click();
   await expectPromptThenClose(page, "질문하기");
@@ -82,6 +86,13 @@ test("입력창·예시 질문 칩·예시 안의 모든 버튼·링크가 로�
     const label = (await control.innerText()).trim() || (await control.getAttribute("aria-label"));
     await control.click();
     await expectPromptThenClose(page, `예시 안 "${label}"`);
+  }
+
+  // 가운데 버튼 클릭(새 탭 열기)도 막는다
+  const link = example.locator("a:visible").first();
+  if ((await link.count()) > 0) {
+    await link.click({ button: "middle" });
+    await expectPromptThenClose(page, "링크 가운데 버튼");
   }
 
   // 원래 동작은 일어나지 않았다: 화면 이동 없음, 새 탭 없음, 접힌 것은 그대로, 표로 바뀌지 않음
