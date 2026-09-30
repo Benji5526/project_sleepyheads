@@ -6,6 +6,28 @@ const KIND: Record<InsightKind, { label: string; className: string }> = {
   watch: { label: "확인할 점", className: "border border-line text-muted" },
 };
 
+function isWebUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/** 기사 발행 시각(UTC) → 한국 날짜 "2026. 9. 29." — 서버·브라우저 어디서 그려도 같은 값 */
+const KST_DATE = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+});
+
+function kstDate(iso: string): string {
+  const time = Date.parse(iso);
+  return Number.isNaN(time) ? "" : KST_DATE.format(time);
+}
+
 /**
  * 오른쪽 분석 글 (PRD F-V6, F-V11~F-V13): 결론 → 투자 포인트 → 근거 숫자(접힘) → 뉴스 단서 → 주의사항.
  * 결론 + 투자 포인트는 스마트폰 한 화면 안에 들어가야 한다 (data-testid="explanation-main").
@@ -133,25 +155,35 @@ export function ExplanationPanel({
       )}
 
       {explanation.newsClues.length > 0 && (
-        <section aria-labelledby="exp-news">
+        <section aria-labelledby="exp-news" data-testid="news-clues">
           <h3 id="exp-news" className="font-semibold">
-            뉴스 단서 <span className="text-sm font-normal text-muted">참고용</span>
+            뉴스 단서
           </h3>
+          {/* PRD F-W3·F-W4: 뉴스는 근거 숫자와 구분되는 "참고용 단서"다 (WU-305) */}
+          <p className="mt-1 text-xs leading-5 text-muted">
+            뉴스는 참고용 단서입니다. 숫자 근거는 차트(공시 자료)만 씁니다.
+          </p>
           <ul className="mt-2 space-y-3">
             {explanation.newsClues.map((n) => (
-              <li key={n.newsId}>
-                <a
-                  href={n.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium underline underline-offset-4"
-                >
-                  {n.title}
-                </a>
+              <li key={n.newsId} data-testid="news-clue">
+                {/* 링크는 RSS가 준 주소 그대로 (TECH §10.2). http(s)가 아니면 링크로 만들지 않는다 */}
+                {isWebUrl(n.url) ? (
+                  <a
+                    href={n.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium underline underline-offset-4"
+                  >
+                    {n.title}
+                    <span className="sr-only"> (새 탭에서 열림)</span>
+                  </a>
+                ) : (
+                  <p className="font-medium">{n.title}</p>
+                )}
                 <p className="text-sm text-muted">
-                  {n.press}, {n.publishedAt.slice(0, 10)}
+                  {n.press} · <time dateTime={n.publishedAt}>{kstDate(n.publishedAt)}</time>
                 </p>
-                <p className="mt-1 text-sm leading-6">{n.gist}</p>
+                {n.gist && <p className="mt-1 text-sm leading-6">{n.gist}</p>}
               </li>
             ))}
           </ul>
