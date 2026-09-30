@@ -9,10 +9,13 @@ import { describeError, type ErrorNotice } from "@/components/ask/errorMessages"
 import { useSession } from "@/components/session/SessionProvider";
 import { clarify, getAnalysis, runStep } from "@/lib/api-client/analysis";
 import { ApiRequestError } from "@/lib/api-client/errors";
+import { ProjectPanel } from "@/components/project/ProjectPanel";
 import { ClarificationCard } from "./ClarificationCard";
+import { DiagnosisPanel } from "./DiagnosisPanel";
 import { DeclineCard } from "./DeclineCard";
 import { ResultView } from "./ResultView";
 import { StatusCard, describeStatus } from "./StatusCard";
+import { VersionBar } from "./VersionBar";
 
 type LoadState =
   | { kind: "loading" }
@@ -75,6 +78,10 @@ export function AnalysisScreen({ projectId }: { projectId: string }) {
     };
   }, [load]);
 
+  async function reload() {
+    setState(await load());
+  }
+
   async function choose(optionId: string) {
     if (!analysisId) return;
     setClarifyNotice(null);
@@ -109,7 +116,16 @@ export function AnalysisScreen({ projectId }: { projectId: string }) {
       {state.kind === "error" && <ErrorCard notice={state.notice} />}
 
       {state.kind === "ready" && (
-        <AnalysisBody analysis={state.analysis} onChoose={choose} clarifyNotice={clarifyNotice} />
+        <>
+          <AnalysisBody
+            analysis={state.analysis}
+            onChoose={choose}
+            clarifyNotice={clarifyNotice}
+            onChanged={reload}
+          />
+          {/* Phase 1 슬롯 (WU-201, 병준) */}
+          <ProjectPanel projectId={projectId} currentAnalysisId={state.analysis.id} />
+        </>
       )}
 
       {state.kind !== "loading" && (
@@ -130,10 +146,13 @@ function AnalysisBody({
   analysis,
   onChoose,
   clarifyNotice,
+  onChanged,
 }: {
   analysis: Analysis;
   onChoose: (optionId: string) => Promise<void>;
   clarifyNotice: ErrorNotice | null;
+  /** 전처리 선택·재실행 뒤 이 분석을 다시 불러온다 */
+  onChanged: () => void;
 }) {
   const status = describeStatus(analysis.status, analysis.stopReason);
 
@@ -156,6 +175,16 @@ function AnalysisBody({
       )}
 
       {status && <StatusCard {...status} />}
+
+      {/* Phase 1 슬롯 (WU-203 화면, 병준) — awaiting_preprocess일 때 진단 카드 */}
+      {analysis.status === "awaiting_preprocess" && (
+        <DiagnosisPanel analysis={analysis} onChanged={onChanged} />
+      )}
+
+      {(analysis.status === "succeeded" || analysis.status === "partial") && analysis.result && (
+        // Phase 1 슬롯 (WU-202, 예림) — 데이터 버전·재실행
+        <VersionBar analysis={analysis} onChanged={onChanged} />
+      )}
 
       {(analysis.status === "succeeded" || analysis.status === "partial") && analysis.result && (
         <ResultView

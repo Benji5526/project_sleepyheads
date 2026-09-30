@@ -6,6 +6,7 @@ export * from "./common";
 export * from "./explanation";
 export * from "./flow";
 export * from "./guest";
+export * from "./project";
 export * from "./request";
 export * from "./result";
 export * from "./status";
