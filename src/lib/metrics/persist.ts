@@ -50,9 +50,26 @@ export interface CalendarQuarterMetricsRow {
   calc_version: typeof CALC_VERSION;
 }
 
+/**
+ * 계산에 쓸 보고서 하나를 접수번호까지 못 박은 것 (WU-202 데이터 버전의 출처 한 줄).
+ * 같은 보고서라도 정정 공시가 나오면 새 접수번호의 행이 추가되고 옛 행에는 `superseded_by`가
+ * 붙는다 — 접수번호로 고르면 옛 버전도 언제든 같은 값으로 다시 읽힌다.
+ */
+export interface ReportPin {
+  bsnsYear: number;
+  reprtCode: ReprtCode;
+  fsDiv: FsDiv;
+  rceptNo: string;
+}
+
 export interface ComputeCalendarQuarterMetricsOptions {
   /** 테스트에서 가짜 Supabase 클라이언트를 주입할 때만 쓴다. */
   client?: SupabaseClient;
+  /**
+   * 주면 이 보고서들의 행만 읽는다(`superseded_by`와 무관하게 접수번호·연결/별도로 고름).
+   * 없으면 예전처럼 현재 값(`superseded_by is null`) 전부를 읽는다.
+   */
+  pins?: readonly ReportPin[];
 }
 
 interface ReportValueDbRow {
@@ -62,6 +79,7 @@ interface ReportValueDbRow {
   account_id: string;
   amount_3m: string | null;
   amount_cum: string | null;
+  source_rcept_no?: string;
 }
 
 type ReportsByYearAndCode = Map<
@@ -81,7 +99,9 @@ export async function computeCalendarQuarterMetrics(
   const admin = options.client ?? getSupabaseAdmin();
 
   const [reportRows, accountMap, company] = await Promise.all([
-    loadReportValues(admin, corpCode),
+    options.pins
+      ? loadPinnedReportValues(admin, corpCode, options.pins)
+      : loadReportValues(admin, corpCode),
     loadAccountMap(admin),
     loadCompany(admin, corpCode),
   ]);
@@ -239,6 +259,35 @@ async function loadReportValues(
     .is("superseded_by", null);
   if (error) throw new Error(`report_values 조회 실패: ${error.message}`);
   return (data ?? []) as unknown as ReportValueDbRow[];
+}
+
+/** `pins`에 적힌 보고서(연도·종류·연결/별도·접수번호)의 행만. 정정으로 대체된 옛 행도 포함한다. */
+async function loadPinnedReportValues(
+  admin: SupabaseClient,
+  corpCode: string,
+  pins: readonly ReportPin[],
+): Promise<ReportValueDbRow[]> {
+  if (pins.length === 0) return [];
+  const { data, error } = await admin
+    .from("report_values")
+    .select("bsns_year, reprt_code, fs_div, account_id, amount_3m, amount_cum, source_rcept_no")
+    .eq("corp_code", corpCode);
+  if (error) throw new Error(`report_values 조회 실패: ${error.message}`);
+  const wanted = new Set(pins.map(pinKey));
+  return ((data ?? []) as unknown as ReportValueDbRow[]).filter((row) =>
+    wanted.has(
+      pinKey({
+        bsnsYear: row.bsns_year,
+        reprtCode: row.reprt_code,
+        fsDiv: row.fs_div,
+        rceptNo: row.source_rcept_no ?? "",
+      }),
+    ),
+  );
+}
+
+function pinKey(pin: ReportPin): string {
+  return `${pin.bsnsYear}|${pin.reprtCode}|${pin.fsDiv}|${pin.rceptNo}`;
 }
 
 interface CompanyContext {

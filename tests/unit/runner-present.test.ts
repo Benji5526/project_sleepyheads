@@ -27,12 +27,15 @@ function request(overrides: Partial<AnalysisRequestView> = {}): AnalysisRequestV
   };
 }
 
+const VERSION_ID = "11111111-1111-8111-8111-111111111111";
+
 describe("buildDataBasis", () => {
   it("연도별 + YoY 요청이면 증감률을 표시하지 않는다는 안내가 붙는다", () => {
     const basis = buildDataBasis(
       request({ groupBy: "year", metrics: ["revenue", "yoy"] }),
       new Set(["2026 반기보고서"]),
       "CFS",
+      VERSION_ID,
     );
     expect(basis.flags).toContain(
       "연도별 보기에서는 증감률(YoY·QoQ)을 표시하지 않습니다 — 분기별로 봐 주세요",
@@ -44,6 +47,7 @@ describe("buildDataBasis", () => {
       request({ groupBy: "year", metrics: ["revenue"] }),
       new Set(["2026 반기보고서"]),
       "CFS",
+      VERSION_ID,
     );
     expect(basis.flags).toEqual([]);
   });
@@ -53,7 +57,14 @@ describe("buildDataBasis", () => {
       request({ groupBy: "quarter", metrics: ["revenue", "yoy"] }),
       new Set(["2026 반기보고서"]),
       "CFS",
+      VERSION_ID,
     );
     expect(basis.flags).toEqual([]);
+  });
+
+  it("데이터 버전 ID를 받은 그대로 넣고, 방금 계산한 결과라 새 버전 표시는 끈다 (WU-202)", () => {
+    const basis = buildDataBasis(request({}), new Set(), "CFS", VERSION_ID);
+    expect(basis.dataVersionId).toBe(VERSION_ID);
+    expect(basis.newerDataVersionAvailable).toBe(false);
   });
 });

@@ -1,6 +1,4 @@
 // WU-110: 계산된 Series·Figure를 ResultObject의 화면용 조각(Chart·DataBasis·UsedData)으로 묶는다.
-import { randomUUID } from "node:crypto";
-
 import type {
   AnalysisRequestView,
   Chart,
@@ -131,6 +129,8 @@ export function buildDataBasis(
   request: AnalysisRequestView,
   reportsUsed: ReadonlySet<string>,
   targetFsDiv: FsDiv,
+  /** 데이터 버전 ID (WU-202 `dataVersionIdFor`) */
+  dataVersionId: string,
 ): DataBasis {
   const flags: string[] = [];
   if (request.target.fiscalMonth !== 12) {
@@ -151,8 +151,8 @@ export function buildDataBasis(
     reports: [...reportsUsed],
     priceDate: null,
     calcVersion: CALC_VERSION,
-    // Step 2(WU-202)에서 dataset_versions로 재현성 있는 버전 관리를 붙이기 전까지의 자리표시자.
-    dataVersionId: randomUUID(),
+    dataVersionId,
+    // 방금 최신 보고서로 계산했으니 false. 나중에 새 공시가 들어오면 조회(analysis-view) 때 다시 판정한다
     newerDataVersionAvailable: false,
     flags,
   };

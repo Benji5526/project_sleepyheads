@@ -12,6 +12,7 @@ import {
 import { formatQuarter } from "@/lib/ask/quarter";
 import { createConcurrencyGate } from "@/lib/quota/concurrency";
 import { reportsNeededForFiscalQuarters } from "@/lib/financials/period";
+import { pinsOf, type DataSource } from "@/lib/versions/version";
 import {
   type FiscalRef,
   mapCalendarRangeToFiscalQuarters,
@@ -32,6 +33,8 @@ export interface CompanyFinancials {
   quartersWithoutReport?: ReadonlySet<Quarter>;
   /** 결산월 — 근거 보고서 이름을 OpenDART 연도로 보여 줄 때 쓴다 (없으면 12월) */
   accMt?: number;
+  /** 계산에 쓴 보고서 출처 (WU-202 데이터 버전). 테스트용 가짜 값에서는 비어 있을 수 있다 */
+  sources?: DataSource[];
 }
 
 export interface EnsureCompanyFinancialsOptions {
@@ -43,6 +46,7 @@ export interface EnsureCompanyFinancialsOptions {
 /**
  * `company`의 [`from`, `to`] 범위를 채우는 보고서를 확보(캐시 우선)하고, 달력 분기 지표를 계산한다.
  * 이미 수집된 보고서는 `ensureReportValues`가 외부 호출 없이 곧바로 끝낸다(WU-105 완료조건).
+ * 계산은 이번에 확인한 보고서의 접수번호로 못 박아서 한다(WU-202) — 같은 출처로 다시 계산하면 같은 숫자.
  */
 export async function ensureCompanyFinancials(
   company: CompanyRef,
@@ -68,8 +72,32 @@ export async function ensureCompanyFinancials(
     ),
   );
 
+  const sources: DataSource[] = fetched.map((r) => ({
+    corpCode: company.corpCode,
+    bsnsYear: r.bsnsYear,
+    reprtCode: r.reprtCode,
+    fsDiv: r.fsDiv,
+    rceptNo: r.fsDiv ? r.rceptNo : null,
+  }));
+  return financialsFromSources(company, from, to, sources, { client: options.client });
+}
+
+/**
+ * 정해진 출처(데이터 버전)만으로 계산한다 — 외부 호출 없음. 재실행(WU-202)과 전처리 선택을
+ * 적용한 재계산(WU-203)이 쓴다. 출처에 없는 보고서는 읽지 않는다.
+ */
+export async function financialsFromSources(
+  company: CompanyRef,
+  from: Quarter,
+  to: Quarter,
+  sources: readonly DataSource[],
+  options: { client?: SupabaseClient } = {},
+): Promise<CompanyFinancials> {
+  const fiscalRefByQuarter = mapCalendarRangeToFiscalQuarters(company.fiscalMonth, from, to);
+  const own = sources.filter((s) => s.corpCode === company.corpCode);
+
   const missingReports = new Set(
-    fetched.filter((r) => r.fsDiv === null).map((r) => `${r.bsnsYear}-${r.reprtCode}`),
+    own.filter((s) => s.fsDiv === null).map((s) => `${s.bsnsYear}-${s.reprtCode}`),
   );
   const quartersWithoutReport = new Set<Quarter>();
   for (const [quarter, ref] of fiscalRefByQuarter) {
@@ -80,7 +108,10 @@ export async function ensureCompanyFinancials(
     }
   }
 
-  const rows = await computeCalendarQuarterMetrics(company.corpCode, { client: options.client });
+  const rows = await computeCalendarQuarterMetrics(company.corpCode, {
+    client: options.client,
+    pins: pinsOf(own, company.corpCode),
+  });
   const metricsByQuarter = new Map<Quarter, CalendarQuarterMetricsRow>();
   for (const row of rows) {
     metricsByQuarter.set(formatQuarter(row.cal_year, row.cal_quarter), row);
@@ -91,5 +122,6 @@ export async function ensureCompanyFinancials(
     fiscalRefByQuarter,
     quartersWithoutReport,
     accMt: company.fiscalMonth,
+    sources: own,
   };
 }

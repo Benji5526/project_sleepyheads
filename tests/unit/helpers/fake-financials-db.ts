@@ -4,7 +4,7 @@ type Row = Record<string, unknown>;
 
 /**
  * WU-105 재무제표 수집 코드가 실제로 쓰는 체인만 지원하는 가짜 Supabase 클라이언트.
- * `select→eq/is→order→maybeSingle`(또는 바로 await), `insert(rows)→select(cols)`(또는 바로 await),
+ * `select→eq/is/in→order→maybeSingle`(또는 바로 await), `insert(rows)→select(cols)`(또는 바로 await),
  * `update(patch)→eq(col,val)`, `upsert(rows, {onConflict})`.
  */
 export function createFakeFinancialsDb(initial: Record<string, unknown[]> = {}) {
@@ -39,6 +39,10 @@ export function createFakeFinancialsDb(initial: Record<string, unknown[]> = {}) 
       },
       is(col: string, val: unknown) {
         filters.push((row) => (row[col] ?? null) === val);
+        return builder;
+      },
+      in(col: string, vals: unknown[]) {
+        filters.push((row) => vals.includes(row[col]));
         return builder;
       },
       order(col: string, opts: { ascending?: boolean } = {}) {
