@@ -6,8 +6,8 @@
 | 문서 종류 | WORK_UNITS (단위 작업 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.6 |
-| 기준 문서 | [PRD.md](./PRD.md) v0.6, [TECH_SPEC.md](./TECH_SPEC.md) v0.6, [API_SPEC.md](./API_SPEC.md) v0.3.5 |
+| 버전 | v0.3.7 |
+| 기준 문서 | [PRD.md](./PRD.md) v0.6, [TECH_SPEC.md](./TECH_SPEC.md) v0.6, [API_SPEC.md](./API_SPEC.md) v0.3.6 |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |
@@ -24,6 +24,7 @@
 | v0.3.4 | 2026-09-29 | WU-111 설명 작성 착수(🟨) — `src/lib/explain/`, `POST /step` 실행 흐름에 연결 |
 | v0.3.5 | 2026-09-30 | WU-114 질문 수 한도 착수(🟨) — `/api/me/usage`, `X-Questions-Remaining`, DB 분당 제한, 동시 중복 요청 1회 차감. 마이그레이션 `20260930010000` 운영 적용·운영 확인 남음 |
 | v0.3.6 | 2026-09-30 | **WU-115 ✅** 비로그인 예시(G1·C2·화면·로그인 안내 창), WU-113 "실제 서버 응답으로 재확인" 체크 (운영 핵심 통과 테스트 성공 2026-09-30 현준 확인 + 실제 SK하이닉스 결과로 화면 확인) |
+| v0.3.7 | 2026-09-30 | **WU-003 ✅** 완료조건 4/4 (Vercel 무료 플랜·결제 수단 없음 현준 확인), Supabase 하나로 유지 결정 기록. **WU-114 ✅** 완료조건 9/9 (운영 남은 질문 표시·차감 확인) |
 
 ---
 
@@ -51,7 +52,7 @@
 |---|---|---|---|---|---|
 | WU-001 | 프로젝트 뼈대·개발 환경 | 🤖 | S | — | ✅ |
 | WU-002 | 외부 API 키 발급 (DART·주가·OpenAI) | 👤🤖 | S | — | 🟨 |
-| WU-003 | Supabase·Vercel 연결과 첫 배포 | 👤🤖 | M | WU-001 | ⬜ |
+| WU-003 | Supabase·Vercel 연결과 첫 배포 | 👤🤖 | M | WU-001 | ✅ |
 
 ### Step 1 — 종목+질문으로 첫 분석
 | WU | 이름 | 담당 | 규모 | 선행 | 상태 |
@@ -69,7 +70,7 @@
 | WU-111 | 설명 작성 (숫자 자리표시자·실패 표시) | 🤖 | M | WU-110 | 🟨 |
 | WU-112 | 공통 레이아웃·하단 안내·약관 페이지 | 🤖 | M | WU-001 | ✅ |
 | WU-113 | 대기화면·결과 화면 (좌 차트 / 우 분석 글) | 🤖 | L | WU-111, WU-112 | 🟨 |
-| WU-114 | 질문 수 한도 | 🤖 | M | WU-108, WU-110 | 🟨 |
+| WU-114 | 질문 수 한도 | 🤖 | M | WU-108, WU-110 | ✅ |
 | WU-115 | 비로그인 대기화면·SK하이닉스 예시 | 🤖 | S | WU-113, WU-114 | ✅ |
 | **WU-199** | **Step 1 통과 테스트·배포 시연** | 👤🤖 | M | WU-101~115 | ⬜ |
 
@@ -227,10 +228,12 @@ flowchart LR
 - 🤖 환경변수 등록 안내, 연결 확인 코드, Supabase CLI 마이그레이션 연결
 
 **완료조건**
-- [ ] 로컬 앱에서 Supabase 연결 확인이 성공한다
-- [ ] `main` 푸시 시 Vercel이 자동 배포하고 `*.vercel.app` 주소에서 페이지가 뜬다
-- [ ] Vercel 환경변수에 서버 전용 키가 `NEXT_PUBLIC_` 없이 등록되어 있다
-- [ ] 두 서비스 모두 **무료 플랜**이다 (결제 수단 미등록)
+- [x] 로컬 앱에서 Supabase 연결 확인이 성공한다 (2026-09-29 현준 로컬 `pnpm check:keys` 6개 ✅)
+- [x] `main` 푸시 시 Vercel이 자동 배포하고 `*.vercel.app` 주소에서 페이지가 뜬다 (`https://projectsleepyheads.vercel.app`, PR 머지마다 자동 배포 기록)
+- [x] Vercel 환경변수에 서버 전용 키가 `NEXT_PUBLIC_` 없이 등록되어 있다 (2026-09-30 운영 번들 12개 파일에 secret key·`SUPABASE_SECRET_KEY`·`OPENAI_API_KEY` 등 없음, 서버 관리자 작업 정상)
+- [x] 두 서비스 모두 **무료 플랜**이다 (결제 수단 미등록) — Supabase Free(조직 "Benji chat bot"), Vercel 팀 `Project_Agent2` 무료 플랜·결제 수단 없음 (2026-09-30 현준 확인)
+
+**결정 (2026-09-30)**: Supabase 프로젝트는 `sleepyhead` 하나를 로컬·Preview·운영이 같이 쓴다 (API_SPEC §7.1). Supabase GitHub 연결은 머지 때 마이그레이션을 자동 적용하지 않는다 → 배포 뒤 `supabase db push` (API_SPEC §7.6).
 
 ---
 
@@ -249,7 +252,7 @@ flowchart LR
 - 모든 테이블 RLS: 🔒 테이블은 `owner_id = auth.uid()`, 🗄️ 테이블은 정책 없음
 - 시드: `sectors`, `sector_rules`, `sector_overrides`(SK하이닉스 포함), `account_map`, `issue_rules`(§15.5), `quota_config`(§4.7, §13), `scope_block_patterns`·`decline_messages`(§4.11), `decline_stats_daily` 표
 - DB 함수(API_SPEC §7.3): `consume_quota`, `refund_quota`, `check_and_record_api_usage`, `acquire_step_lock`, `delete_my_data` — `SECURITY DEFINER` + `anon`·`authenticated` 실행 권한 회수
-- `sleepyheads-dev`에 먼저 적용
+- `sleepyhead`에 먼저 적용 (프로젝트 하나로 유지 — API_SPEC §7.1)
 
 **완료조건**
 - [ ] 빈 DB에 마이그레이션을 적용하면 오류 없이 모든 테이블이 생긴다
@@ -577,15 +580,15 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 | 선행 | WU-108, WU-110 |
 
 **완료조건**
-- [ ] 21번째 질문은 429 `QUOTA_EXCEEDED`, 이미 만든 분석은 계속 열린다
-- [ ] 같은 질문을 동시에 2번 보내도 1회만 차감된다
-- [ ] 1분에 11번째 질문 관련 요청(`ask`·`clarify`·`rewrite`·`rerun`)은 429 `RATE_LIMITED`, 진행 상태 확인·단계 실행은 분당 120회까지 허용
-- [ ] AI 장애로 질문 해석이 실패하면 질문 수가 되돌려진다 (`refund_quota`)
-- [ ] 한국 시간 00:00에 초기화된다 (시각을 바꿔 테스트)
-- [ ] 화면에 남은 질문 수가 표시·갱신된다
-- [ ] 전체 AI 질문 상한(300) 도달 시 새 질문이 `SERVICE_BUDGET`으로 안내된다
-- [ ] 거절된 질문도 1회 차감되고, 하루 거절 11번째부터는 `429 DECLINE_LIMIT`
-- [ ] `quota_config` 값을 바꾸면 코드 수정 없이 한도가 바뀐다
+- [x] 21번째 질문은 429 `QUOTA_EXCEEDED`, 이미 만든 분석은 계속 열린다 (DB 테스트 21번째 거부, `ask-route` 테스트 429)
+- [x] 같은 질문을 동시에 2번 보내도 1회만 차감된다 (`quota_consumptions`·`already_consumed` — DB·`ask-duplicate` 테스트, 운영 2026-09-30 질문 2개 → 차감 2건·사용량 +2)
+- [x] 1분에 11번째 질문 관련 요청(`ask`·`clarify`·`rewrite`·`rerun`)은 429 `RATE_LIMITED`, 진행 상태 확인·단계 실행은 분당 120회까지 허용 (DB 함수 `check_request_rate` — DB 테스트, 운영 `rate_limit_counters` 기록 확인)
+- [x] AI 장애로 질문 해석이 실패하면 질문 수가 되돌려진다 (`refund_quota` — 한 번만·차감한 날 기준, DB·`ask-route` 테스트)
+- [x] 한국 시간 00:00에 초기화된다 (DB 테스트: 어제 20개를 쓴 회원도 오늘 새로 시작, `resetAt` 다음 KST 00:00)
+- [x] 화면에 남은 질문 수가 표시·갱신된다 (운영 2026-09-30 병준 확인: 질문 뒤 16 → 15/20)
+- [x] 전체 AI 질문 상한(300) 도달 시 새 질문이 `SERVICE_BUDGET`으로 안내된다 (`/api/ask` WU-109, `serviceStatus: budget_reached` 단위 테스트)
+- [x] 거절된 질문도 1회 차감되고, 하루 거절 11번째부터는 `429 DECLINE_LIMIT` (`/api/ask` WU-109 동작)
+- [x] `quota_config` 값을 바꾸면 코드 수정 없이 한도가 바뀐다 (DB 테스트: 25로 바꾸면 남은 수 변경, 분당 한도도 `quota_config`)
 
 ---
 
