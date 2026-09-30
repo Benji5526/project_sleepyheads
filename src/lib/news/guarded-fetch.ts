@@ -34,6 +34,10 @@ export class DomainPacer {
 
   async wait(hostname: string): Promise<void> {
     const now = this.deps.clock ?? Date.now;
+    // 간격이 이미 지난 도메인은 잊는다 — 오래 떠 있는 서버에서 목록이 끝없이 커지지 않게
+    for (const [host, at] of this.last) {
+      if (at + this.intervalMs <= now()) this.last.delete(host);
+    }
     const previous = this.last.get(hostname);
     if (previous !== undefined) {
       const gap = previous + this.intervalMs - now();
@@ -81,6 +85,8 @@ export async function guardedFetch(
     }
 
     if (response.status >= 300 && response.status < 400) {
+      // 이동 응답의 본문은 읽지 않고 닫는다 (연결을 붙잡지 않게)
+      await response.body?.cancel().catch(() => {});
       const location = response.headers.get("location");
       if (!location) return { ok: false, reason: "넘겨줄 주소 없는 이동 응답", status: 0 };
       current = new URL(location, check.url).toString();
@@ -89,4 +95,45 @@ export async function guardedFetch(
     return { ok: true, response, finalUrl: check.url };
   }
   return { ok: false, reason: "주소 이동이 너무 많음" };
+}
+
+/**
+ * 응답 본문을 글자로 읽되 **최대 바이트·제한 시간**을 지킨다. `fetchWithTimeout`의 시간 제한은 응답 머리까지만
+ * 걸리므로, 본문을 천천히 흘려보내는 서버에 붙잡히지 않도록 본문 읽기에도 따로 시간을 건다.
+ * 한도를 넘으면 거기까지만 돌려주고 연결을 끊는다. 시간이 다 되면 null.
+ */
+export async function readTextLimited(
+  response: Response,
+  maxBytes: number,
+  timeoutMs = ARTICLE_TIMEOUT_MS,
+): Promise<string | null> {
+  const reader = response.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), timeoutMs);
+  });
+  try {
+    while (size < maxBytes) {
+      const next = await Promise.race([reader.read(), timeout]);
+      if (next === "timeout") return null;
+      if (next.done) break;
+      chunks.push(next.value);
+      size += next.value.byteLength;
+    }
+  } finally {
+    clearTimeout(timer);
+    await reader.cancel().catch(() => {});
+  }
+  const bytes = new Uint8Array(Math.min(size, maxBytes));
+  let offset = 0;
+  for (const chunk of chunks) {
+    const part = chunk.subarray(0, bytes.length - offset);
+    bytes.set(part, offset);
+    offset += part.length;
+    if (offset >= bytes.length) break;
+  }
+  return new TextDecoder().decode(bytes);
 }

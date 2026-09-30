@@ -25,6 +25,7 @@ import type { NewsClue } from "@/contracts";
 import type { llmCall, LlmUsage } from "@/lib/llm/client";
 import { containsBannedWord } from "@/lib/explain/banned-words";
 import { QuotaExceededError } from "@/lib/quota/errors";
+import { todayKst } from "@/lib/quota/kst";
 import { newsFetch } from "@/lib/quota/news-fetch";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { readArticleExcerpt } from "./article";
@@ -113,11 +114,6 @@ function isUsableItem(item: RssItem, companyName: string): boolean {
   return !containsBannedWord(item.title) && !ADVICE_TITLE.test(item.title.replace(/\s+/g, ""));
 }
 
-/** ISO 시각 → 한국 날짜 YYYY-MM-DD */
-function kstDate(iso: string): string {
-  return new Date(Date.parse(iso) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
 function summarizeReasons(reasons: string[]): string[] {
   const counts = new Map<string, number>();
   for (const reason of reasons) counts.set(reason, (counts.get(reason) ?? 0) + 1);
@@ -180,7 +176,7 @@ export async function findNewsClues(
         newsId: `n${index + 1}`,
         title: item.title,
         press: item.press,
-        publishedDate: kstDate(item.publishedAt),
+        publishedDate: todayKst(new Date(item.publishedAt)),
         ...(read.ok ? { excerpt: read.excerpt } : {}),
       });
     }

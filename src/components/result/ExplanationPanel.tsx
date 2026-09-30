@@ -1,19 +1,11 @@
 import type { Chart, Explanation, InsightKind } from "@/contracts";
+import { isWebUrl } from "@/lib/news/web-url";
 
 const KIND: Record<InsightKind, { label: string; className: string }> = {
   positive: { label: "긍정 요인", className: "bg-accent-soft text-accent" },
   risk: { label: "위험 요인", className: "bg-notice-bg text-notice-ink" },
   watch: { label: "확인할 점", className: "border border-line text-muted" },
 };
-
-function isWebUrl(value: string): boolean {
-  try {
-    const { protocol } = new URL(value);
-    return protocol === "https:" || protocol === "http:";
-  } catch {
-    return false;
-  }
-}
 
 /** 기사 발행 시각(UTC) → 한국 날짜 "2026. 9. 29." — 서버·브라우저 어디서 그려도 같은 값 */
 const KST_DATE = new Intl.DateTimeFormat("ko-KR", {

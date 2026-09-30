@@ -228,6 +228,13 @@ describe("실패해도 분석은 끝까지 — 뉴스 없이 (WU-304 완료조�
     expect(llm).not.toHaveBeenCalled();
   });
 
+  it("RSS를 다시 시도하면 그 시도도 하루 사용량에 센다", async () => {
+    vi.spyOn(global, "fetch").mockImplementation(async () => new Response("", { status: 503 }));
+    const { run, db } = deps();
+    await run({ ...INPUT, keywords: [] });
+    expect(db.newsCalls()).toBe(2); // 첫 시도 + 재시도 1회
+  });
+
   it("네트워크 오류·시간 초과 → 빈 배열", async () => {
     vi.spyOn(global, "fetch").mockRejectedValue(new TypeError("fetch failed"));
     const result = await deps().run();

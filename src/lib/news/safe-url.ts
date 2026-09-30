@@ -31,8 +31,8 @@ function ipv6Blocked(ip: string): boolean {
   if (lower === "::" || lower === "::1") return true;
   const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (mapped) return ipv4Blocked(mapped[1]);
-  // ::ffff:7f00:1 처럼 16진수로 쓴 IPv4 대응 주소도 막는다
-  if (lower.startsWith("::ffff:")) return true;
+  // ::ffff:7f00:1 처럼 16진수로 쓴 IPv4 대응 주소, IPv4를 품는 NAT64(64:ff9b::/96)도 막는다
+  if (lower.startsWith("::ffff:") || lower.startsWith("64:ff9b:")) return true;
   const first = parseInt(lower.split(":")[0] || "0", 16);
   return (
     (first & 0xfe00) === 0xfc00 || // fc00::/7 고유 로컬(사설)
@@ -78,6 +78,10 @@ export async function checkFetchableUrl(
   }
 
   const host = stripBrackets(url.hostname.toLowerCase());
+  // IP를 직접 적은 주소는 이름 검사(점이 있는가 등)보다 먼저 판정한다 — IPv6에는 점이 없다
+  if (isIP(host)) {
+    return isBlockedIp(host) ? { ok: false, reason: "사설·예약 IP 주소" } : { ok: true, url };
+  }
   if (
     !host ||
     host === "localhost" ||
@@ -85,9 +89,6 @@ export async function checkFetchableUrl(
     !host.includes(".")
   ) {
     return { ok: false, reason: "내부 주소" };
-  }
-  if (isIP(host)) {
-    return isBlockedIp(host) ? { ok: false, reason: "사설·예약 IP 주소" } : { ok: true, url };
   }
 
   let addresses: string[];

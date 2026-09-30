@@ -6,7 +6,12 @@
 // Google 경유 링크는 요청하지 않고 곧바로 "제목만"으로 넘긴다. 언론사 주소가 직접 들어온 경우에만 읽는다.
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { guardedFetch, type DomainPacer, type GuardedFetchDeps } from "./guarded-fetch";
+import {
+  guardedFetch,
+  readTextLimited,
+  type DomainPacer,
+  type GuardedFetchDeps,
+} from "./guarded-fetch";
 import { isAllowedByRobots } from "./robots";
 
 export const ARTICLE_EXCERPT_CHARS = 4_000;
@@ -81,9 +86,8 @@ export async function readArticleExcerpt(
     return { ok: false, reason: "HTML이 아닌 응답" };
   }
 
-  const excerpt = extractArticleText((await response.text()).slice(0, MAX_HTML_BYTES)).slice(
-    0,
-    ARTICLE_EXCERPT_CHARS,
-  );
+  const html = await readTextLimited(response, MAX_HTML_BYTES);
+  if (html === null) return { ok: false, reason: "본문 읽기 5초 초과" };
+  const excerpt = extractArticleText(html).slice(0, ARTICLE_EXCERPT_CHARS);
   return excerpt ? { ok: true, excerpt } : { ok: false, reason: "본문을 찾지 못함" };
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readArticleExcerpt, extractArticleText } from "@/lib/news/article";
-import { DomainPacer, guardedFetch } from "@/lib/news/guarded-fetch";
+import { DomainPacer, guardedFetch, readTextLimited } from "@/lib/news/guarded-fetch";
 import { isAllowedByRobots, isPathAllowed, parseRobots } from "@/lib/news/robots";
 import { checkFetchableUrl, isBlockedIp } from "@/lib/news/safe-url";
 import { createNewsFakeDb } from "../fixtures/mock/news-db";
@@ -34,6 +34,7 @@ describe("내부 주소 차단 (TECH §17 외부 요청)", () => {
     "http://[::ffff:127.0.0.1]/a",
     "http://[fd00::1]/a",
     "http://[fe80::1]/a",
+    "http://[64:ff9b::7f00:1]/a",
     "ftp://example.com/a",
     "file:///etc/passwd",
     "https://user:pass@example.com/a",
@@ -51,6 +52,11 @@ describe("내부 주소 차단 (TECH §17 외부 요청)", () => {
       "10.0.0.1",
     ]);
     expect(check).toEqual({ ok: false, reason: "사설·예약 IP로 연결되는 주소" });
+  });
+
+  it("공개 IPv6 주소를 직접 적어도 통과 (점이 없어도 내부 주소로 보지 않는다)", async () => {
+    const check = await checkFetchableUrl("https://[2606:4700::1111]/a", publicDns);
+    expect(check.ok).toBe(true);
   });
 
   it("공개 주소는 통과", async () => {
@@ -144,7 +150,7 @@ Disallow:
     expect(isPathAllowed(rules, "/a/b")).toBe(true);
   });
 
-  it("robots.txt가 없으면(404) 허용, 서버 오류(503)면 금지 — 결과는 하루 캐시", async () => {
+  it("robots.txt가 없으면(404) 허용·하루 캐시, 서버 오류(503)면 금지·캐시 안 함", async () => {
     const db = createNewsFakeDb();
     const fetchSpy = vi
       .spyOn(global, "fetch")
@@ -157,7 +163,42 @@ Disallow:
     // 같은 도메인은 캐시를 쓴다 — 다시 요청하지 않는다
     expect(await isAllowedByRobots(new URL("https://a.example.com/news/2"), deps)).toBe(true);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(db.tables.robots_cache.map((r) => r.domain)).toEqual(["a.example.com", "b.example.com"]);
+    // 404(파일 없음)는 확정 답이라 캐시, 503(일시 오류)는 캐시하지 않는다
+    expect(db.tables.robots_cache.map((r) => r.domain)).toEqual(["a.example.com"]);
+  });
+});
+
+describe("본문 읽기 한도 (5초·최대 바이트)", () => {
+  it("본문을 천천히 흘려보내면 5초에서 끊는다", async () => {
+    vi.useFakeTimers();
+    try {
+      const stream = new ReadableStream<Uint8Array>({ start() {} }); // 머리만 오고 본문은 영영 안 옴
+      const pending = readTextLimited(new Response(stream), 1000, 5000);
+      await vi.advanceTimersByTimeAsync(5000);
+      await expect(pending).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("최대 바이트까지만 읽는다", async () => {
+    const text = await readTextLimited(new Response("가나다라마바사".repeat(1000)), 30);
+    expect(new TextEncoder().encode(text!).length).toBeLessThanOrEqual(30);
+  });
+});
+
+describe("robots.txt 일시 실패는 캐시하지 않는다", () => {
+  it("연결 실패 → 이번엔 금지, 다음 요청에서 다시 확인", async () => {
+    const db = createNewsFakeDb();
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(textResponse("User-agent: *\nAllow: /"));
+    const deps = { client: db.client, pacer: new DomainPacer(1000, noWait), resolve: publicDns };
+    expect(await isAllowedByRobots(new URL("https://c.example.com/news/1"), deps)).toBe(false);
+    expect(db.tables.robots_cache).toHaveLength(0);
+    expect(await isAllowedByRobots(new URL("https://c.example.com/news/1"), deps)).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });
 

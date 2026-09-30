@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkAndRecordApiUsage } from "./api-usage";
-import { UpstreamApiError } from "./errors";
+import { QuotaExceededError, UpstreamApiError } from "./errors";
 import { fetchWithTimeout } from "./fetch-with-timeout";
 import { logApiFailure } from "./log";
 import { withRetry } from "./retry";
@@ -35,14 +35,20 @@ export interface NewsFetchOptions {
 export async function newsFetch(url: URL, options: NewsFetchOptions = {}): Promise<string> {
   const { userId = null, analysisId = null, timeoutMs = DEFAULT_TIMEOUT_MS, client } = options;
 
-  await checkAndRecordApiUsage({ provider: "news", userId, calls: 1 }, client);
-
   try {
-    return await withRetry(() => requestOnce(url, timeoutMs), {
-      retries: MAX_RETRIES,
-      isRetryable: (error) => error instanceof UpstreamApiError && error.retryable,
-    });
+    // 재시도도 실제 요청이므로 시도마다 확인·기록한다 (하루 상한을 넘겨 재시도하지 않게)
+    return await withRetry(
+      async () => {
+        await checkAndRecordApiUsage({ provider: "news", userId, calls: 1 }, client);
+        return requestOnce(url, timeoutMs);
+      },
+      {
+        retries: MAX_RETRIES,
+        isRetryable: (error) => error instanceof UpstreamApiError && error.retryable,
+      },
+    );
   } catch (error) {
+    if (error instanceof QuotaExceededError) throw error; // 상한 도달은 장애가 아니다
     logApiFailure({
       provider: "news",
       message: error instanceof Error ? error.message : String(error),

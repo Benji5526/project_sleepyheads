@@ -6,7 +6,12 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NEWS_ROBOTS_TOKEN } from "@/lib/quota/news-fetch";
-import { guardedFetch, type DomainPacer, type GuardedFetchDeps } from "./guarded-fetch";
+import {
+  guardedFetch,
+  readTextLimited,
+  type DomainPacer,
+  type GuardedFetchDeps,
+} from "./guarded-fetch";
 
 export const ROBOTS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_ROBOTS_BYTES = 500_000;
@@ -129,24 +134,32 @@ async function writeCached(
   }
 }
 
+/** `cacheable: false` = 일시적인 실패(연결·5초 초과·서버 오류)라 하루 동안 기억하지 않는다 */
 async function fetchRobots(
   origin: string,
   deps: { pacer: DomainPacer } & GuardedFetchDeps,
-): Promise<RobotsRules> {
+): Promise<{ rules: RobotsRules; cacheable: boolean }> {
+  const unreachable = { rules: { mode: "disallow_all" as const, rules: [] }, cacheable: false };
   const result = await guardedFetch(`${origin}/robots.txt`, { ...deps, accept: "text/plain" });
-  if (!result.ok) return { mode: "disallow_all", rules: [] };
+  if (!result.ok) return unreachable;
 
   const { status } = result.response;
-  if (status >= 400 && status < 500) return { mode: "allow_all", rules: [] };
-  if (status < 200 || status >= 300) return { mode: "disallow_all", rules: [] };
+  if (status >= 400 && status < 500) {
+    await result.response.body?.cancel().catch(() => {});
+    return { rules: { mode: "allow_all", rules: [] }, cacheable: true };
+  }
+  if (status < 200 || status >= 300) {
+    await result.response.body?.cancel().catch(() => {});
+    return unreachable;
+  }
 
-  const body = (await result.response.text()).slice(0, MAX_ROBOTS_BYTES);
-  return parseRobots(body);
+  const body = await readTextLimited(result.response, MAX_ROBOTS_BYTES);
+  return body === null ? unreachable : { rules: parseRobots(body), cacheable: true };
 }
 
 /**
  * 이 기사 주소를 가져가도 되는지 언론사 robots.txt로 판단한다. 도메인별 결과는 하루 캐시.
- * 판단할 수 없으면(robots.txt 서버 오류·연결 실패) **가져가지 않는 쪽**으로 답한다.
+ * 판단할 수 없으면(robots.txt 서버 오류·연결 실패) **가져가지 않는 쪽**으로 답하고, 그 결과는 캐시하지 않는다.
  */
 export async function isAllowedByRobots(
   articleUrl: URL,
@@ -157,8 +170,9 @@ export async function isAllowedByRobots(
 
   let rules = await readCached(deps.client, domain, now);
   if (!rules) {
-    rules = await fetchRobots(articleUrl.origin, deps);
-    await writeCached(deps.client, domain, rules, now);
+    const fetched = await fetchRobots(articleUrl.origin, deps);
+    rules = fetched.rules;
+    if (fetched.cacheable) await writeCached(deps.client, domain, rules, now);
   }
   return isPathAllowed(rules, `${articleUrl.pathname}${articleUrl.search}`);
 }

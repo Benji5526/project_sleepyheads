@@ -1,6 +1,7 @@
 // Google 뉴스 RSS XML 해석 (TECH §3.3). 공식 API가 아닌 공개 피드라 형식이 예고 없이 바뀔 수 있다 —
 // 모양이 기대와 다르면 던지지 않고 `null`(형식 오류)을 돌려주고, 호출부는 "뉴스 없음"으로 넘어간다.
 import { XMLParser } from "fast-xml-parser";
+import { isWebUrl } from "./web-url";
 
 /** RSS `item` 하나를 정리한 것. **본문은 없다** — RSS에도 본문·요약은 오지 않는다(description은 링크 HTML뿐). */
 export interface RssItem {
@@ -30,16 +31,6 @@ function text(value: unknown): string {
     return typeof inner === "string" ? inner.trim() : "";
   }
   return "";
-}
-
-/** 화면 `href`에 넣어도 되는 주소인가 — `javascript:` 등 http(s)가 아닌 주소는 버린다 */
-function isWebUrl(value: string): boolean {
-  try {
-    const { protocol } = new URL(value);
-    return protocol === "https:" || protocol === "http:";
-  } catch {
-    return false;
-  }
 }
 
 function splitTitle(rawTitle: string, sourceName: string): { title: string; press: string } {
