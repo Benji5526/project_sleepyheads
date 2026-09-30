@@ -374,8 +374,42 @@ export function buildCompanyComparisonSeries(
     });
   }
 
+  // 증감률(QoQ·YoY)을 물었으면 기업마다 그 기업 비교 분기 기준으로 — 수업 Step 3 통과 테스트
+  // "직전 분기 대비 영업이익 변화와 감소한 경쟁사 비교" (2026-09-30 WU-399 운영 확인에서 빠진 것을 찾음)
+  const changeOps = (["qoq", "yoy"] as const).filter((m) => metrics.includes(m));
+  for (const changeOp of changeOps) {
+    const base = primaryChangeMetric(metrics);
+    const lag = changeOp === "yoy" ? 4 : 1;
+    const points: Series["points"] = [];
+    for (const sample of samples) {
+      const q = quarterOf(sample);
+      const current = metricAt(sample.financials, q, base);
+      const previous = sample.financials.metricsByQuarter.get(addQuarters(q, -lag))?.metrics[base];
+      const isProfit = base !== "revenue";
+      const computed: ChangeComputed =
+        changeOp === "yoy"
+          ? computeYoy(current, previous, isProfit)
+          : computeQoq(current, previous, isProfit);
+      const figure = allocator.add({
+        label: `${sample.company.name} ${METRIC_LABEL[base]} ${METRIC_LABEL[changeOp]} ${q}`,
+        unit: "PERCENT",
+        value: computed.value,
+        reason: computed.reason,
+        displayText: "signChange" in computed ? computed.signChange : undefined,
+        basis: { report: reportBasis(q, sample.financials), fsDiv: sample.fsDiv },
+      });
+      points.push({ x: rowLabel(sample), figureId: figure.id });
+    }
+    series.push({
+      key: changeOp,
+      label: `${METRIC_LABEL[base]} ${METRIC_LABEL[changeOp]}`,
+      unit: "PERCENT",
+      points,
+    });
+  }
+
   // 비교 그래프: 금융사가 있으면 부채비율을 빼고 자기자본비율로. 없으면 물은 지표 그대로(덧붙인 것은 표에만)
-  const chartKeys = new Set<string>(requested);
+  const chartKeys = new Set<string>([...requested, ...changeOps]);
   let stabilitySwitched = false;
   if (hasFinancial && chartKeys.has("debt_ratio")) {
     chartKeys.delete("debt_ratio");
