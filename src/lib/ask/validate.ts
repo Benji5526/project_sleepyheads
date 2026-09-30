@@ -38,6 +38,8 @@ const MAX_PEERS = 5;
 export type FinishValidationResult =
   | { type: "unsupported_question"; message: string }
   | { type: "out_of_range"; message: string }
+  // 기업 수 초과 (TECH §4.5 "기업 수 ≤ 6 — 초과 오류") → 413 TOO_LARGE
+  | { type: "too_large"; message: string }
   // hasOutOfScopePart: 범위 안 질문에 범위 밖 요청이 섞였는가 (TECH §4.11.1) — AnalysisRequestView에는
   // 없는 필드라 여기서 따로 들고 다니다, WU-111이 분석 글 끝에 안내 문구를 붙일 때 쓴다(§4.11.1, PRD F-U6).
   | { type: "resolved"; request: AnalysisRequestView; hasOutOfScopePart: boolean };
@@ -96,9 +98,15 @@ export async function finishValidation(
   target: CompanyRef,
   options: ValidateOptions = {},
 ): Promise<FinishValidationResult> {
-  const peerQueries = ai.companies
-    .filter((c) => c.role === "peer" && c.query !== undefined)
-    .slice(0, MAX_PEERS);
+  const requestedPeers = ai.companies.filter((c) => c.role === "peer" && c.query !== undefined);
+  // 조용히 앞 5곳만 비교하면 사용자는 빠진 기업을 모른다 — 넘으면 줄여 달라고 안내한다
+  if (requestedPeers.length > MAX_PEERS) {
+    return {
+      type: "too_large",
+      message: `한 번에 비교할 수 있는 기업은 대상 포함 ${MAX_COMPANIES}곳까지입니다. 비교할 기업을 ${MAX_PEERS}곳 이하로 줄여 다시 물어봐 주세요.`,
+    };
+  }
+  const peerQueries = requestedPeers;
 
   const peers: CompanyRef[] = [];
   for (const peerQuery of peerQueries) {

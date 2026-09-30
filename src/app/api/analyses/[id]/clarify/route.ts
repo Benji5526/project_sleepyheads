@@ -56,6 +56,7 @@ export const POST = route({ access: "member", questionRequest: true }, async (ct
   if (resumed.type === "unsupported_question")
     throw new HttpError("UNSUPPORTED_QUESTION", resumed.message);
   if (resumed.type === "out_of_range") throw new HttpError("OUT_OF_RANGE", resumed.message);
+  if (resumed.type === "too_large") throw new HttpError("TOO_LARGE", resumed.message);
 
   const { error: updateError } = await supabase
     .from("analyses")

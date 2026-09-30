@@ -100,6 +100,9 @@ export const POST = route(
       if (interpreted.type === "out_of_range") {
         throw new HttpError("OUT_OF_RANGE", interpreted.message);
       }
+      if (interpreted.type === "too_large") {
+        throw new HttpError("TOO_LARGE", interpreted.message);
+      }
       result = interpreted;
     } catch (err) {
       if (err instanceof HttpError) throw err; // 422는 질문 수를 차감한 채로 둔다 (API_SPEC Q1)

@@ -138,6 +138,19 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
     expect(result.type === "unsupported_question" && result.message).not.toContain("revenue");
   });
 
+  it("비교 기업이 5곳을 넘으면 조용히 자르지 않고 기업 수 초과로 안내한다 (TECH §4.5)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX]);
+    const peers = ["삼성전자", "LG전자", "현대차", "기아", "NAVER", "카카오"].map((query) => ({
+      query,
+      role: "peer" as const,
+    }));
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ companies: [{ query: "SK하이닉스", role: "target" }, ...peers] }),
+      { client },
+    );
+    expect(result.type).toBe("too_large");
+  });
+
   it("'2013년 매출'은 기간 밖", async () => {
     const { client } = createFakeCompaniesClient([SK_HYNIX]);
     const result = await validateAnalysisRequest(

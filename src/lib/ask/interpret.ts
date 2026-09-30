@@ -31,6 +31,7 @@ export type InterpretResult =
     }
   | { type: "unsupported_question"; message: string }
   | { type: "out_of_range"; message: string }
+  | { type: "too_large"; message: string }
   | { type: "resolved"; request: AnalysisRequestView; hasOutOfScopePart: boolean };
 
 export interface InterpretQuestionInput {

@@ -6,7 +6,7 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.4 |
+| 버전 | v0.3.5 |
 | 기준 문서 | [PRD](./PRD.md) v0.6 · [TECH_SPEC](./TECH_SPEC.md) v0.6 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
@@ -22,6 +22,7 @@
 | v0.3.2 | 2026-09-29 | Q4 `step` 최대 실행 시간 60초 → 300초 (운영 첫 질문이 시간 초과로 실패, §8.2) |
 | v0.3.3 | 2026-09-30 | WU-114 질문 수 한도: 요청 속도 제한을 DB 함수 `check_request_rate`로(§1.6·§7.3, 한도 값은 `quota_config`), 같은 멱등키 동시 요청 1회만 차감(`quota_consumptions`, `consume_quota.already_consumed`, Q1 처리 중이면 409), A5 `serviceStatus` 판정 기준(§4) |
 | v0.3.4 | 2026-09-30 | WU-115 비로그인 예시: G1 응답 타입 `GuestExample`·예시가 아직 없으면 `404`, C2 `?force=1`(관리자 수동 재생성)·새 보고서 판정(정기공시 목록 1회)·최대 실행 시간 120초 → 300초 |
+| v0.3.5 | 2026-09-30 | WU-199: 계산 불가 사유 `NO_REPORT`(그 분기 보고서가 전자공시에 없음, 013) 추가 — `MISSING_ACCOUNT`(보고서는 있는데 계정 값 없음)와 구분. Q1 비교 기업이 5곳을 넘으면 `413 TOO_LARGE`(조용히 자르지 않음, 질문 1회 사용) |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -95,7 +96,7 @@ flowchart LR
 | 금액 | **원 단위 정수** (화면에서 억·조 원으로 변환) |
 | 비율 | 퍼센트 숫자 (`12.3` = 12.3%) |
 | ID | UUID 문자열 |
-| 계산 불가 값 | `null` + 옆 필드 `reason`(`NO_PREV_PERIOD`, `ZERO_DENOMINATOR`, `MISSING_ACCOUNT`, `NO_PRICE`, `DEFICIT`, `CAPITAL_IMPAIRMENT`) |
+| 계산 불가 값 | `null` + 옆 필드 `reason`(`NO_PREV_PERIOD`, `ZERO_DENOMINATOR`, `MISSING_ACCOUNT`, `NO_REPORT`, `NO_PRICE`, `DEFICIT`, `CAPITAL_IMPAIRMENT`) |
 
 ### 1.5 공통 헤더
 | 헤더 | 방향 | 내용 |
@@ -154,6 +155,7 @@ type Quarter = `${number}Q${1 | 2 | 3 | 4}`;           // "2026Q2"
 type Unit = "KRW" | "PERCENT" | "TIMES" | "COUNT";      // 원, %, 배, 건
 type NullReason =
   | "NO_PREV_PERIOD" | "ZERO_DENOMINATOR" | "MISSING_ACCOUNT"
+  | "NO_REPORT"          // 그 분기 보고서가 전자공시에 없음 (제출 전·공시 없음, 013)
   | "NO_PRICE" | "DEFICIT" | "CAPITAL_IMPAIRMENT";
 
 interface CompanyRef {
@@ -547,7 +549,7 @@ interface Analysis {
     "questionCharged": true } } }
 ```
 
-오류: `400`, `401`, `403`, `404`(projectId), `409 INVALID_STATE`(같은 질문 처리 중), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`, `429 QUOTA_EXCEEDED`, `429 DECLINE_LIMIT`, `429 RATE_LIMITED`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
+오류: `400`, `401`, `403`, `404`(projectId), `409 INVALID_STATE`(같은 질문 처리 중), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`(비교 기업 5곳 초과, 질문 1회 사용), `429 QUOTA_EXCEEDED`, `429 DECLINE_LIMIT`, `429 RATE_LIMITED`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
 
 - 질문 해석이 AI 장애로 실패하면 `503 LLM_UNAVAILABLE`이며 **질문 수를 돌려준다**(차감 취소).
 - 같은 `Idempotency-Key` 질문을 처리하는 중에 다시 보내면(동시에 두 번) 질문 수를 다시 차감하지 않고 AI도 다시 부르지 않는다. 먼저 보낸 질문의 분석이 이미 저장됐으면 그 결과를, 아직 처리 중이면 `409 INVALID_STATE`("같은 질문을 처리하고 있습니다")를 돌려준다.

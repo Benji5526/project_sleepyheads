@@ -271,6 +271,30 @@ describe("buildAnnualSeries", () => {
   });
 });
 
+describe("보고서 없음(013)과 계정 값 없음 구분 (WU-199)", () => {
+  it("보고서가 아직 없는 분기는 NO_REPORT, 보고서는 있는데 값이 빈 분기는 MISSING_ACCOUNT", () => {
+    const financials: CompanyFinancials = {
+      ...financialsFromRows([
+        row(2026, 1, baseMetrics({ revenue: { value: null, reason: "MISSING_ACCOUNT" } })),
+      ]),
+      quartersWithoutReport: new Set(["2026Q2" as Quarter]),
+    };
+    financials.fiscalRefByQuarter.set("2026Q2" as Quarter, { bsnsYear: 2026, quarter: 2 });
+    const allocator = createFigureAllocator();
+
+    const { series } = buildQuarterlySeries(
+      financials,
+      "CFS",
+      ["2026Q1", "2026Q2"] as Quarter[],
+      ["revenue"],
+      allocator,
+    );
+
+    const reasons = series[0].points.map((p) => allocator.figures[p.figureId].reason);
+    expect(reasons).toEqual(["MISSING_ACCOUNT", "NO_REPORT"]);
+  });
+});
+
 describe("buildCompanyComparisonSeries", () => {
   it("기업마다 같은 분기의 값을 나란히 놓는다", () => {
     const a = financialsFromRows([row(2026, 2, baseMetrics({ operating_margin: { value: 15 } }))]);

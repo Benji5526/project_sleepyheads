@@ -14,6 +14,8 @@ export type NullReason =
   | "NO_PREV_PERIOD"
   | "ZERO_DENOMINATOR"
   | "MISSING_ACCOUNT"
+  /** 그 분기 보고서가 전자공시에 없다 (제출 전이거나 공시 없음, OpenDART 013) — 계정 값 없음과 구분 */
+  | "NO_REPORT"
   | "NO_PRICE"
   | "DEFICIT"
   | "CAPITAL_IMPAIRMENT";

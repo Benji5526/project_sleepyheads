@@ -4,6 +4,7 @@ import type { CompanyRef, MetricId, PeriodRange, Quarter, Series } from "@/contr
 import type { FsDiv } from "@/lib/financials/types";
 import { calendarAnnualFlow } from "@/lib/metrics/calendar-quarter";
 import { qoq as computeQoq, yoy as computeYoy } from "@/lib/metrics/formulas";
+import type { CalendarQuarterMetricsRow } from "@/lib/metrics/persist";
 import type { Computed } from "@/lib/metrics/types";
 import { addQuarters, compareQuarters, parseQuarter } from "@/lib/ask/quarter";
 import type { CompanyFinancials } from "./company-financials";
@@ -71,8 +72,7 @@ export function buildQuarterlySeries(
     let footnoteMark: "※" | undefined;
 
     for (const quarter of quarters) {
-      const row = financials.metricsByQuarter.get(quarter);
-      const computed = row?.metrics[metric] ?? { value: null, reason: "MISSING_ACCOUNT" as const };
+      const computed = metricAt(financials, quarter, metric);
       const report = reportBasis(quarter, financials.fiscalRefByQuarter);
       reportsUsed.add(report);
       const footnote = (computed as { footnoteMark?: "※" }).footnoteMark;
@@ -103,12 +103,10 @@ export function buildQuarterlySeries(
     const points: Series["points"] = [];
 
     for (const quarter of quarters) {
-      const current = financials.metricsByQuarter.get(quarter)?.metrics[base];
+      const current = metricAt(financials, quarter, base);
       const previous = financials.metricsByQuarter.get(addQuarters(quarter, -lag))?.metrics[base];
       const computed: Computed<number> =
-        changeOp === "yoy"
-          ? computeYoy(currentOrMissing(current), previous)
-          : computeQoq(currentOrMissing(current), previous);
+        changeOp === "yoy" ? computeYoy(current, previous) : computeQoq(current, previous);
       const report = reportBasis(quarter, financials.fiscalRefByQuarter);
 
       const figure = allocator.add({
@@ -132,8 +130,22 @@ export function buildQuarterlySeries(
   return { series, reportsUsed };
 }
 
-function currentOrMissing(value: Computed<bigint> | undefined): Computed<bigint> {
-  return value ?? { value: null, reason: "MISSING_ACCOUNT" };
+/**
+ * 한 분기의 지표 값. 비어 있을 때 그 분기 보고서 자체가 없으면(013) "보고서 없음",
+ * 보고서는 있는데 계정을 못 찾았으면 "계정 값 없음"으로 구분한다.
+ */
+function metricAt<M extends keyof CalendarQuarterMetricsRow["metrics"]>(
+  financials: CompanyFinancials,
+  quarter: Quarter,
+  metric: M,
+): NonNullable<CalendarQuarterMetricsRow["metrics"][M]> {
+  type Value = NonNullable<CalendarQuarterMetricsRow["metrics"][M]>;
+  const computed = financials.metricsByQuarter.get(quarter)?.metrics[metric];
+  if (computed && computed.value !== null) return computed as Value;
+  if (financials.quartersWithoutReport?.has(quarter)) {
+    return { value: null, reason: "NO_REPORT" } as Value;
+  }
+  return (computed ?? { value: null, reason: "MISSING_ACCOUNT" }) as Value;
 }
 
 /** groupBy = "year": 연간 값은 분기 합(흐름)·4분기말 값(저량)이다 — 분기 비율의 평균이 아니다(§6.3). */
@@ -158,13 +170,15 @@ export function buildAnnualSeries(
   const flowValueByYear = (year: number, metric: FlowMetricId): Computed<bigint> => {
     const values = ([1, 2, 3, 4] as const).map((q) => {
       const key = `${year}Q${q}` as Quarter;
-      const row = financials.metricsByQuarter.get(key);
       reportsUsed.add(reportBasis(key, financials.fiscalRefByQuarter));
-      const computed = row?.metrics[metric];
-      return computed?.value ?? null;
+      return metricAt(financials, key, metric);
     });
-    const total = calendarAnnualFlow(values);
-    return total === null ? { value: null, reason: "MISSING_ACCOUNT" } : { value: total };
+    const total = calendarAnnualFlow(values.map((v) => v.value));
+    if (total !== null) return { value: total };
+    return {
+      value: null,
+      reason: values.some((v) => v.reason === "NO_REPORT") ? "NO_REPORT" : "MISSING_ACCOUNT",
+    };
   };
 
   for (const metric of metrics) {
@@ -212,11 +226,7 @@ export function buildAnnualSeries(
     let footnoteMark: "※" | undefined;
     for (const year of years) {
       const key = `${year}Q4` as Quarter;
-      const row = financials.metricsByQuarter.get(key);
-      const computed = row?.metrics[metric as DirectMetricId] ?? {
-        value: null,
-        reason: "MISSING_ACCOUNT" as const,
-      };
+      const computed = metricAt(financials, key, metric as DirectMetricId);
       const footnote = (computed as { footnoteMark?: "※" }).footnoteMark;
       if (footnote) footnoteMark = footnote;
       const figure = allocator.add({
@@ -274,8 +284,7 @@ export function buildCompanyComparisonSeries(
     // 비교 기업 중 금융업이 있으면 부채비율 등에 ※를 단다 (분기·연도별 경로와 같게)
     let footnoteMark: "※" | undefined;
     for (const sample of samples) {
-      const row = sample.financials.metricsByQuarter.get(quarter);
-      const computed = row?.metrics[metric] ?? { value: null, reason: "MISSING_ACCOUNT" as const };
+      const computed = metricAt(sample.financials, quarter, metric);
       const footnote = (computed as { footnoteMark?: "※" }).footnoteMark;
       if (footnote) footnoteMark = footnote;
       const report = reportBasis(quarter, sample.financials.fiscalRefByQuarter);
