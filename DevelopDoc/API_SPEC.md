@@ -22,7 +22,7 @@
 | v0.3.2 | 2026-09-29 | Q4 `step` 최대 실행 시간 60초 → 300초 (운영 첫 질문이 시간 초과로 실패, §8.2) |
 | v0.3.3 | 2026-09-30 | WU-114 질문 수 한도: 요청 속도 제한을 DB 함수 `check_request_rate`로(§1.6·§7.3, 한도 값은 `quota_config`), 같은 멱등키 동시 요청 1회만 차감(`quota_consumptions`, `consume_quota.already_consumed`, Q1 처리 중이면 409), A5 `serviceStatus` 판정 기준(§4) |
 | v0.3.4 | 2026-09-30 | WU-115 비로그인 예시: G1 응답 타입 `GuestExample`·예시가 아직 없으면 `404`, C2 `?force=1`(관리자 수동 재생성)·새 보고서 판정(정기공시 목록 1회)·최대 실행 시간 120초 → 300초 |
-| v0.3.5 | 2026-09-30 | 증감률(YoY·QoQ)이 이익 지표에서 부호가 바뀌면 `value: null` + `reason` 없음 + `display`에 `흑자전환`·`적자전환`·`적자지속` (TECH §6.4). WU-199: 계산 불가 사유 `NO_REPORT`(그 분기 보고서가 전자공시에 없음, 013) 추가 — `MISSING_ACCOUNT`(보고서는 있는데 계정 값 없음)와 구분. Q1 비교 기업이 5곳을 넘으면 `413 TOO_LARGE`(조용히 자르지 않음, 질문 1회 사용) |
+| v0.3.5 | 2026-09-30 | **합계**(PRD F-N3): `AnalysisRequestView.aggregate?: "sum"` — 질문에 나온 기업들의 흐름 지표를 분기마다 더함(섹터별 가능, Step 1은 질문에 나온 기업 범위만). 증감률(YoY·QoQ)이 이익 지표에서 부호가 바뀌면 `value: null` + `reason` 없음 + `display`에 `흑자전환`·`적자전환`·`적자지속` (TECH §6.4). WU-199: 계산 불가 사유 `NO_REPORT`(그 분기 보고서가 전자공시에 없음, 013) 추가 — `MISSING_ACCOUNT`(보고서는 있는데 계정 값 없음)와 구분. Q1 비교 기업이 5곳을 넘으면 `413 TOO_LARGE`(조용히 자르지 않음, 질문 1회 사용) |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -192,6 +192,7 @@ interface AnalysisRequestView {
   period: PeriodRange;
   groupBy: "quarter" | "year" | "company" | "sector";
   needsNews: boolean;
+  aggregate?: "sum";                // 질문에 나온 기업(2~6곳)의 매출·영업이익·순이익을 분기마다 더함. groupBy "sector"면 섹터별로. 값 없는 기업은 빼고 차트 주석에 표시
 }
 ```
 

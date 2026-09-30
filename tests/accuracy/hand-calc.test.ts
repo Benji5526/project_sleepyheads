@@ -14,7 +14,11 @@ import type { DartFinancialStatementItem } from "@/lib/financials/types";
 import type { Computed } from "@/lib/metrics/types";
 import { ensureCompanyFinancials, type CompanyFinancials } from "@/lib/runner/company-financials";
 import { createFigureAllocator } from "@/lib/runner/figures";
-import { buildAnnualSeries, buildQuarterlySeries } from "@/lib/runner/series-builders";
+import {
+  buildAnnualSeries,
+  buildQuarterlySeries,
+  buildSumSeries,
+} from "@/lib/runner/series-builders";
 import { ACCOUNT_MAP_SEED_ROWS } from "../fixtures/mock/account-map";
 import { createFakeFinancialsDb } from "../unit/helpers/fake-financials-db";
 import dongwonMobility from "./fixtures/dongwon-mobility.json";
@@ -614,5 +618,83 @@ describe("④ WU-199 기본 질문 — 분기별 추이 (buildQuarterlySeries, 2
         expect(values).toEqual(LATEST_FOUR.map((q) => EXPECTED[key][q][index]));
       },
     );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ⑤ 엔진의 합계 기능 (buildSumSeries, PRD F-N3) = 손 계산
+// 위 ④는 기업별 엔진 값을 테스트에서 더했다. 여기서는 서비스가 실제로 쓰는 합계 함수가 같은 답을 내는지 본다.
+// ---------------------------------------------------------------------------
+
+function sample(key: SampleKey, sectorName = "") {
+  const ref = companyRef(key);
+  return {
+    company: { ...ref, sector: { ...ref.sector, name: sectorName } },
+    financials: financials[key],
+    fsDiv: (key === "leeno" ? "OFS" : "CFS") as "CFS" | "OFS", // 리노공업만 별도 기준 (위 fs_div 테스트)
+  };
+}
+
+function sumFigures(
+  series: ReturnType<typeof buildSumSeries>,
+  allocator: ReturnType<typeof createFigureAllocator>,
+) {
+  return new Map(
+    series.series.map((s) => [
+      s.key,
+      new Map(s.points.map((p) => [p.x, allocator.figures[p.figureId]])),
+    ]),
+  );
+}
+
+describe("⑤ 엔진 합계 기능 — 전체 매출(합계)·섹터별 합계 (WU-199 1번 조건)", () => {
+  it("비금융 5곳 매출 합계: 4개 분기 모두 손 계산과 같다", () => {
+    const allocator = createFigureAllocator();
+    const result = buildSumSeries(
+      NON_FINANCIAL.map((key) => sample(key)),
+      LATEST_FOUR,
+      ["revenue"],
+      false,
+      allocator,
+    );
+    const byQuarter = sumFigures(result, allocator).get("revenue_sum")!;
+    for (const quarter of LATEST_FOUR) {
+      expect(String(BigInt(Math.round(byQuarter.get(quarter)!.value!))), quarter).toBe(
+        EXPECTED_TOTAL_REVENUE[quarter],
+      );
+    }
+    expect(result.excluded).toEqual([]);
+  });
+
+  it("금융사를 섞으면 매출이 없는 금융사는 빼고 더하고, 뺀 사실을 알린다 (0으로 치지 않는다)", () => {
+    const allocator = createFigureAllocator();
+    const result = buildSumSeries(
+      [...NON_FINANCIAL, "kb" as SampleKey].map((key) => sample(key)),
+      ["2026Q2"],
+      ["revenue"],
+      false,
+      allocator,
+    );
+    const figure = sumFigures(result, allocator).get("revenue_sum")!.get("2026Q2")!;
+    expect(String(BigInt(Math.round(figure.value!)))).toBe(EXPECTED_TOTAL_REVENUE["2026Q2"]);
+    expect(result.excluded).toEqual(["KB금융 매출"]);
+  });
+
+  for (const [quarter, bySector] of Object.entries(EXPECTED_SECTOR_REVENUE)) {
+    it(`${quarter} 섹터별 매출 합계가 손 계산과 같다`, () => {
+      const allocator = createFigureAllocator();
+      const result = buildSumSeries(
+        NON_FINANCIAL.map((key) => sample(key, EXPECTED_SECTOR[key])),
+        [quarter as Quarter],
+        ["revenue"],
+        true,
+        allocator,
+      );
+      const figures = sumFigures(result, allocator);
+      for (const [sector, expected] of Object.entries(bySector)) {
+        const figure = figures.get(`revenue:${sector}`)!.get(quarter)!;
+        expect(String(BigInt(Math.round(figure.value!))), sector).toBe(expected);
+      }
+    });
   }
 });

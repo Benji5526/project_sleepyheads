@@ -149,6 +149,10 @@ export async function finishValidation(
     period: periodResult.period,
     groupBy: ai.group_by,
     needsNews: ai.needs_news,
+    // 합계는 더할 기업이 2곳 이상일 때만 뜻이 있다 (1곳이면 그 기업 값 그대로라 일반 분석으로 둔다)
+    ...(ai.operations.some((o) => o.op === "sum") && peers.length > 0
+      ? { aggregate: "sum" as const }
+      : {}),
   };
 
   return { type: "resolved", request, hasOutOfScopePart: ai.has_out_of_scope_part };

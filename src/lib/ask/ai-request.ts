@@ -28,7 +28,7 @@ export const AI_METRICS = [
 export const AI_GROUP_BY = ["quarter", "year", "company", "sector"] as const;
 export const AI_CHART_TYPES = ["bar", "line", "card", "table"] as const;
 export const AI_COMPANY_ROLES = ["target", "peer"] as const;
-export const AI_OPERATIONS = ["change", "compare"] as const;
+export const AI_OPERATIONS = ["change", "compare", "sum"] as const;
 export const AI_CHANGE_BASES = ["QoQ", "YoY"] as const;
 
 const aiCompanySchema = z.object({

@@ -1,6 +1,6 @@
 // WU-110: `aggregate`·`compute_metric`·`change` 도구 — 계산된 달력 분기 지표(WU-106)를
 // 요청된 묶음(groupBy)에 맞는 Series로 바꾼다. 차트와 표는 여기서 만든 Figure를 그대로 같이 쓴다.
-import type { CompanyRef, MetricId, PeriodRange, Quarter, Series } from "@/contracts";
+import type { CompanyRef, MetricId, NullReason, PeriodRange, Quarter, Series } from "@/contracts";
 import type { FsDiv } from "@/lib/financials/types";
 import { calendarAnnualFlow } from "@/lib/metrics/calendar-quarter";
 import { type ChangeComputed, qoq as computeQoq, yoy as computeYoy } from "@/lib/metrics/formulas";
@@ -311,4 +311,77 @@ export function buildCompanyComparisonSeries(
   }
 
   return { series, reportsUsed };
+}
+
+export interface BuildSumResult extends BuildQuarterlyResult {
+  /** 값이 없어 합계에서 뺀 기업·지표 ("KB금융 매출") — 차트 주석으로 알린다 */
+  excluded: string[];
+}
+
+/**
+ * 합계 (PRD F-N3, WU-199 "전체 매출(합계)·섹터별 합계"): 질문에 나온 기업들의 흐름 지표
+ * (매출·영업이익·순이익)를 분기마다 더한다. `bySector`면 기업의 섹터별로 따로 더한다.
+ * - 비율 지표(이익률·ROE·부채비율 등)는 더하면 뜻이 없어 넣지 않는다.
+ * - 값이 없는 기업(예: 금융사 매출)은 빼고 더한 뒤 `excluded`로 알린다 — 조용히 0으로 치지 않는다.
+ * - 한 그룹의 기업이 모두 비어 있으면 합계도 계산 불가다.
+ */
+export function buildSumSeries(
+  samples: CompanyMetricSample[],
+  quarters: Quarter[],
+  metrics: MetricId[],
+  bySector: boolean,
+  allocator: FigureAllocator,
+): BuildSumResult {
+  const series: Series[] = [];
+  const reportsUsed = new Set<string>();
+  const excluded = new Set<string>();
+  const flowMetrics = (FLOW_METRICS as readonly MetricId[]).filter((m) => metrics.includes(m));
+  const summed = flowMetrics.length > 0 ? (flowMetrics as FlowMetricId[]) : (["revenue"] as const);
+
+  const groups = new Map<string, CompanyMetricSample[]>();
+  for (const sample of samples) {
+    const key = bySector ? sample.company.sector.name || "기타" : "합계";
+    groups.set(key, [...(groups.get(key) ?? []), sample]);
+  }
+
+  for (const metric of summed) {
+    for (const [group, members] of groups) {
+      const points: Series["points"] = [];
+      for (const quarter of quarters) {
+        let total = BigInt(0);
+        let counted = 0;
+        let emptyReason: NullReason = "MISSING_ACCOUNT";
+        for (const sample of members) {
+          reportsUsed.add(`${sample.company.name} ${reportBasis(quarter, sample.financials)}`);
+          const computed = metricAt(sample.financials, quarter, metric);
+          if (computed.value === null) {
+            emptyReason = computed.reason;
+            excluded.add(`${sample.company.name} ${METRIC_LABEL[metric]}`);
+            continue;
+          }
+          total += computed.value;
+          counted += 1;
+        }
+        const label = bySector
+          ? `${group} ${METRIC_LABEL[metric]}`
+          : `${METRIC_LABEL[metric]} 합계`;
+        const figure = allocator.add({
+          label: `${label} ${quarter} (${counted}곳 합산)`,
+          unit: "KRW",
+          value: counted > 0 ? total : null,
+          reason: counted > 0 ? undefined : emptyReason,
+          basis: { report: `기업별 보고서 ${counted}곳 합산`, fsDiv: members[0].fsDiv },
+        });
+        points.push({ x: quarter, figureId: figure.id });
+      }
+      series.push({
+        key: bySector ? `${metric}:${group}` : `${metric}_sum`,
+        label: bySector ? `${group} ${METRIC_LABEL[metric]}` : `${METRIC_LABEL[metric]} 합계`,
+        unit: "KRW",
+        points,
+      });
+    }
+  }
+
+  return { series, reportsUsed, excluded: [...excluded] };
 }

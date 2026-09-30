@@ -29,4 +29,9 @@ export interface AnalysisRequestView {
   period: PeriodRange;
   groupBy: "quarter" | "year" | "company" | "sector";
   needsNews: boolean;
+  /**
+   * "sum" = 질문에 나온 기업들의 매출·영업이익·순이익을 분기마다 더한다 (PRD F-N3).
+   * groupBy가 "sector"면 섹터별로 따로 더한다. 기업이 2곳 이상일 때만 붙는다.
+   */
+  aggregate?: "sum";
 }

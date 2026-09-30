@@ -151,6 +151,25 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
     expect(result.type).toBe("too_large");
   });
 
+  it("'합계'를 물으면 기업이 2곳 이상일 때 aggregate: sum (PRD F-N3)", async () => {
+    const { client } = createFakeCompaniesClient([SK_HYNIX, HYUNDAI_MOTOR]);
+    const sumOp = { op: "sum" as const, metric: "revenue" as const, base: null, peers: null };
+    const two = await validateAnalysisRequest(
+      baseAiRequest({
+        companies: [
+          { query: "SK하이닉스", role: "target" },
+          { query: "현대차", role: "peer" },
+        ],
+        operations: [sumOp],
+      }),
+      { client },
+    );
+    expect(two.type === "resolved" && two.request.aggregate).toBe("sum");
+
+    const one = await validateAnalysisRequest(baseAiRequest({ operations: [sumOp] }), { client });
+    expect(one.type === "resolved" && one.request.aggregate).toBeUndefined();
+  });
+
   it("'2013년 매출'은 기간 밖", async () => {
     const { client } = createFakeCompaniesClient([SK_HYNIX]);
     const result = await validateAnalysisRequest(
