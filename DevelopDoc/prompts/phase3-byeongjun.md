@@ -15,9 +15,9 @@
 - `src/lib/limits/size.ts` 다듬기: 행 수 추정이 실제와 맞는지, 15만 행 초과 `TOO_LARGE` 안내, 차트 점 500개 초과 안내, 집계 30초 상한(TECH §12.5)
 - `pnpm test`에는 가벼운 판정 테스트만. 무거운 측정은 별도 설정(예: `vitest.perf.config.ts`, CI 제외)
 
-### 2. ~~OpenAI 키 여러 개 순차 사용~~ ✅ 현준이 먼저 함 (2026-09-30, `feat/WU-401-board-ui`)
+### 2. ~~OpenAI 키 여러 개 순차 사용~~ ✅ 현준이 먼저 함 (2026-09-30, main에 있음)
 - `src/lib/llm/client.ts`: 쉼표로 여러 키, 잔액·지출 한도 오류(공식 코드 4종 + `error.type` `insufficient_quota`)면 다음 키, 속도 제한은 그대로, 키 값은 로그에 없음. `pnpm check:keys`가 키마다 확인. 테스트 `tests/unit/llm-client.test.ts`
-- **남은 것(병준)**: 조원 키를 Vercel `OPENAI_API_KEY`에 쉼표로 넣기(본인 동의 후 — 사용자 안내 전에 Vercel 화면 메뉴 확인), 시연 전용 키를 개발에 쓰지 않는 방안 보고서에 제안. 이 파일은 통합 전까지 고치지 않는다(겹침 방지)
+- **남은 것(병준)**: 조원 키를 Vercel `OPENAI_API_KEY`에 쉼표로 넣기(본인 동의 후 — 사용자 안내 전에 Vercel 화면 메뉴 확인), 시연 전용 키를 개발에 쓰지 않는 방안 보고서에 제안. `llm/client.ts`는 main에 들어가 있으니 더 고칠 것이 있으면 이어서 고쳐도 된다
 
 ### 3. Phase 2 후속 (보고서 "다른 트랙에 부탁")
 - ~~`tests/unit/api/owner-routes.test.ts`: Q5·Q6을 "구현된 경로"로~~ ✅ 현준이 먼저 함 (Q5~Q8 모두 404만, 2026-09-30)

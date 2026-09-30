@@ -24,7 +24,7 @@
 - **운영(Vercel)에서 주가 API 실패** → 경쟁사가 "종목코드 순 (주가를 받지 못함)" (분석 `e2fc3367…`). 같은 요청이 로컬에서는 성공 — `market-cap.ts` 쪽 원인인지 병준님(Vercel 환경변수)과 함께 확인
 - ISC 섹터가 `기타`(반도체 검사 소켓) — 섹터 규칙·수동 지정 검토
 - DB하이텍 2026Q2: 반기보고서 3개월 값과 "반기 누적 − 1분기"가 3,190,705,373원 다르다 — TECH §6.2대로 3개월 값을 쓰는지 확인 (`STEP3_PASS_TEST.md` §3.4)
-- 위 세 파일(`period.ts`·`resolve.ts`·`series-builders.ts`)은 현준 브랜치에 있다 — 통합 전에 같은 곳을 고치면 겹치니, 더 고칠 것이 있으면 보고서 "다른 트랙에 부탁"에 적어 주세요
+- 위 파일(`ask/period.ts`·`companies/aliases.ts`·`resolve.ts`·`search.ts`·`runner/series-builders.ts`)의 현준 수정은 **이미 main에 있다**(2026-09-30 밤) — 내 브랜치에서 그대로 이어서 고쳐도 된다. 검토해 보고 이상하면 보고서에
 
 ## 하지 말 것
 - 소유표 밖 파일·잠긴 파일 수정 (`src/contracts/**`, `tools/types.ts`·`registry.ts`, `limits/size.ts`, `ResultView.tsx`·`AnalysisScreen.tsx`, `http.ts`, `route.ts`, `guards.ts`, `package.json`, `HANDOFF.md`), 병준님 `steps/**`, 현준님 화면·`news-tools.ts`·`explain/**`

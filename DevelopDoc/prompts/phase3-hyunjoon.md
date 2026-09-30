@@ -8,25 +8,13 @@
 3. `src/contracts/board.ts`(`BoardView`·`RewriteResponse`, 잠금) · `src/app/api/analyses/[id]/rewrite/route.ts`(Q9, 지금 501)
 4. `DevelopDoc/WORK_UNITS.md` **WU-399, WU-401, WU-402, WU-499** · `DevelopDoc/STEP3_PASS_TEST.md` · API_SPEC Q9·B1·B2 · TECH §12.3·§12.4
 
-## 할 일
-### 1. WU-399 Step 3 통과 테스트 (먼저 — 운영에서) — 🟨 1차 완료 2026-09-30 (`STEP3_PASS_TEST.md` §1·§2), QoQ·뉴스 표시 수정 배포 뒤 #1·#4·#5 재확인
-- 배포 주소에서: 복합 질문(`STEP3_PASS_TEST.md` §3.1 안 A) → 계획 카드 → 승인 전 `api_usage_daily` 변화 없음 → [분석 시작] → 진행 표시 → 결과(§3.3 정답과 대조, 뉴스 단서·[뉴스 N]) → 실행 기록(`search_news` 사유 포함) → 다른 질문으로 [취소]·[닫기]
-- 증거표 채우기, WORK_UNITS WU-301~305·399 운영 확인 체크. 문제는 보고서 "다른 트랙에 부탁"에
-- **토큰 아끼기**: 시연 질문은 필요한 만큼만(분석 글은 운영에서 gpt-6-sol)
-
-### 2. WU-401 보드 화면 + Q9
-- `src/components/board/BoardPanel.tsx`: 필터 막대(기간 프리셋 + 직접 선택, 비교 기업 추가·삭제 최대 5) → B2 → 보드의 **모든** 차트·표가 같은 조건으로. 필터 상태는 다시 열어도 유지(B1)
-- 분석 글에 "원래 조건 기준 설명입니다" + **[설명 다시 쓰기]**(Q9, 질문 1회 차감 안내·확인)
-- **Q9** 서버(`rewrite/route.ts`): `loadBoardResult`(예림)로 현재 보드 결과를 읽어 `generateExplanation` → 그 분석의 설명 갱신. AI 장애 `503 LLM_UNAVAILABLE` + 차감 취소, 기존 설명 유지. `ownedOrNotFound()`
-- 가짜 모드 `mock-boards.ts` + e2e `board.spec.ts`(1280px·375px). `ResultView.tsx`는 잠금 — "끼울 곳"을 보고서에 적고 통합 때 끼운다
-
-### 3. WU-402 차트 규격·표 보기·용어 설명
-- 모든 차트: 제목·축·단위·범례(2계열 이상)·출처 — 차트 종류별 확인표
-- 범례를 색 말고도 선 모양·무늬로 구분, "표로 보기" 키보드로 열기
-- 재무 용어(영업이익률, ROE, PER, PBR, TTM, 부채비율, 자기자본비율 등) 한 줄 설명 — 마우스 올리기·누르기 둘 다
-
-### 4. WU-499 준비
-- `DevelopDoc/STEP4_PASS_TEST.md` 뼈대 — 보드 필터 연동, 대용량 결과표(병준 `tests/perf/RESULTS.md`), 구현 제외 항목(PRD §11.2) 사유
+## 할 일 — 2026-09-30 밤에 대부분 먼저 했다 (main에 있음, 보고서 `DevelopDoc/phase3/hyunjoon.md`)
+### 남은 것 (내일)
+1. **WU-399 운영 재확인** — 30일 밤 main 배포로 "기업 비교 QoQ"·"뉴스 단서 전부 표시"가 운영에 올라갔다. `STEP3_PASS_TEST.md` §2의 안 B 질문으로 QoQ가 §3.2 정답과 같은지, 뉴스 단서·"분석 글 근거" 표시, 실행 기록을 다시 보고 §1 #1·#5, §2 #4를 ✅로
+2. **WU-401 통합 준비** — 예림님 B1·B2·`loadBoardResult`가 오면 `rewrite/board-result.ts`를 바꾸고, 통합 때 `AnalysisScreen.tsx`에 `BoardPanel`을 끼운다(보고서 "통합 때 할 것" 1~4). 그 전까지 보드 화면은 운영에 보이지 않는다
+3. **결정 필요(팀)**: 설명 다시 쓰기(Q9)로 쓴 글을 `boards`에 따로 둘지(`BoardView` 계약에 설명 칸 추가) — 보고서 "남은 설계 문제"
+4. **WU-499 준비** — `STEP4_PASS_TEST.md` 뼈대 채우기(병준 `tests/perf/RESULTS.md`가 오면)
+5. 좁은 화면에서 차트 Y축 단위 "(조 원)" 왼쪽이 조금 잘림 — 다듬기
 
 ## 하지 말 것
 - 소유표 밖 파일·잠긴 파일 수정 (`src/contracts/**`, `tools/types.ts`·`registry.ts`, `limits/size.ts`, `ResultView.tsx`·`AnalysisScreen.tsx`, `http.ts`, `route.ts`, `guards.ts`, `package.json`, `HANDOFF.md`), 예림님 `boards/**`·`runner/**`, 병준님 `steps/**`

@@ -30,6 +30,7 @@
 | 2026-09-30 | **Step 1 마감**: 완료조건 전수 점검·버그 수정(PR #25), DB 변경 3개 운영 적용, §0.0·§0.3을 Step 2 기준으로 |
 | 2026-09-30 | **Phase 1 병렬 개발 계획**: `DevelopDoc/PHASE1_PLAN.md`, 지시문 3개+병합 지시문(`DevelopDoc/prompts/`), 시작 스크립트(`scripts/phase1-start.sh`·`.ps1`), §0.3을 Phase 1 기준으로 |
 | 2026-09-30 | **Phase 2 병합**: PR #33(트랙 A 병준: 계획·단계 실행 엔진)·#32(트랙 B 예림: 경쟁사·비교·섹터·계산식 v3)·트랙 C(현준: 뉴스 연결·분석 글 품질·T4)를 `integrate/phase2`에서 한 번에 합침. 교차 검토 수정(재무 앞 4분기, 상한이 결과 계산을 막지 않음, 재분석 계획 승인, 계산 불가 사유), 마이그레이션 5개 재번호·운영 적용. **T4: 분석 글만 gpt-6-sol + 하루 AI 예산 넘으면 저가 모델(시연용 토큰 보호)**, 질문당 AI 상한 $0.03. **Phase 3 계획**: [PHASE3_PLAN](DevelopDoc/PHASE3_PLAN.md)·지시문 4개·`scripts/phase3-start.*`, 보드 계약(`BoardView`)·한도 함수(`src/lib/limits/size.ts`) 고정 (§0.1·§0.3) |
+| 2026-09-30 | **밤(현준 단독)**: WU-399 운영 1차 확인, Phase 3 현준 트랙(WU-401 화면·Q9·WU-402) + 병준·예림 몫 일부(OpenAI 키 순차 사용, owner-routes, 질문 기간 범위, 줄임말 "현대차"), 운영에서 찾은 버그(기업 비교 QoQ 누락·뉴스 칸 사라짐) 수정 → **main 직접 반영**. 지시문에 "현준이 먼저 함" 표시 (§0.0·§0.3·§0.4) |
 
 > 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
@@ -43,8 +44,8 @@
 1. 내 포크를 원본 main에 맞춘다 — GitHub 내 포크 화면의 **Sync fork → Update branch**, 또는 터미널에서 `git fetch upstream && git switch main && git merge upstream/main` (원본 저장소를 `upstream`으로 등록해 둔 경우)
 2. `pnpm install` (오늘 새 패키지는 없지만 습관으로)
 3. `.env.local` 확인 → `pnpm check:keys`에서 6개 모두 ✅ (Supabase 3개 포함). Supabase 키는 팀이 쓰는 **`sleepyhead` 프로젝트 하나**의 값
-4. `pnpm test` 가 통과하면 준비 끝 (단위·정확도·DB 1,010개 — Phase 2 병합 기준)
-5. 상태 한 줄 요약 (2026-09-30 Phase 2 병합): **Step 3 코드 완료** — 운영 확인(WU-399)은 현준이 먼저. **다음은 Phase 3 = Step 4 병렬 개발** — 계획 `DevelopDoc/PHASE3_PLAN.md`, 각자 `bash scripts/phase3-start.sh 병준|예림|현준`(PowerShell은 `scripts/phase3-start.ps1`)으로 시작하면 main을 맞추고 내 브랜치를 만든 뒤 Claude Code가 내 지시문(`DevelopDoc/prompts/phase3-*.md`)으로 뜬다. **⚠️ AI 토큰은 시연용을 남긴다** — 로컬은 `OPENAI_EXPLAIN_MODEL=gpt-6-luna`, 실제 AI 회귀는 필요할 때 한 번만
+4. `pnpm test` 가 통과하면 준비 끝 (단위·정확도·DB 1,121개 — 2026-09-30 밤 기준)
+5. 상태 한 줄 요약 (2026-09-30 밤): **Phase 2 병합 + Phase 3 현준 트랙 대부분이 main에 있다.** 내일은 **Phase 3 병렬 개발** — 각자 `bash scripts/phase3-start.sh 병준|예림|현준`(PowerShell `scripts/phase3-start.ps1`) 한 줄이면 main을 맞추고 내 브랜치를 만든 뒤 Claude Code가 지시문(`DevelopDoc/prompts/phase3-*.md`)으로 뜬다. 지시문에 **"현준이 먼저 함"** 표시된 항목은 건너뛴다. **⚠️ AI 토큰은 시연용을 남긴다** — 로컬은 `OPENAI_EXPLAIN_MODEL=gpt-6-luna`, 실제 AI 회귀는 필요할 때 한 번만
 
 ### 0.1 main에 들어간 것 (2026-09-29 ~ 09-30)
 | PR | 내용 | 작성 |
@@ -72,8 +73,9 @@
 | #32 | **Phase 2 트랙 B**: WU-303 경쟁사 자동 선택(`get_peers`, 같은 섹터 시가총액 순)·기업 비교 금융업 표시(§7 문구)·섹터 규칙 보강(삼성전자·리노공업 → 반도체 등)·계산 불가 사유, **계산식 v3**. Phase 1 후속: 결측 제외를 기업별로, 최신 데이터 재분석 기간 다시 잡기, 정정 공시 재수집 경로 | 예림 (통합: 현준) |
 | (브랜치) | **Phase 2 트랙 C** `feat/WU-304-link`: WU-299 Step 2 운영 통과 테스트, WU-304 `search_news` 실행기 연결·`news_clues` 표, WU-305 분석 글 품질("2025Q2" 문장 폐기 버그 등)·T4 결정, WU-399 증거표·손 계산 정답 | 현준 |
 | (통합) | **Phase 2 통합** `integrate/phase2`: 교차 검토 수정, **마이그레이션 5개 운영 적용**(`20260930170000` analysis_steps · `180000` quota_consumption_outcome · `190000` wu303_sector_rules · `200000` wu304_news_clues · `210000` llm_cost_cap). 검사: 단위 1,010 · 화면 117 통과. Phase 3 계획·지시문·시작 스크립트 | 현준 |
+| (직접) | **Phase 3 현준 선행분** `feat/WU-401-board-ui` → main (2026-09-30 밤, 현준 결정): WU-399 운영 1차 확인·기업 비교 QoQ 추가·뉴스 단서 전부 표시, WU-401 보드 화면(`src/components/board/`, **아직 결과 화면에 안 끼움**)·Q9 설명 다시 쓰기 서버, WU-402 차트 규격·용어 설명, OpenAI 키 여러 개 순차 사용, owner-routes Q5~Q8, 질문 분기 범위, 줄임말 표. 마이그레이션 없음. 검사: 단위 1,121 · 화면 133(+ 보드 12개는 통합 때) | 현준 |
 
-- 테스트: 단위 1,010개, 화면 117개 (1280px·375px, Phase 2 통합 기준). CI는 Linux·Windows 두 환경에서 돈다. 실제 API 회귀는 `scripts/regression-live.test.ts`(CI 제외, 공유 DB·OpenAI 사용 — **시연용 토큰 때문에 필요할 때만**)
+- 테스트: 단위 1,121개, 화면 133개 (1280px·375px, 2026-09-30 밤 기준). CI는 Linux·Windows 두 환경에서 돈다. 실제 API 회귀는 `scripts/regression-live.test.ts`(CI 제외, 공유 DB·OpenAI 사용 — **시연용 토큰 때문에 필요할 때만**)
 - 배포: **https://projectsleepyheads.vercel.app** — 구글 로그인·약관 동의 성공(2026-09-29), **핵심 통과 테스트 질문 성공(2026-09-30 현준 확인)**, 비로그인 첫 화면에 SK하이닉스 예시(2026-09-30 확인).
 - 합치는 방식: 포크 PR이 main과 충돌하면 `merge/pr-<번호>-…` 브랜치에서 그 PR 커밋을 그대로 합치고 충돌만 풀어 새 PR로 올린다 → 합쳐지면 원래 PR도 자동으로 Merged 표시 (#8·#12·#13).
 
@@ -98,7 +100,8 @@
 | 통합 담당 (현준, 누구든) | 세 개가 모이면 한 번에 합치기·교차 검토·마이그레이션(배포 **전**)·main | — | [phase3-merge](DevelopDoc/prompts/phase3-merge.md) |
 
 - 계약: 보드 응답 `BoardView`·`RewriteResponse`(`src/contracts/board.ts`), **보드 ID = 분석 ID**, 한도 함수 `assertAggregateSize`·`chartPointsNotice`(`src/lib/limits/size.ts`, 첫 버전 동작) — Phase 3 동안 잠금.
-- 각자 보고서는 `DevelopDoc/phase3/<이름>.md`.
+- 각자 보고서는 `DevelopDoc/phase3/<이름>.md`. **현준 보고서는 이미 있다**(30일 밤 선행분 — 먼저 읽기 권장: 두 분 몫에서 가져온 것·부탁·통합 때 할 것).
+- **현준이 먼저 한 두 분 몫** (지시문에 표시): 병준 — OpenAI 키 여러 개 순차 사용(`llm/client.ts`, Vercel에 조원 키 넣기만 남음), owner-routes Q5~Q8 / 예림 — 질문에 적은 분기 범위(`ask/period.ts`), 줄임말 표(`companies/aliases.ts`), 기업 비교 QoQ(`runner/series-builders.ts`, 검토 부탁).
 - **⚠️ 시연용 AI 토큰**(PHASE3_PLAN §1-7): 키 3개(각 약 5천 원)를 개발·시연이 나눠 쓴다. 운영 하루 예산 `OPENAI_EXPLAIN_DAILY_BUDGET_USD`(기본 $1)를 넘으면 분석 글도 저가 모델로.
 
 <details><summary>지난 Phase 2 표 (기록용)</summary>
@@ -141,6 +144,7 @@
 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·AI 입력 가능 여부) | ✅ Phase 1에서 완료 (TECH §21 T7) |
 
 ### 0.4 남은 확인·주의
+- **WU-399 1차(2026-09-30 밤)에서 찾은 것** ([STEP3_PASS_TEST](DevelopDoc/STEP3_PASS_TEST.md) §2.1): ① ~~기업 비교 QoQ 누락~~ 고침(main) — **운영 재확인 필요** ② **운영(Vercel)에서 주가 API 실패** → 경쟁사가 시가총액 순이 아니라 "종목코드 순 (주가를 받지 못함)". 같은 요청이 로컬에서는 성공 → Vercel `DATA_GO_KR_SERVICE_KEY` 확인(병준·예림) ③ 처음 조회하는 경쟁사 3곳 재무 수집 102초·외부 호출 39건(복합 질문이면 90초 상한 — WU-403) ④ ISC 섹터 `기타`(예림) ⑤ 수업 시연은 경쟁사 **자동 선택** 질문(안 B)이나 뉴스가 필요한 질문으로 — 경쟁사를 지정한 질문(안 A)은 규칙상 단순 질문이라 계획 카드가 안 뜬다
 - **Phase 2 병합 뒤 사람이 확인할 것** (보고서 3개에서 옮김, WU-399에서 함께): ① 운영 단순 질문 1건이 엔진 경로로 결과까지 ② 복합 질문 → 계획 카드 → 승인 전 `api_usage_daily` 변화 없음 → 진행 → 결과 → 실행 기록, [취소]·[닫기] ③ **실행 시간 상한 90초**: 처음 조회하는 기업이 둘 이상인 비교는 넘을 수 있다 — 넘어도 결과(차트·표)까지는 만들고 분석 글 앞에서 멈춘다(통합 수정). 자주 걸리면 `quota_config.max_seconds_per_question`을 240으로 ④ 섹터 보정: `select c.corp_name, s.name from companies c join sectors s on s.id = c.sector_id where c.corp_name in ('삼성전자','삼성전기','삼성카드','SK하이닉스');` → 반도체·전자부품·장비·기타금융·반도체 ⑤ "SK하이닉스 경쟁사보다 부채비율 나아?" → 경쟁사 반도체 기업, 실행 기록 "시가총액 순" ⑥ "SK하이닉스와 KB금융 부채비율 비교" → `KB금융※`·`부채비율※`·§7 문구·그래프 자기자본비율 ⑦ 뉴스 질문 → 실행 기록 `search_news` 사유·분석 글 뉴스 단서·[뉴스 N], Vercel에서 Google 뉴스 RSS가 막히지 않는지(T8) ⑧ 운영 하이브 12분기 질문의 투자 포인트가 나오는지("2025Q2" 버그 수정) ⑨ 주가 API 사용량: 경쟁사 고르기 첫 호출 2건, 그 뒤 4일 0건
 - **AI 모델 (T4, 2026-09-30 현준님)**: 분석 글만 `gpt-6-sol`, 해석·뉴스 요지는 `gpt-6-luna`. 오늘 전체 AI 비용이 `OPENAI_EXPLAIN_DAILY_BUDGET_USD`(Vercel에 없으면 $1) 이상이면 그날 분석 글도 luna(로그 `[explain:…] 기본 모델로 작성 (daily_budget)`). 질문당 AI 상한 `max_llm_cost_usd_per_question` = **$0.03** (마이그레이션 `20260930210000`). 키 여러 개 순차 사용은 Phase 3 병준
 - **계산식 v3 (2026-10-01, Phase 2 트랙 B)**: 기업 비교 결과의 숫자 목록이 바뀌어(자기자본비율·기업별 기준 분기) 올렸다. v2 이하로 저장된 분석의 [같은 조건으로 재실행]은 "계산 방식이 바뀌어…" 안내가 정상. (v2 2026-09-30: 12월 외 결산 분기가 1년 어긋나던 버그 수정)
