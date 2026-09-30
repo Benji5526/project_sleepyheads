@@ -15,7 +15,9 @@ import {
   requireIdempotencyKey,
   requireTermsAgreed,
 } from "./guards";
-import { createMemoryRateLimiter, RATE_LIMITS } from "./rate-limit";
+import { checkRequestRate, type RateScope } from "./rate-limit";
+import { withHeader } from "./respond";
+import { withQuestionsRemaining } from "./questions-remaining";
 
 // 권한 표기 (API_SPEC §1.3)
 //  public       🔓 누구나
@@ -26,7 +28,7 @@ export type Access = "public" | "preTerms" | "member" | "cron";
 
 export interface RouteOptions {
   access: Access;
-  questionRequest?: boolean; // §1.6 질문 관련 요청 (분당 10회)
+  questionRequest?: boolean; // §1.6 질문 관련 요청 (분당 10회, quota_config)
   idempotent?: boolean; // §1.5 Idempotency-Key 필수
 }
 
@@ -41,10 +43,8 @@ export interface ApiContext {
 
 type Handler = (ctx: ApiContext) => Promise<Response>;
 
-const limiter = createMemoryRateLimiter();
-
-function rateLimit(key: string, limit: number) {
-  const { allowed, retryAfterSeconds } = limiter.hit(key, limit);
+async function rateLimit(subject: string, scope: RateScope) {
+  const { allowed, retryAfterSeconds } = await checkRequestRate(subject, scope);
   if (!allowed) throw new HttpError("RATE_LIMITED", undefined, { retryAfterSeconds });
 }
 
@@ -56,20 +56,19 @@ export function route(options: RouteOptions, handler: Handler) {
   ): Promise<Response> => {
     const requestId = randomUUID();
     let response: Response;
+    let userId: string | null = null;
 
     try {
-      let userId: string | null = null;
       let supabase: SessionClient | null = null;
 
       if (options.access === "cron") {
         requireCronSecret(req, process.env.CRON_SECRET);
       } else if (options.access === "public") {
-        rateLimit(`guest:${clientIp(req)}`, RATE_LIMITS.guest);
+        await rateLimit(clientIp(req), "guest");
       } else {
         supabase = await createSessionClient();
         userId = await authenticate(supabase);
-        rateLimit(`member:${userId}`, RATE_LIMITS.member);
-        if (options.questionRequest) rateLimit(`question:${userId}`, RATE_LIMITS.question);
+        await rateLimit(userId, options.questionRequest ? "question" : "member");
         if (options.access === "member") await requireTermsAgreed(supabase, userId);
       }
 
@@ -91,20 +90,19 @@ export function route(options: RouteOptions, handler: Handler) {
       response = toErrorResponse(err, requestId);
     }
 
+    // §1.5 🔑 API 응답마다 오늘 남은 질문 수 (화면 오른쪽 위 표시). 로그인 확인이 된 요청만.
+    // 분당 한도 초과(Retry-After 있는 429)와 서버 오류에는 붙이지 않는다: 요청이 몰리거나 DB가
+    // 아플 때 조회를 더 얹지 않게. 질문 수 소진(QUOTA_EXCEEDED, 429)에는 붙인다 (남은 0 표시).
+    const rateLimited = response.status === 429 && response.headers.has("Retry-After");
+    if (options.access === "member" && userId && !rateLimited && response.status < 500) {
+      response = await withQuestionsRemaining(response, userId, requestId);
+    }
     return withRequestId(response, requestId);
   };
 }
 
-// Response.redirect()나 fetch() 응답은 헤더를 바꿀 수 없으므로 그때는 복사본에 붙인다.
 function withRequestId(response: Response, requestId: string): Response {
-  try {
-    response.headers.set("X-Request-Id", requestId);
-    return response;
-  } catch {
-    const copy = new Response(response.body, response);
-    copy.headers.set("X-Request-Id", requestId);
-    return copy;
-  }
+  return withHeader(response, "X-Request-Id", requestId);
 }
 
 function toErrorResponse(err: unknown, requestId: string): Response {

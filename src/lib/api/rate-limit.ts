@@ -1,41 +1,60 @@
-// API_SPEC §1.6 요청 속도 제한.
-// 주의: 지금은 서버 인스턴스 메모리에만 세는 임시 구현이다. Vercel은 요청마다 다른 인스턴스가
-// 뜰 수 있어 운영에서는 제한이 느슨해진다. WU-114에서 DB 기반으로 바꾸고 quota_config 값을 읽는다.
-export const RATE_LIMITS = {
-  question: 10, // 회원당 분당 ask·clarify·rewrite·rerun
-  member: 120, // 회원당 분당 전체 🔑 요청
-  guest: 30, // IP당 분당 🔓 요청
-} as const;
+import "server-only";
 
-const WINDOW_MS = 60_000;
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+// API_SPEC §1.6 요청 속도 제한 (WU-114). DB 함수 check_request_rate가 1분 고정 창으로 센다.
+// Vercel은 요청마다 다른 서버 인스턴스가 뜰 수 있어 메모리로는 셀 수 없다.
+// 한도 값은 quota_config(requests_per_minute·question_requests_per_minute·guest_requests_per_minute).
+//
+//  guest     🔓 IP당
+//  member    🔑 회원당 모든 요청
+//  question  ask·clarify·rewrite·rerun — member 한도와 질문 한도를 함께 센다
+export type RateScope = "guest" | "member" | "question";
 
 export interface RateLimitResult {
   allowed: boolean;
   retryAfterSeconds: number;
 }
 
-export interface RateLimiter {
-  hit(key: string, limit: number): RateLimitResult;
+interface RateRow {
+  allowed: boolean;
+  retry_after_seconds: number;
 }
 
-// 고정 1분 창. now는 테스트에서 시각을 바꾸기 위한 것.
-export function createMemoryRateLimiter(now: () => number = Date.now): RateLimiter {
-  const windows = new Map<string, { start: number; count: number }>();
+// DB가 느려도 모든 요청이 여기서 오래 붙잡히지 않게 한다
+const RATE_CHECK_TIMEOUT_MS = 2_000;
+// 제한 없이 통과시킨 사실은 인스턴스마다 1분에 한 번씩 로그로 남긴다 (계속 꺼져 있어도 드러나게)
+const WARN_INTERVAL_MS = 60_000;
+let lastWarnAt = 0;
 
-  return {
-    hit(key, limit) {
-      const t = now();
-      if (windows.size > 10_000) {
-        for (const [k, v] of windows) if (t - v.start >= WINDOW_MS) windows.delete(k);
-      }
-      let w = windows.get(key);
-      if (!w || t - w.start >= WINDOW_MS) {
-        w = { start: t, count: 0 };
-        windows.set(key, w);
-      }
-      w.count += 1;
-      const retryAfterSeconds = Math.ceil((w.start + WINDOW_MS - t) / 1000);
-      return { allowed: w.count <= limit, retryAfterSeconds };
-    },
-  };
+// 남용 방지 장치가 서비스 전체를 멈추지 않게 한다: DB 오류·지연·함수 미적용·설정 누락이면
+// 제한 없이 통과시키고 경고를 남긴다 (질문 수 한도는 consume_quota가 따로 지킨다).
+function passThrough(reason: string): RateLimitResult {
+  const now = Date.now();
+  if (now - lastWarnAt >= WARN_INTERVAL_MS) {
+    console.warn(`[rate-limit] check_request_rate 실패 — 제한 없이 통과: ${reason}`);
+    lastWarnAt = now;
+  }
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
+export async function checkRequestRate(
+  subject: string,
+  scope: RateScope,
+  client?: SupabaseClient,
+): Promise<RateLimitResult> {
+  try {
+    const db = client ?? getSupabaseAdmin();
+    const { data, error } = await db
+      .rpc("check_request_rate", { p_subject: subject, p_scope: scope })
+      .abortSignal(AbortSignal.timeout(RATE_CHECK_TIMEOUT_MS));
+    if (error) return passThrough(error.message);
+
+    const row = (Array.isArray(data) ? data[0] : data) as RateRow | undefined;
+    return { allowed: row?.allowed ?? true, retryAfterSeconds: row?.retry_after_seconds ?? 60 };
+  } catch (err) {
+    return passThrough(err instanceof Error ? err.message : String(err));
+  }
 }
