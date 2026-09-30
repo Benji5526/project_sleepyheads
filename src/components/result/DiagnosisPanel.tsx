@@ -53,6 +53,14 @@ export function DiagnosisPanel({ analysis, onChanged }: DiagnosisPanelProps) {
   const [choices, setChoices] = useState(() => defaultChoices(toConfirm));
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<ErrorNotice | null>(null);
+  // 다시 불러온 분석이 또 확인을 기다리면(새 진단) 같은 카드가 새 내용으로 그려진다 — 선택·진행 상태를 새로 시작한다
+  const [shown, setShown] = useState(analysis);
+  if (shown !== analysis) {
+    setShown(analysis);
+    setChoices(defaultChoices(toConfirm));
+    setPending(false);
+    setNotice(null);
+  }
 
   const allChosen = toConfirm.every((d) => d.options.some((o) => o.id === choices[d.id]));
 

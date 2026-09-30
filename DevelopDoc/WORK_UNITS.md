@@ -701,7 +701,7 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 - [ ] 회원 B가 회원 A의 프로젝트 ID·분석 ID로 **모든 API**(`GET`·`rerun`·`step`·`cancel`·`preprocess`·`boards`)를 직접 요청하면 404 — 지금 구현된 경로 ✅: P2·Q1(`projectId`, 질문 수 차감 전)·Q2·Q3·Q4가 404이고 남의 행에 쓰기 0건. 구현 전 경로(Q5~Q9·B1·B2)는 지금 501이며, **구현된 뒤 404가 아니면 같은 테스트가 실패**한다. 근거: `tests/unit/api/owner-routes.test.ts`(13개). rerun·preprocess 병합 뒤 WU-299에서 체크
 - [x] 회원 B가 A의 `/p/[projectId]` 주소로 들어가면 "찾을 수 없음" 화면 — Q2 404 → `AnalysisScreen` "분석을 찾을 수 없습니다", 질문 기록·후속 질문 입력도 안 보임. 근거: e2e "없는(또는 남의) 프로젝트 주소는 '찾을 수 없음' 화면"
 - [x] 서버 검사를 일부러 빼도 RLS가 막는다 (이중 차단 테스트) — 실제 Postgres(PGlite)에서 B 세션으로 A의 프로젝트·분석·회원 정보·사용량 읽기 0행, 수정·삭제 영향 0행, A 명의 생성·A 프로젝트에 끼워 넣기 거부, 회원 데이터 표 전부 RLS 켜짐. 근거: `tests/unit/api/owner-rls.test.ts` "RLS 이중 차단"(5개)
-- [x] 탈퇴 시 해당 회원의 `profiles`·`projects`·`analyses`·`analysis_steps`·`dataset_versions`·`boards`·`news_clues`·`usage_daily`가 0행 — A6 `DELETE /api/me`: 세션 끊기 → Auth 사용자 삭제(연쇄 삭제) → `delete_my_data`. 회원을 가리키는 모든 외래 키가 `on delete cascade`인지 검사해 **앞으로 생길 표(`analysis_steps` 등)도 빠지면 테스트가 실패**. 근거: `owner-rls.test.ts` "탈퇴 시 삭제"(4개), `owner-projects-and-delete.test.ts` A6(7개). 운영에서 실제 탈퇴는 WU-299에서 시험 계정으로 확인
+- [x] 탈퇴 시 해당 회원의 `profiles`·`projects`·`analyses`·`analysis_steps`·`dataset_versions`·`boards`·`news_clues`·`usage_daily`가 0행 — A6 `DELETE /api/me`: Auth 사용자 삭제(연쇄 삭제) → 세션 끊기 → `delete_my_data`. 회원을 가리키는 모든 외래 키가 `on delete cascade`인지 검사해 **앞으로 생길 표(`analysis_steps` 등)도 빠지면 테스트가 실패**. 근거: `owner-rls.test.ts` "탈퇴 시 삭제"(4개), `owner-projects-and-delete.test.ts` A6(7개). 운영에서 실제 탈퇴는 WU-299에서 시험 계정으로 확인
 - [x] 탈퇴 버튼은 "되돌릴 수 없음" 확인 후에만 실행 — `/me` 확인 창에 "탈퇴"를 직접 입력해야 버튼이 켜짐, 서버도 `{"confirm":"탈퇴"}`가 아니면 400. 근거: e2e "'되돌릴 수 없음' 확인 창에서…", `owner-projects-and-delete.test.ts` "확인 문구가 정확히…"
 
 ---

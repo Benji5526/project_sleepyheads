@@ -256,18 +256,18 @@ describe("A6 DELETE /api/me", () => {
     },
   );
 
-  it("모든 기기 세션 끊기 → 로그인 계정 삭제(연쇄 삭제) → 뒷정리 순서로 하고 204", async () => {
+  it("로그인 계정 삭제(연쇄 삭제) → 모든 기기 세션 끊기 → 뒷정리 순서로 하고 204", async () => {
     const res = await remove({ confirm: "탈퇴" });
     expect(res.status).toBe(204);
-    expect(state.calls).toEqual(["signOut:global", `deleteUser:${A}`, `rpc:delete_my_data:${A}`]);
+    expect(state.calls).toEqual([`deleteUser:${A}`, "signOut:global", `rpc:delete_my_data:${A}`]);
   });
 
-  it("로그인 계정 삭제가 실패하면 500이고 데이터는 건드리지 않는다 (다시 시도할 수 있게)", async () => {
+  it("로그인 계정 삭제가 실패하면 500이고 세션·데이터는 그대로다 (같은 화면에서 다시 시도할 수 있게)", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     state.deleteUserError = { message: "auth down" };
     const res = await remove({ confirm: "탈퇴" });
     expect(res.status).toBe(500);
-    expect(state.calls).toEqual(["signOut:global", `deleteUser:${A}`]);
+    expect(state.calls).toEqual([`deleteUser:${A}`]);
     spy.mockRestore();
   });
 });

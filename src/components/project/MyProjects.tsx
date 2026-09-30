@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ProjectDetail, ProjectSummary } from "@/contracts";
 import { ErrorCard } from "@/components/ask/ErrorCard";
 import { describeError, formatKstTime, type ErrorNotice } from "@/components/ask/errorMessages";
@@ -20,6 +20,7 @@ export function MyProjects() {
   const router = useRouter();
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [loadingMore, setLoadingMore] = useState(false);
+  const [moreNotice, setMoreNotice] = useState<ErrorNotice | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -47,6 +48,7 @@ export function MyProjects() {
   async function loadMore() {
     if (state.kind !== "ready" || !state.nextCursor || loadingMore) return;
     setLoadingMore(true);
+    setMoreNotice(null);
     try {
       const page = await listProjects(state.nextCursor);
       setState({
@@ -55,7 +57,8 @@ export function MyProjects() {
         nextCursor: page.nextCursor,
       });
     } catch (error) {
-      setState({ kind: "error", notice: describeError(error) });
+      // 이미 보이는 목록은 그대로 두고 더 보기 아래에만 안내한다 (다시 누르면 재시도)
+      setMoreNotice(describeError(error));
     } finally {
       setLoadingMore(false);
     }
@@ -114,6 +117,11 @@ export function MyProjects() {
           {loadingMore ? "불러오는 중…" : "더 보기"}
         </button>
       )}
+      {moreNotice && (
+        <div className="mt-4">
+          <ErrorCard notice={moreNotice} />
+        </div>
+      )}
     </section>
   );
 }
@@ -128,8 +136,11 @@ function ProjectRow({ project }: { project: ProjectSummary }) {
   const [detail, setDetail] = useState<DetailState>({ kind: "closed" });
   const open = detail.kind !== "closed";
   const panelId = `project-${project.id}`;
+  // 불러오는 중에 접었다 펼치면 늦게 온 이전 응답은 버린다 (접힌 줄이 저절로 다시 펼쳐지지 않게)
+  const request = useRef(0);
 
   async function toggle() {
+    const seq = ++request.current;
     if (open) {
       setDetail({ kind: "closed" });
       return;
@@ -137,9 +148,9 @@ function ProjectRow({ project }: { project: ProjectSummary }) {
     setDetail({ kind: "loading" });
     try {
       const { data } = await getProject(project.id);
-      setDetail({ kind: "ready", detail: data });
+      if (seq === request.current) setDetail({ kind: "ready", detail: data });
     } catch (error) {
-      setDetail({ kind: "error", notice: describeError(error) });
+      if (seq === request.current) setDetail({ kind: "error", notice: describeError(error) });
     }
   }
 

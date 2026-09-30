@@ -501,8 +501,8 @@ interface Analysis {
 ```
 응답 `204`. 삭제 대상: `profiles`, `projects`, `analyses`, `analysis_steps`, `dataset_versions`, `boards`, `news_clues`, `usage_daily`, Supabase Auth 사용자. `confirm` 값이 다르면 `400`.
 
-- 처리 순서 (WU-204): ① 모든 기기 세션 끊기(`signOut({scope:"global"})`, 실패해도 계속) → ② Supabase Auth 사용자 삭제(관리자 클라이언트) → 회원 데이터 표는 모두 `profiles`/`auth.users`에 **연쇄 삭제**로 묶여 있어 이것만으로 지워진다 → ③ `delete_my_data` 뒷정리(실패해도 204, 서버 로그만).
-- ②가 실패하면 `500`이고 데이터는 그대로다 (다시 시도 가능). 데이터를 먼저 지우면 `profiles`가 없어 재시도가 `403`으로 막히기 때문에 계정을 먼저 지운다.
+- 처리 순서 (WU-204): ① Supabase Auth 사용자 삭제(관리자 클라이언트) → 회원 데이터 표는 모두 `profiles`/`auth.users`에 **연쇄 삭제**로 묶여 있어 이것만으로 지워진다 → ② 세션 쿠키 지우기·모든 기기 세션 끊기(`signOut({scope:"global"})`, 실패해도 계속) → ③ `delete_my_data` 뒷정리(실패해도 204, 서버 로그만).
+- ①이 실패하면 `500`이고 세션·데이터는 그대로다 (같은 화면에서 다시 시도 가능). 세션을 먼저 끊으면 재시도가 `401`, 데이터를 먼저 지우면 `profiles`가 없어 `403`으로 막히기 때문에 계정을 가장 먼저 지운다.
 - 회원을 가리키는 새 표는 반드시 `on delete cascade`로 만든다 — `tests/unit/api/owner-rls.test.ts`가 빠진 표를 잡는다.
 
 ---

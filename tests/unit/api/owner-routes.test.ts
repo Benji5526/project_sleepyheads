@@ -58,14 +58,15 @@ type Handler = (
   ctx: { params: Promise<Record<string, string>> },
 ) => Promise<Response>;
 
-function call(handler: Handler, method: string, path: string, id: string, body?: unknown) {
+function call(handler: Handler, method: string, path: string, id: string | null, body?: unknown) {
   return handler(
     new NextRequest(`http://localhost:3000${path}`, {
       method,
       headers: { "Idempotency-Key": KEY },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     }),
-    { params: Promise.resolve({ id }) },
+    // Q1처럼 :id가 없는 경로는 params도 비운다 (빈 id는 route()가 먼저 404로 막아 버린다)
+    { params: Promise.resolve(id === null ? ({} as Record<string, string>) : { id }) },
   );
 }
 
@@ -112,7 +113,7 @@ describe("회원 B가 A의 ID로 부르면 404 — 구현된 경로", () => {
   });
 
   it("Q1 POST /api/ask 에 A의 projectId를 넣으면 질문 수를 쓰기 전에 404", async () => {
-    const res = await call(routes.Q1.POST, "POST", "/api/ask", "", {
+    const res = await call(routes.Q1.POST, "POST", "/api/ask", null, {
       question: "그럼 영업이익은?",
       projectId: A_PROJECT,
     });

@@ -20,6 +20,17 @@ export function createFakeDb(): FakeDb {
 
 function query(db: FakeDb, table: string) {
   let rows = [...(db.tables[table] ?? [])];
+  // order()를 여러 번 부르면 앞의 것이 1순위, 뒤의 것이 동점일 때 기준 (PostgREST와 같게)
+  const orderBy: { column: string; ascending: boolean }[] = [];
+  const sortRows = () =>
+    rows.sort((x, y) => {
+      for (const { column, ascending } of orderBy) {
+        const a = String(x[column]);
+        const b = String(y[column]);
+        if (a !== b) return a < b === ascending ? -1 : 1;
+      }
+      return 0;
+    });
   const q = {
     select: () => q,
     eq: (column: string, value: unknown) => {
@@ -35,7 +46,8 @@ function query(db: FakeDb, table: string) {
       return q;
     },
     order: (column: string, { ascending }: { ascending: boolean }) => {
-      rows.sort((x, y) => (String(x[column]) < String(y[column]) === ascending ? -1 : 1));
+      orderBy.push({ column, ascending });
+      sortRows();
       return q;
     },
     limit: (n: number) => {
