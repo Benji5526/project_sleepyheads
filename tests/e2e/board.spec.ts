@@ -1,0 +1,135 @@
+import { expect, test, type Page } from "@playwright/test";
+
+// WU-401 분석 보드: 필터 막대(기간·비교 기업) → 모든 차트·표가 같은 조건으로, "원래 조건 기준 설명" + [설명 다시 쓰기].
+// 가짜 모드(src/lib/api-client/mock-boards.ts)로 돈다.
+// 통합 때 ResultView에 끼운 뒤 켠다 — 지금은 결과 화면(ResultView·AnalysisScreen, 잠금)에 BoardPanel이 없어
+// 화면에서 닿을 수 없다. 끼우는 자리는 DevelopDoc/phase3 현준 보고서 "끼울 곳"에 적었다.
+test.describe.configure({ mode: "parallel" });
+test.skip(true, "통합 때 ResultView에 끼운 뒤 켠다");
+
+async function openBoard(page: Page) {
+  await page.goto("/");
+  await expect(page.getByTestId("questions-remaining")).toContainText("20/20");
+  await page.getByRole("combobox").fill("SK하이닉스 최근 실적 어때?");
+  await page.getByRole("button", { name: "질문하기" }).click();
+  await page.waitForURL(/\/p\/.+\?analysis=/);
+  await expect(page.getByRole("region", { name: "보드 필터" })).toBeVisible();
+  // B1을 다 불러온 뒤에 필터를 누른다
+  await expect(page.getByRole("button", { name: "최근 8분기" })).toBeEnabled();
+}
+
+const charts = (page: Page) =>
+  page.locator('[aria-label="근거 차트"]').locator("section[id^=chart-]");
+
+test("기간 프리셋을 바꾸면 모든 분기 차트 제목·표가 같은 기간으로 바뀌고 질문 수는 그대로", async ({
+  page,
+}) => {
+  await openBoard(page);
+  await expect(page.getByTestId("questions-remaining")).toContainText("19/20");
+
+  await page.getByRole("button", { name: "최근 8분기" }).click();
+  await expect(page.getByRole("button", { name: "최근 8분기" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const condition = await page.getByTestId("board-condition").textContent();
+  const range = /(\d{4}Q[1-4])~(\d{4}Q[1-4])/.exec(condition ?? "");
+  expect(range).not.toBeNull();
+
+  // 카드(최근 분기 실적)를 뺀 모든 차트 제목이 새 기간
+  const titled = charts(page).filter({ hasText: /\(\d{4}Q[1-4]~\d{4}Q[1-4]\)/ });
+  const count = await titled.count();
+  expect(count).toBeGreaterThanOrEqual(2);
+  for (let i = 0; i < count; i += 1) {
+    await expect(titled.nth(i)).toContainText(`(${range![0]})`);
+  }
+  // 표로 보기에도 8개 분기
+  await titled.first().getByRole("button", { name: "표로 보기" }).click();
+  await expect(titled.first().locator("tbody tr")).toHaveCount(8);
+
+  await expect(page.getByTestId("questions-remaining")).toContainText("19/20");
+});
+
+test("비교 기업을 넣으면 기업 비교 차트가 생기고, 빼면 사라진다", async ({ page }) => {
+  await openBoard(page);
+  const filter = page.getByRole("region", { name: "보드 필터" });
+  await filter.getByLabel("비교 기업 찾기").fill("삼성전자");
+  await filter.getByRole("button", { name: /삼성전자/ }).click();
+  await expect(filter.getByRole("list", { name: "고른 비교 기업" })).toContainText("삼성전자");
+  await expect(page.locator("#chart-board-peers")).toContainText("삼성전자");
+
+  await filter.getByRole("button", { name: "삼성전자 빼기" }).click();
+  await expect(page.locator("#chart-board-peers")).toHaveCount(0);
+});
+
+test("긴 기간 + 비교 기업 여러 곳이면 413 안내 — 기간이나 비교 기업 수를 줄이라고 알려 준다", async ({
+  page,
+}) => {
+  await openBoard(page);
+  const filter = page.getByRole("region", { name: "보드 필터" });
+  for (const name of ["삼성전자", "NAVER"]) {
+    await filter.getByLabel("비교 기업 찾기").fill(name);
+    await filter.getByRole("button", { name: new RegExp(name) }).click();
+    await expect(filter.getByRole("list", { name: "고른 비교 기업" })).toContainText(name);
+  }
+  await filter.getByLabel("시작 분기").selectOption("2015Q1");
+  await filter.getByRole("button", { name: "기간 적용" }).click();
+
+  const alert = page
+    .getByRole("alert")
+    .filter({ hasText: "한 번에 계산할 수 있는 양을 넘었습니다" });
+  await expect(alert).toContainText("기간이나 비교 기업 수를 줄여 주세요");
+  await expect(alert).toContainText("질문 수는 쓰지 않았습니다");
+});
+
+test("필터를 바꾸면 '원래 조건 기준 설명' — [설명 다시 쓰기]는 질문 1회 확인 뒤 새 설명으로 바꾼다", async ({
+  page,
+}) => {
+  await openBoard(page);
+  await expect(page.getByTestId("explanation-stale")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "최근 8분기" }).click();
+  const stale = page.getByTestId("explanation-stale");
+  await expect(stale).toContainText("원래 조건 기준 설명입니다.");
+
+  await stale.getByRole("button", { name: "설명 다시 쓰기" }).click();
+  await expect(stale).toContainText("질문 1회가 사용됩니다");
+  await stale.getByRole("button", { name: "질문 1회 쓰고 다시 쓰기" }).click();
+
+  await expect(page.getByTestId("explanation-stale")).toHaveCount(0);
+  await expect(page.getByTestId("explanation-main")).toContainText(
+    "기준으로 다시 쓴 분석 글입니다",
+  );
+  await expect(page.getByTestId("questions-remaining")).toContainText("18/20");
+});
+
+test("AI 장애면 기존 설명을 그대로 두고 질문 수는 차감되지 않았다고 알려 준다", async ({
+  page,
+}) => {
+  await openBoard(page);
+  await page.evaluate(() => window.sessionStorage.setItem("sleepyheads.mock.llmDown", "1"));
+  await page.getByRole("button", { name: "최근 8분기" }).click();
+  const stale = page.getByTestId("explanation-stale");
+  await stale.getByRole("button", { name: "설명 다시 쓰기" }).click();
+  await stale.getByRole("button", { name: "질문 1회 쓰고 다시 쓰기" }).click();
+
+  await expect(page.getByTestId("rewrite-notice")).toContainText("기존 설명을 그대로 두었고");
+  await expect(page.getByTestId("rewrite-notice")).toContainText("질문 수는 차감되지 않았습니다");
+  await expect(stale).toContainText("원래 조건 기준 설명입니다.");
+  await expect(page.getByTestId("questions-remaining")).toContainText("19/20");
+});
+
+test("필터 상태는 새로 고쳐도 유지된다 (B1)", async ({ page }) => {
+  await openBoard(page);
+  await page.getByRole("button", { name: "최근 3년" }).click();
+  await expect(page.getByRole("button", { name: "최근 3년" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.reload();
+  await expect(page.getByRole("button", { name: "최근 3년" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByTestId("explanation-stale")).toBeVisible();
+});

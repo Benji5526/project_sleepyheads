@@ -690,6 +690,10 @@ interface Analysis {
 
 응답 `200` → `{ "data": { "explanation": Explanation } }`
 - AI 장애 시 `503 LLM_UNAVAILABLE` + 질문 수 차감 취소, 기존 설명은 `stale` 그대로 유지.
+- 구현 (WU-401): 순서는 소유자 검사(남의 것 `404`, 차감 없음) → 결과 있는 분석인지(`succeeded`·`partial`, 아니면 `409`, 차감 없음) → 보드 결과 읽기(`loadBoardResult`) → **질문 1회 차감** → 설명 작성 → `analyses.explanation` 저장.
+  - 설명 작성이 실패(`status: "failed"`)하면 `refund_quota`로 차감을 되돌리고 `503 LLM_UNAVAILABLE`. `analyses.explanation`은 건드리지 않는다. 다시 쓴 설명을 저장하지 못해도(`500`) 차감을 되돌린다.
+  - 같은 `Idempotency-Key`가 이미 차감됐으면(처리 중이거나 처리 끝) AI를 다시 부르지 않고 `409 INVALID_STATE`. 화면은 누를 때마다 새 키를 만든다.
+  - 뉴스는 새로 찾지 않고 기존 분석 글의 뉴스 단서를 그대로 넘긴다 (외부 호출은 AI 1건).
 
 ---
 
