@@ -42,6 +42,15 @@
 - [x] 단계 수(8)·시간(90초)·AI 비용($0.01) 상한 → 즉시 멈추고 "부분 결과" — `steps-engine.test.ts` STEP_LIMIT·COST_LIMIT·TIMEOUT·"단순 질문에는 실행 시간 상한을 걸지 않는다", e2e "상한에 닿으면 '부분 결과'…"
 - [ ] 직전 분기가 없거나 분모가 0이면 계산 불가 사유가 결과·분석 글에 표시 — `build_result` 안의 계산이라 **트랙 B(예림) "계산 불가 사유 표시"** 몫. 엔진은 도구가 준 결과를 그대로 저장한다
 
+## Phase 1 후속 (HANDOFF §0.3, PR #19·#26 검토 후속)
+- **2분 지난 끊긴 질문을 두 요청이 동시에 이어받음** → 이어받기를 차감 기록(`quota_consumptions.created_at`)의 **조건부 갱신**으로 바꿨습니다(`takeOverStaleConsumption`: 2분 넘은 기록만 지금 시각으로). 하나만 이어받고 나머지는 409("같은 질문 처리 중")이므로 AI가 두 번 불리지 않습니다. 이어받은 요청마저 끊기면 2분 뒤 다시 이어받을 수 있습니다.
+- **422 뒤 같은 키로 재전송하면 재차감** → 422(지원 불가·기간 밖)·413으로 끝난 질문은 차감 기록을 지우지 않고 **결과(`outcome_code`·`outcome_message`)를 남깁니다**. 같은 키로 다시 오면 `consume_quota`가 이미 차감으로 보고, 경로가 저장된 오류를 그대로 돌려줍니다(차감·AI 0건). 결과가 남은 기록은 이어받을 수도 없어서, 같은 키로 다른 질문을 공짜로 보내는 길도 막힙니다.
+- 파일:
+  - 코드: `src/lib/quota/question-quota.ts`(차감 기록 함수들), `src/app/api/ask/route.ts`(중복·422 부분)
+  - 마이그레이션: `supabase/migrations/20260930180000_quota_consumption_outcome.sql`
+  - 테스트: `tests/unit/api/ask-duplicate.test.ts`·`quota-usage.test.ts`(갱신 + 새 케이스), `tests/unit/db/quota-consumption-outcome.test.ts`(PGlite)
+  - 이 파일들은 Phase 2 소유표에 없지만, HANDOFF §0.3에서 통합/배포 몫으로 적힌 Phase 1 후속이라 고쳤습니다(다른 트랙이 건드리지 않는 파일).
+
 ## 자체 검토
 - 검사 5종 모두 통과했습니다.
   - lint, format, typecheck ✅
@@ -66,6 +75,7 @@
   - 지금 코드가 쓰는 것을 지우거나 바꾸지 않는다.
 - **적용 순서: main에 올리기 전에 반드시.** 새 코드의 Q1(insert)·Q2(select)가 `plan` 컬럼을 쓰기 때문에, 먼저 배포하면 모든 질문·결과 화면이 500이 된다. 파일 시각은 합치는 순서에 맞게 재번호해도 된다.
 - 되돌리기: `drop table if exists analysis_steps; alter table analyses drop column if exists plan;` (되돌리기 전에 코드부터 이전 버전으로)
+- 파일 2: `supabase/migrations/20260930180000_quota_consumption_outcome.sql` (Phase 1 후속) — **추가만**: `quota_consumptions`에 `outcome_code`·`outcome_message` 칸 추가(`add column if not exists`). 이것도 **main에 올리기 전에** 적용한다(새 코드가 이 칸을 읽고 쓴다). 되돌리기: `alter table quota_consumptions drop column if exists outcome_code, drop column if exists outcome_message;`
 
 ## 계약·공유 파일
 - 계약 변경: **없음** (`src/contracts/**`, `tools/types.ts`·`registry.ts`는 그대로)

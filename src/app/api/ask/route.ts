@@ -17,9 +17,12 @@ import { QuotaExceededError, UpstreamApiError } from "@/lib/quota/errors";
 import {
   consumeQuestionQuota,
   getConsumptionState,
+  getSettledOutcome,
   QuestionQuotaExceededError,
   refundQuestionQuota,
   settleQuestionQuota,
+  takeOverStaleConsumption,
+  type SettledOutcome,
 } from "@/lib/quota/question-quota";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { SessionClient } from "@/lib/supabase/server";
@@ -84,11 +87,21 @@ export const POST = route(
       if (winner) return created(await toAskResponseData(winner, admin));
 
       const state = await getConsumptionState(userId, idempotencyKey, STALE_CONSUMPTION_MS, admin);
-      // 그사이 기록이 사라졌다(먼저 요청이 환불·422 정리) → 새 질문으로 다시 차감한다
+      // 422로 끝난 질문의 재전송(응답을 못 받은 화면 등) → 차감·AI 호출 없이 같은 422 (Phase 1 후속)
+      if (state === "settled") {
+        const outcome = await getSettledOutcome(userId, idempotencyKey, admin);
+        if (outcome) throw new HttpError(outcome.code, outcome.message || undefined);
+      }
+      // 그사이 기록이 사라졌다(먼저 요청이 환불) → 새 질문으로 다시 차감한다
       if (state === "missing")
         alreadyConsumed = await consumeOrThrow(userId, idempotencyKey, admin);
-      // 차감한 지 오래됐는데 분석이 없으면 먼저 요청이 끊긴 것 → 다시 차감하지 않고 이어서 처리
-      if (alreadyConsumed && state !== "stale") {
+      // 차감한 지 오래됐는데 분석이 없으면 먼저 요청이 끊긴 것 → 다시 차감하지 않고 이어서 처리.
+      // 두 요청이 동시에 이어받지 않게 조건부 갱신으로 하나만 (Phase 1 후속)
+      const tookOver =
+        alreadyConsumed &&
+        state === "stale" &&
+        (await takeOverStaleConsumption(userId, idempotencyKey, STALE_CONSUMPTION_MS, admin));
+      if (alreadyConsumed && !tookOver) {
         throw new HttpError(
           "INVALID_STATE",
           "같은 질문을 처리하고 있습니다. 잠시 후 다시 시도해 주세요.",
@@ -116,12 +129,15 @@ export const POST = route(
       result = interpreted;
     } catch (err) {
       if (err instanceof HttpError) {
-        // 422는 질문 수를 차감한 채로 둔다 (API_SPEC Q1). 멱등키 기록만 정리해,
-        // 같은 키로 다른 질문을 보내 "끊긴 요청"으로 공짜 처리되지 않게 한다
-        // 정리가 실패해도 사용자에게는 원래 422를 보여 준다 (기록이 남으면 2분 뒤 같은 키 재요청 1회가 차감 없이 처리될 뿐)
-        await settleQuestionQuota(userId, idempotencyKey, admin).catch((settleError) =>
-          console.warn(`[${ctx.requestId}] 422 질문의 차감 기록 정리 실패:`, settleError),
-        );
+        // 422는 질문 수를 차감한 채로 둔다 (API_SPEC Q1). 멱등키 기록에 결과를 남겨, 같은 키 재전송에는
+        // 차감·AI 호출 없이 같은 422를 돌려주고, "끊긴 요청"으로 공짜 처리되지도 않게 한다.
+        // 기록이 실패해도 사용자에게는 원래 422를 보여 준다 (기록이 없으면 2분 뒤 같은 키 재요청 1회가 차감 없이 처리될 뿐)
+        if (isSettledCode(err.code)) {
+          const outcome: SettledOutcome = { code: err.code, message: err.message };
+          await settleQuestionQuota(userId, idempotencyKey, outcome, admin).catch((settleError) =>
+            console.warn(`[${ctx.requestId}] 422 질문의 차감 기록 정리 실패:`, settleError),
+          );
+        }
         throw err;
       }
       await refundQuestionQuota(userId, idempotencyKey, admin);
@@ -181,6 +197,16 @@ export const POST = route(
     return created(await toAskResponseData(insertedRow, admin));
   },
 );
+
+// 차감한 채 끝나는 해석 결과 (API_SPEC Q1: 422 지원 불가·기간 밖, 413 기업 수 초과)
+const SETTLED_CODES: ReadonlySet<string> = new Set([
+  "UNSUPPORTED_QUESTION",
+  "OUT_OF_RANGE",
+  "TOO_LARGE",
+]);
+function isSettledCode(code: string): code is SettledOutcome["code"] {
+  return SETTLED_CODES.has(code);
+}
 
 // WU-301: 해석이 끝난 질문은 계획을 함께 저장한다. 복합 질문(TECH §4.6)은 awaiting_approval —
 // 계획 카드에서 승인(Q7)하기 전에는 외부 호출·계산을 하지 않는다. 단순 질문은 지금처럼 queued.

@@ -6,7 +6,9 @@ import { checkRequestRate } from "@/lib/api/rate-limit";
 import {
   getConsumptionState,
   getQuestionUsage,
+  getSettledOutcome,
   settleQuestionQuota,
+  takeOverStaleConsumption,
 } from "@/lib/quota/question-quota";
 import { getServiceStatus } from "@/lib/quota/service-status";
 
@@ -187,18 +189,72 @@ describe("getConsumptionState", () => {
     expect(await getConsumptionState("u", "k", TWO_MIN, client, NOW)).toBe("stale");
   });
 
-  it("기록이 없으면 missing (환불·422 정리됨 → 호출한 쪽이 다시 차감)", async () => {
+  it("기록이 없으면 missing (환불됨 → 호출한 쪽이 다시 차감)", async () => {
     const client = fakeClient({ quota_consumptions: null });
     expect(await getConsumptionState("u", "k", TWO_MIN, client, NOW)).toBe("missing");
+  });
+
+  it("422 결과가 남아 있으면 오래됐어도 settled (공짜로 이어받지 않음)", async () => {
+    const client = fakeClient({
+      quota_consumptions: {
+        created_at: "2026-09-30T04:00:00Z",
+        outcome_code: "OUT_OF_RANGE",
+        outcome_message: "기간 밖",
+      },
+    });
+    expect(await getConsumptionState("u", "k", TWO_MIN, client, NOW)).toBe("settled");
+    expect(await getSettledOutcome("u", "k", client)).toEqual({
+      code: "OUT_OF_RANGE",
+      message: "기간 밖",
+    });
+  });
+});
+
+describe("takeOverStaleConsumption", () => {
+  function recorder(rows: unknown[]) {
+    const calls: unknown[][] = [];
+    const client = {
+      from: (table: string) => ({
+        update: (patch: unknown) => {
+          calls.push([table, "update", patch]);
+          const q = {
+            eq: (c: string, v: unknown) => (calls.push(["eq", c, v]), q),
+            lte: (c: string, v: unknown) => (calls.push(["lte", c, v]), q),
+            is: (c: string, v: unknown) => (calls.push(["is", c, v]), q),
+            select: async () => ({ data: rows, error: null }),
+          };
+          return q;
+        },
+      }),
+    } as unknown as SupabaseClient;
+    return { client, calls };
+  }
+
+  it("2분 넘은 기록만 지금 시각으로 바꾸는 조건부 갱신 — 한 줄 바뀌면 이어받음", async () => {
+    const { client, calls } = recorder([{ idempotency_key: "k" }]);
+    expect(await takeOverStaleConsumption("u", "k", 2 * 60_000, client, NOW)).toBe(true);
+    expect(calls).toEqual([
+      ["quota_consumptions", "update", { created_at: NOW.toISOString() }],
+      ["eq", "user_id", "u"],
+      ["eq", "idempotency_key", "k"],
+      ["lte", "created_at", new Date(NOW.getTime() - 2 * 60_000).toISOString()],
+      ["is", "outcome_code", null],
+    ]);
+  });
+
+  it("다른 요청이 먼저 이어받아 바뀐 줄이 없으면 false", async () => {
+    const { client } = recorder([]);
+    expect(await takeOverStaleConsumption("u", "k", 2 * 60_000, client, NOW)).toBe(false);
   });
 });
 
 describe("settleQuestionQuota", () => {
-  it("차감은 두고 이 회원·멱등키의 기록만 지운다", async () => {
+  it("차감은 두고 이 회원·멱등키의 기록에 422 결과를 남긴다 (지우지 않음)", async () => {
     const calls: unknown[][] = [];
     const client = {
       from: (table: string) => ({
-        delete: () => {
+        update: (patch: unknown) => {
+          calls.push([table, "update", patch]);
           const q = {
             eq: (column: string, value: unknown) => {
               calls.push([table, column, value]);
@@ -210,8 +266,18 @@ describe("settleQuestionQuota", () => {
         },
       }),
     } as unknown as SupabaseClient;
-    await settleQuestionQuota("u1", "k1", client);
+    await settleQuestionQuota(
+      "u1",
+      "k1",
+      { code: "UNSUPPORTED_QUESTION", message: "지원하지 않는 질문" },
+      client,
+    );
     expect(calls).toEqual([
+      [
+        "quota_consumptions",
+        "update",
+        { outcome_code: "UNSUPPORTED_QUESTION", outcome_message: "지원하지 않는 질문" },
+      ],
       ["quota_consumptions", "user_id", "u1"],
       ["quota_consumptions", "idempotency_key", "k1"],
     ]);
