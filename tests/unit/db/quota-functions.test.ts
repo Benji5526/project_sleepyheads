@@ -1,15 +1,15 @@
 // @vitest-environment node
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { PGlite } from "@electric-sql/pglite";
-import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
+import type { PGlite } from "@electric-sql/pglite";
 import { beforeAll, describe, expect, it } from "vitest";
 
-// WU-114 DB 함수를 실제 Postgres(PGlite, 메모리)에서 확인한다.
-// 운영 DB는 하나뿐이라 거기서 시험하지 않는다: supabase/migrations 전체 + seed.sql을 순서대로 적용한 빈 DB를 쓴다.
+import { addMember, createTestDb, SUPABASE_DIR } from "./test-db";
 
-const ROOT = join(__dirname, "../../../supabase");
+// WU-114 DB 함수를 실제 Postgres(PGlite, 메모리)에서 확인한다 (준비는 ./test-db).
+
+const ROOT = SUPABASE_DIR;
 const U = "11111111-1111-4111-8111-111111111111";
 const V = "22222222-2222-4222-8222-222222222222";
 
@@ -48,29 +48,9 @@ function sameMinute<T>(fn: (q: Queryable) => Promise<T>): Promise<T> {
 }
 
 beforeAll(async () => {
-  db = new PGlite({ extensions: { pg_trgm } });
-  // Supabase가 미리 만들어 두는 역할·auth 스키마 흉내
-  await db.exec(`
-    create role anon; create role authenticated; create role service_role;
-    create schema auth;
-    create table auth.users (id uuid primary key, email text);
-    create function auth.uid() returns uuid language sql stable
-      as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-  `);
-  const dir = join(ROOT, "migrations");
-  for (const file of readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
-    .sort()) {
-    await db.exec(readFileSync(join(dir, file), "utf8"));
-  }
-  await db.exec(readFileSync(join(ROOT, "seed.sql"), "utf8"));
-  for (const [id, email] of [
-    [U, "u@example.com"],
-    [V, "v@example.com"],
-  ]) {
-    await db.query("insert into auth.users values ($1, $2)", [id, email]);
-    await db.query("insert into profiles (id, email) values ($1, $2)", [id, email]);
-  }
+  db = await createTestDb();
+  await addMember(db, U, "u@example.com");
+  await addMember(db, V, "v@example.com");
 }, 60_000);
 
 describe("WU-114 마이그레이션", () => {

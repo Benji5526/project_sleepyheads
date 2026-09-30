@@ -36,3 +36,28 @@ export interface WithRemaining<T> {
   data: T;
   questionsRemaining: number | null;
 }
+
+/** P1 GET /api/projects 목록 한 줄 (API_SPEC §4) */
+export interface ProjectListItem {
+  id: UUID;
+  title: string;
+  /** 가장 최근 분석의 대상 기업 이름. 해석 전·거절만 있으면 null */
+  targetName: string | null;
+  analysisCount: number;
+  updatedAt: string;
+}
+
+/** P2 GET /api/projects/:id (API_SPEC §4) */
+export interface ProjectDetail {
+  id: UUID;
+  title: string;
+  analyses: {
+    id: UUID;
+    question: string;
+    status: AnalysisStatus;
+    /** 데이터 버전(WU-202) 전까지 null */
+    dataVersionId: UUID | null;
+    newerDataVersionAvailable: boolean;
+    createdAt: string;
+  }[];
+}

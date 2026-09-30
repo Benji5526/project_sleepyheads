@@ -131,7 +131,7 @@ export const POST = route(
     }
 
     // 새 프로젝트는 분석을 저장할 때만 만든다 — 한도 초과·AI 장애 때 빈 프로젝트가 남지 않게
-    const projectId = requestedProjectId ?? (await createProject(supabase, userId));
+    const projectId = requestedProjectId ?? (await createProject(supabase, userId, question));
     const row = buildAnalysesInsertRow({
       projectId,
       ownerId: userId,
@@ -156,6 +156,15 @@ export const POST = route(
       return created(await toAskResponseData(winner, admin));
     }
     if (insertError) throw insertError;
+
+    // 후속 질문이면 프로젝트의 최근 활동 시각을 올린다 — 내 프로젝트 목록(P1)이 최근 활동순 (WU-201)
+    if (requestedProjectId) {
+      const { error: touchError } = await supabase
+        .from("projects")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", projectId);
+      if (touchError) console.warn(`[${ctx.requestId}] 프로젝트 활동 시각 갱신 실패:`, touchError);
+    }
 
     return created(await toAskResponseData(insertedRow, admin));
   },
@@ -212,10 +221,17 @@ async function ensureOwnProject(
   ownedOrNotFound(project, userId);
 }
 
-async function createProject(supabase: SessionClient, userId: string): Promise<string> {
+// 첫 질문을 프로젝트 제목으로 둔다 (API_SPEC P1 예시). 목록에서 한 줄로 보이게 앞부분만.
+const PROJECT_TITLE_MAX = 100;
+
+async function createProject(
+  supabase: SessionClient,
+  userId: string,
+  question: string,
+): Promise<string> {
   const { data: project, error } = await supabase
     .from("projects")
-    .insert({ owner_id: userId })
+    .insert({ owner_id: userId, title: question.slice(0, PROJECT_TITLE_MAX) })
     .select("id")
     .single();
   if (error) throw error;

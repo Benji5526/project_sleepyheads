@@ -6,8 +6,8 @@
 | 문서 종류 | WORK_UNITS (단위 작업 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.7 |
-| 기준 문서 | [PRD.md](./PRD.md) v0.6, [TECH_SPEC.md](./TECH_SPEC.md) v0.6, [API_SPEC.md](./API_SPEC.md) v0.3.6 |
+| 버전 | v0.3.8 |
+| 기준 문서 | [PRD.md](./PRD.md) v0.6, [TECH_SPEC.md](./TECH_SPEC.md) v0.6, [API_SPEC.md](./API_SPEC.md) v0.3.7 |
 
 ### 변경 이력
 | 버전 | 날짜 | 내용 |
@@ -25,6 +25,7 @@
 | v0.3.5 | 2026-09-30 | WU-114 질문 수 한도 착수(🟨) — `/api/me/usage`, `X-Questions-Remaining`, DB 분당 제한, 동시 중복 요청 1회 차감. 마이그레이션 `20260930010000` 운영 적용·운영 확인 남음 |
 | v0.3.6 | 2026-09-30 | **WU-115 ✅** 비로그인 예시(G1·C2·화면·로그인 안내 창), WU-113 "실제 서버 응답으로 재확인" 체크 (운영 핵심 통과 테스트 성공 2026-09-30 현준 확인 + 실제 SK하이닉스 결과로 화면 확인) |
 | v0.3.7 | 2026-09-30 | **WU-003 ✅** 완료조건 4/4 (Vercel 무료 플랜·결제 수단 없음 현준 확인), Supabase 하나로 유지 결정 기록. **WU-114 ✅** 완료조건 9/9 (운영 남은 질문 표시·차감 확인) |
+| v0.3.8 | 2026-09-30 | WU-204 🟨 서버 쪽 완료(P1·P2 소유자 검사, A6 탈퇴, RLS 이중 차단·연쇄 삭제 DB 테스트) — 탈퇴 확인 창·"찾을 수 없음" 화면·나머지 경로(rerun·cancel·preprocess·boards)는 각 WU에서. WU-201 P1·P2 API 준비(`/me` 화면 남음) |
 
 ---
 
@@ -80,7 +81,7 @@
 | WU-201 | 프로젝트·분석 저장·후속 질문·내 분석 | 🤖 | M | WU-199 | ⬜ |
 | WU-202 | 데이터 버전·재실행·새 버전 알림 | 🤖 | L | WU-201 | ⬜ |
 | WU-203 | 전처리 진단·확인 카드·원본/변환본 분리 | 🤖 | L | WU-202 | ⬜ |
-| WU-204 | 소유자 검사·탈퇴 시 삭제 | 🤖 | M | WU-201 | ⬜ |
+| WU-204 | 소유자 검사·탈퇴 시 삭제 | 🤖 | M | WU-201 | 🟨 |
 | **WU-299** | **Step 2 통과 테스트·배포 시연** | 👤🤖 | M | WU-201~204 | ⬜ |
 
 ### Step 3 — 계획·실행·검증 흐름 + 뉴스 단서
@@ -694,11 +695,11 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 | 선행 | WU-201 |
 
 **완료조건**
-- [ ] 회원 B가 회원 A의 프로젝트 ID·분석 ID로 **모든 API**(`GET`·`rerun`·`step`·`cancel`·`preprocess`·`boards`)를 직접 요청하면 404
-- [ ] 회원 B가 A의 `/p/[projectId]` 주소로 들어가면 "찾을 수 없음" 화면
-- [ ] 서버 검사를 일부러 빼도 RLS가 막는다 (이중 차단 테스트)
-- [ ] 탈퇴 시 해당 회원의 `profiles`·`projects`·`analyses`·`analysis_steps`·`dataset_versions`·`boards`·`news_clues`·`usage_daily`가 0행
-- [ ] 탈퇴 버튼은 "되돌릴 수 없음" 확인 후에만 실행
+- [ ] 회원 B가 회원 A의 프로젝트 ID·분석 ID로 **모든 API**(`GET`·`rerun`·`step`·`cancel`·`preprocess`·`boards`)를 직접 요청하면 404 — 구현된 경로(P2 `GET /api/projects/:id`, Q2 `GET`·Q3 `clarify`·Q4 `step`)는 `ownedOrNotFound()`로 404 (P2 단위 테스트). `rerun`(WU-202)·`preprocess`(WU-203)·`cancel`(WU-302)·`boards`(WU-401)는 그 WU에서 같은 검사를 붙인다
+- [ ] 회원 B가 A의 `/p/[projectId]` 주소로 들어가면 "찾을 수 없음" 화면 — API는 404, 화면 확인 남음 (기획/화면)
+- [x] 서버 검사를 일부러 빼도 RLS가 막는다 (이중 차단 테스트) — `tests/unit/db/ownership.test.ts`: 회원 B로 A의 프로젝트·분석·회원 정보·사용량 읽기 0행, 수정·삭제 0행, A 명의 생성 거부
+- [x] 탈퇴 시 해당 회원의 `profiles`·`projects`·`analyses`·`analysis_steps`·`dataset_versions`·`boards`·`news_clues`·`usage_daily`가 0행 — A6가 로그인 계정 삭제(연쇄 삭제) + `delete_my_data` 뒷정리, DB 테스트로 회원 데이터를 가진 **모든 테이블 0행**·다른 회원 그대로 확인. 아직 없는 테이블(`analysis_steps` 등)은 만들 때 연쇄 삭제를 빠뜨리면 같은 테스트가 실패한다
+- [ ] 탈퇴 버튼은 "되돌릴 수 없음" 확인 후에만 실행 — 서버는 `{"confirm":"탈퇴"}` 없으면 400(단위 테스트), 확인 창 화면 남음 (기획/화면)
 
 ---
 

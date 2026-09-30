@@ -1,6 +1,9 @@
-import { HttpError, notImplemented } from "@/lib/api/errors";
-import { ok } from "@/lib/api/respond";
+import { z } from "zod";
+
+import { HttpError } from "@/lib/api/errors";
+import { noContent, ok } from "@/lib/api/respond";
 import { route } from "@/lib/api/route";
+import { deleteAccount } from "@/lib/auth/delete-account";
 import { ensureProfile, getOwnProfile, toMe } from "@/lib/auth/profile";
 
 // A3 GET /api/me 🔑* — API_SPEC §4
@@ -17,5 +20,16 @@ export const GET = route({ access: "preTerms" }, async ({ supabase, userId }) =>
   return ok(toMe(profile));
 });
 
-// A6 DELETE /api/me 🔑 — API_SPEC §4
-export const DELETE = route({ access: "member" }, async () => notImplemented("WU-204"));
+// 화면의 "되돌릴 수 없음" 확인 창을 거쳤다는 표시 (API_SPEC A6)
+const DeleteBody = z.object({ confirm: z.literal("탈퇴") });
+
+// A6 DELETE /api/me 🔑 — API_SPEC §4 (WU-204). 되돌릴 수 없다.
+export const DELETE = route({ access: "member" }, async ({ req, requestId, supabase, userId }) => {
+  if (!DeleteBody.safeParse(await req.json().catch(() => null)).success) {
+    throw new HttpError("VALIDATION_ERROR", '탈퇴하려면 확인 문구 "탈퇴"가 필요합니다.', {
+      details: { field: "confirm" },
+    });
+  }
+  await deleteAccount(supabase!, userId!, requestId);
+  return noContent();
+});

@@ -6,7 +6,7 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.6 |
+| 버전 | v0.3.7 |
 | 기준 문서 | [PRD](./PRD.md) v0.6 · [TECH_SPEC](./TECH_SPEC.md) v0.6 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
@@ -24,6 +24,7 @@
 | v0.3.4 | 2026-09-30 | WU-115 비로그인 예시: G1 응답 타입 `GuestExample`·예시가 아직 없으면 `404`, C2 `?force=1`(관리자 수동 재생성)·새 보고서 판정(정기공시 목록 1회)·최대 실행 시간 120초 → 300초 |
 | v0.3.5 | 2026-09-30 | PR #19 리뷰 후속: `/auth/callback`(A1)은 분당 요청 제한에서 제외(§1.6), Q1 같은 멱등키 재요청은 차감 뒤 2분이 지나도 분석이 없으면 409 대신 다시 처리 |
 | v0.3.6 | 2026-09-30 | WU-003 결정: Supabase 프로젝트를 **`sleepyhead` 하나로 유지**(로컬·Preview·운영 공용, §1.1·§7.1·§8.3), 운영·Preview 주소 확정, 마이그레이션 적용 순서(§7.6) — GitHub 연결로 자동 적용되지 않음 |
+| v0.3.7 | 2026-09-30 | WU-204 서버 쪽: P1·P2 응답 규칙(제목 없으면 첫 질문, `targetName` null 가능, 최근 활동순 커서, `dataVersionId`는 WU-202 전까지 null), A6 탈퇴 처리 순서(모든 기기 세션 끊기 → 로그인 계정 삭제(연쇄 삭제) → `delete_my_data` 뒷정리) |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -498,6 +499,9 @@ interface Analysis {
 ```
 응답 `204`. 삭제 대상: `profiles`, `projects`, `analyses`, `analysis_steps`, `dataset_versions`, `boards`, `news_clues`, `usage_daily`, Supabase Auth 사용자. `confirm` 값이 다르면 `400`.
 
+- 처리 순서: ① 모든 기기의 세션을 끊는다(`signOut` global — 로그인 계정을 지워도 이미 발급된 토큰은 만료 전까지 남기 때문) ② Supabase Auth 사용자 삭제 — 연쇄 삭제로 개인 데이터가 함께 지워진다. 실패하면 `500`이고 데이터는 그대로라 다시 시도할 수 있다 ③ DB 함수 `delete_my_data`로 뒷정리(실패해도 기록만 남긴다).
+- 회원 데이터를 가진 테이블(`owner_id`·`user_id` 열)은 모두 `profiles`(또는 `auth.users`)에 **`on delete cascade`**로 묶는다 — 로그인 계정이 지워지면 남은 행도 함께 지워진다. 새 테이블을 만들 때 빠뜨리면 DB 테스트(`tests/unit/db/ownership.test.ts`)가 실패한다.
+
 ---
 
 ### S1 `GET /api/search?q=` 🔑
@@ -683,6 +687,9 @@ interface Analysis {
               "analysisCount": 3, "updatedAt": "2026-09-28T15:00:00+09:00" } ],
   "nextCursor": null }
 ```
+- 내 프로젝트만, **최근 활동순**(`updated_at` — 후속 질문을 저장하면 갱신). `?limit=`(기본 20, 최대 50)·`?cursor=`(§1.8, 서버가 만든 값 그대로. 조작하면 `400`).
+- `title`: 첫 질문(앞 100자). 제목 없이 만들어진 예전 프로젝트는 첫 질문을 보여 준다.
+- `targetName`: 가장 최근 분석의 대상 기업. 해석 전·거절만 있으면 `null`.
 
 ### P2 `GET /api/projects/:id` 🛡️ (Step 2)
 응답 `200`
@@ -692,6 +699,8 @@ interface Analysis {
                             "dataVersionId": "d1…", "newerDataVersionAvailable": false,
                             "createdAt": "…" } ] } }
 ```
+- 분석은 오래된 것부터. 남의 프로젝트·없는 프로젝트는 똑같이 `404 NOT_FOUND`.
+- `dataVersionId`·`newerDataVersionAvailable`: 데이터 버전(WU-202)이 생기기 전까지 `null`·`false`.
 
 ---
 
