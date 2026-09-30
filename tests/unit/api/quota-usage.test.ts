@@ -3,7 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 
 import { checkRequestRate } from "@/lib/api/rate-limit";
-import { getQuestionUsage } from "@/lib/quota/question-quota";
+import {
+  getConsumptionState,
+  getQuestionUsage,
+  settleQuestionQuota,
+} from "@/lib/quota/question-quota";
 import { getServiceStatus } from "@/lib/quota/service-status";
 
 // WU-114: 요청 속도 제한(DB 함수), 오늘 질문 사용량, 서비스 전체 상태
@@ -167,5 +171,49 @@ describe("A5 GET /api/me/usage", () => {
       },
     });
     expect(res.headers.get("X-Questions-Remaining")).toBe("16");
+  });
+});
+
+describe("getConsumptionState", () => {
+  const TWO_MIN = 2 * 60_000;
+
+  it("차감한 지 2분이 안 됐으면 fresh (처리 중)", async () => {
+    const client = fakeClient({ quota_consumptions: { created_at: "2026-09-30T04:59:00Z" } });
+    expect(await getConsumptionState("u", "k", TWO_MIN, client, NOW)).toBe("fresh");
+  });
+
+  it("2분이 지났으면 stale (먼저 요청이 끊김)", async () => {
+    const client = fakeClient({ quota_consumptions: { created_at: "2026-09-30T04:58:00Z" } });
+    expect(await getConsumptionState("u", "k", TWO_MIN, client, NOW)).toBe("stale");
+  });
+
+  it("기록이 없으면 missing (환불·422 정리됨 → 호출한 쪽이 다시 차감)", async () => {
+    const client = fakeClient({ quota_consumptions: null });
+    expect(await getConsumptionState("u", "k", TWO_MIN, client, NOW)).toBe("missing");
+  });
+});
+
+describe("settleQuestionQuota", () => {
+  it("차감은 두고 이 회원·멱등키의 기록만 지운다", async () => {
+    const calls: unknown[][] = [];
+    const client = {
+      from: (table: string) => ({
+        delete: () => {
+          const q = {
+            eq: (column: string, value: unknown) => {
+              calls.push([table, column, value]);
+              return q;
+            },
+            then: (resolve: (v: { error: null }) => unknown) => resolve({ error: null }),
+          };
+          return q;
+        },
+      }),
+    } as unknown as SupabaseClient;
+    await settleQuestionQuota("u1", "k1", client);
+    expect(calls).toEqual([
+      ["quota_consumptions", "user_id", "u1"],
+      ["quota_consumptions", "idempotency_key", "k1"],
+    ]);
   });
 });

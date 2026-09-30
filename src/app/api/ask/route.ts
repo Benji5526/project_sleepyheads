@@ -15,8 +15,10 @@ import { nextKstMidnight } from "@/lib/quota/kst";
 import { QuotaExceededError, UpstreamApiError } from "@/lib/quota/errors";
 import {
   consumeQuestionQuota,
+  getConsumptionState,
   QuestionQuotaExceededError,
   refundQuestionQuota,
+  settleQuestionQuota,
 } from "@/lib/quota/question-quota";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { SessionClient } from "@/lib/supabase/server";
@@ -26,6 +28,9 @@ export const maxDuration = 60;
 
 // Postgres unique_violation — analyses (owner_id, idempotency_key)
 const UNIQUE_VIOLATION = "23505";
+
+// 이 요청은 maxDuration(60초)에 끊기므로, 차감 뒤 2분이 지나도 분석이 없으면 먼저 보낸 요청은 끝난 것이다
+const STALE_CONSUMPTION_MS = 2 * 60_000;
 
 const AskBodySchema = z.object({
   question: z.string().trim().min(1).max(500),
@@ -69,26 +74,25 @@ export const POST = route(
       throw new HttpError("DECLINE_LIMIT", undefined, { resetAt: nextKstMidnight() });
     }
 
-    let alreadyConsumed: boolean;
-    try {
-      ({ alreadyConsumed } = await consumeQuestionQuota(userId, idempotencyKey, admin));
-    } catch (err) {
-      // 오늘 질문 수 소진 → 429 QUOTA_EXCEEDED + 초기화 시각 (API_SPEC §1.7). 그냥 두면 500이 된다
-      if (err instanceof QuestionQuotaExceededError) {
-        throw new HttpError("QUOTA_EXCEEDED", undefined, { resetAt: err.resetAt });
-      }
-      throw err;
-    }
+    let alreadyConsumed = await consumeOrThrow(userId, idempotencyKey, admin);
 
     // 같은 멱등키 질문을 다른 요청이 이미 차감하고 처리하는 중이다 (동시에 두 번 보냄, WU-114).
     // AI를 다시 부르지 않고(비용·전체 AI 상한 중복 소모 방지), 이미 끝났으면 그 결과를 돌려준다.
     if (alreadyConsumed) {
       const winner = await findByIdempotencyKey(supabase, userId, idempotencyKey);
       if (winner) return created(await toAskResponseData(winner, admin));
-      throw new HttpError(
-        "INVALID_STATE",
-        "같은 질문을 처리하고 있습니다. 잠시 후 다시 시도해 주세요.",
-      );
+
+      const state = await getConsumptionState(userId, idempotencyKey, STALE_CONSUMPTION_MS, admin);
+      // 그사이 기록이 사라졌다(먼저 요청이 환불·422 정리) → 새 질문으로 다시 차감한다
+      if (state === "missing")
+        alreadyConsumed = await consumeOrThrow(userId, idempotencyKey, admin);
+      // 차감한 지 오래됐는데 분석이 없으면 먼저 요청이 끊긴 것 → 다시 차감하지 않고 이어서 처리
+      if (alreadyConsumed && state !== "stale") {
+        throw new HttpError(
+          "INVALID_STATE",
+          "같은 질문을 처리하고 있습니다. 잠시 후 다시 시도해 주세요.",
+        );
+      }
     }
 
     let result: PersistableResult;
@@ -105,7 +109,15 @@ export const POST = route(
       }
       result = interpreted;
     } catch (err) {
-      if (err instanceof HttpError) throw err; // 422는 질문 수를 차감한 채로 둔다 (API_SPEC Q1)
+      if (err instanceof HttpError) {
+        // 422는 질문 수를 차감한 채로 둔다 (API_SPEC Q1). 멱등키 기록만 정리해,
+        // 같은 키로 다른 질문을 보내 "끊긴 요청"으로 공짜 처리되지 않게 한다
+        // 정리가 실패해도 사용자에게는 원래 422를 보여 준다 (기록이 남으면 2분 뒤 같은 키 재요청 1회가 차감 없이 처리될 뿐)
+        await settleQuestionQuota(userId, idempotencyKey, admin).catch((settleError) =>
+          console.warn(`[${ctx.requestId}] 422 질문의 차감 기록 정리 실패:`, settleError),
+        );
+        throw err;
+      }
       await refundQuestionQuota(userId, idempotencyKey, admin);
       if (err instanceof QuotaExceededError && err.provider === "llm") {
         throw new HttpError("SERVICE_BUDGET", undefined, { resetAt: err.resetAt });
@@ -151,6 +163,23 @@ export const POST = route(
     return created(await toAskResponseData(insertedRow, admin));
   },
 );
+
+// 질문 1회 차감. 오늘 질문 수 소진이면 429 QUOTA_EXCEEDED + 초기화 시각 (API_SPEC §1.7).
+// @returns 같은 멱등키로 이미 차감된 질문이면 true (이번에는 차감하지 않음)
+async function consumeOrThrow(
+  userId: string,
+  idempotencyKey: string,
+  admin: ReturnType<typeof getSupabaseAdmin>,
+): Promise<boolean> {
+  try {
+    return (await consumeQuestionQuota(userId, idempotencyKey, admin)).alreadyConsumed;
+  } catch (err) {
+    if (err instanceof QuestionQuotaExceededError) {
+      throw new HttpError("QUOTA_EXCEEDED", undefined, { resetAt: err.resetAt });
+    }
+    throw err;
+  }
+}
 
 // analyses (owner_id, idempotency_key) 고유 제약 위반인지 (다른 고유 제약과 구분)
 function isIdempotencyConflict(error: { message?: string; details?: string }): boolean {
