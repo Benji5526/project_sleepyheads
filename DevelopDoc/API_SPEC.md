@@ -6,7 +6,7 @@
 | 문서 종류 | API_SPEC (서버 API 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.6 |
+| 버전 | v0.3.7 |
 | 기준 문서 | [PRD](./PRD.md) v0.6 · [TECH_SPEC](./TECH_SPEC.md) v0.6 |
 | 문서 관리 | 통합/배포 (계약 타입 §2는 데이터/서버 + 기획/화면 공동) |
 
@@ -24,6 +24,7 @@
 | v0.3.4 | 2026-09-30 | WU-115 비로그인 예시: G1 응답 타입 `GuestExample`·예시가 아직 없으면 `404`, C2 `?force=1`(관리자 수동 재생성)·새 보고서 판정(정기공시 목록 1회)·최대 실행 시간 120초 → 300초 |
 | v0.3.5 | 2026-09-30 | PR #19 리뷰 후속: `/auth/callback`(A1)은 분당 요청 제한에서 제외(§1.6), Q1 같은 멱등키 재요청은 차감 뒤 2분이 지나도 분석이 없으면 409 대신 다시 처리 |
 | v0.3.6 | 2026-09-30 | WU-003 결정: Supabase 프로젝트를 **`sleepyhead` 하나로 유지**(로컬·Preview·운영 공용, §1.1·§7.1·§8.3), 운영·Preview 주소 확정, 마이그레이션 적용 순서(§7.6) — GitHub 연결로 자동 적용되지 않음 |
+| v0.3.7 | 2026-09-30 | **합계**(PRD F-N3): `AnalysisRequestView.aggregate?: "sum"` — 질문에 나온 기업들의 흐름 지표를 분기마다 더함(섹터별 가능, Step 1은 질문에 나온 기업 범위만). 증감률(YoY·QoQ)이 이익 지표에서 부호가 바뀌면 `value: null` + `reason` 없음 + `display`에 `흑자전환`·`적자전환`·`적자지속` (TECH §6.4). WU-199: 계산 불가 사유 `NO_REPORT`(그 분기 보고서가 전자공시에 없음, 013) 추가 — `MISSING_ACCOUNT`(보고서는 있는데 계정 값 없음)와 구분. Q1 비교 기업이 5곳을 넘으면 `413 TOO_LARGE`(조용히 자르지 않음, 질문 1회 사용) |
 
 > 화면(브라우저)과 서버가 주고받는 모든 약속을 이 문서 하나에 모았다. **API를 바꿀 때는 이 문서를 먼저 고치고** PR에서 관련 역할의 확인을 받는다 (HANDOFF §5).
 
@@ -97,7 +98,7 @@ flowchart LR
 | 금액 | **원 단위 정수** (화면에서 억·조 원으로 변환) |
 | 비율 | 퍼센트 숫자 (`12.3` = 12.3%) |
 | ID | UUID 문자열 |
-| 계산 불가 값 | `null` + 옆 필드 `reason`(`NO_PREV_PERIOD`, `ZERO_DENOMINATOR`, `MISSING_ACCOUNT`, `NO_PRICE`, `DEFICIT`, `CAPITAL_IMPAIRMENT`) |
+| 계산 불가 값 | `null` + 옆 필드 `reason`(`NO_PREV_PERIOD`, `ZERO_DENOMINATOR`, `MISSING_ACCOUNT`, `NO_REPORT`, `NO_PRICE`, `DEFICIT`, `CAPITAL_IMPAIRMENT`) |
 
 ### 1.5 공통 헤더
 | 헤더 | 방향 | 내용 |
@@ -156,6 +157,7 @@ type Quarter = `${number}Q${1 | 2 | 3 | 4}`;           // "2026Q2"
 type Unit = "KRW" | "PERCENT" | "TIMES" | "COUNT";      // 원, %, 배, 건
 type NullReason =
   | "NO_PREV_PERIOD" | "ZERO_DENOMINATOR" | "MISSING_ACCOUNT"
+  | "NO_REPORT"          // 그 분기 보고서가 전자공시에 없음 (제출 전·공시 없음, 013)
   | "NO_PRICE" | "DEFICIT" | "CAPITAL_IMPAIRMENT";
 
 interface CompanyRef {
@@ -192,6 +194,7 @@ interface AnalysisRequestView {
   period: PeriodRange;
   groupBy: "quarter" | "year" | "company" | "sector";
   needsNews: boolean;
+  aggregate?: "sum";                // 질문에 나온 기업(2~6곳)의 매출·영업이익·순이익을 분기마다 더함. groupBy "sector"면 섹터별로. 값 없는 기업은 빼고 차트 주석에 표시
 }
 ```
 
@@ -262,7 +265,7 @@ interface Figure {                 // 화면의 모든 숫자
   value: number | null;
   unit: Unit;
   display: string;                 // "+12.3%" / "5조 4,210억 원" (서버가 포맷)
-  reason?: NullReason;             // value가 null일 때
+  reason?: NullReason;             // value가 null일 때 (증감률 부호 전환이면 reason 없이 display에 "흑자전환"·"적자전환"·"적자지속")
   basis: { report: string; fsDiv: "CFS" | "OFS"; priceDate?: string };  // "2026 반기보고서"
 }
 
@@ -549,7 +552,7 @@ interface Analysis {
     "questionCharged": true } } }
 ```
 
-오류: `400`, `401`, `403`, `404`(projectId), `409 INVALID_STATE`(같은 질문 처리 중), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`, `429 QUOTA_EXCEEDED`, `429 DECLINE_LIMIT`, `429 RATE_LIMITED`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
+오류: `400`, `401`, `403`, `404`(projectId), `409 INVALID_STATE`(같은 질문 처리 중), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`(비교 기업 5곳 초과, 질문 1회 사용), `429 QUOTA_EXCEEDED`, `429 DECLINE_LIMIT`, `429 RATE_LIMITED`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
 
 - 질문 해석이 AI 장애로 실패하면 `503 LLM_UNAVAILABLE`이며 **질문 수를 돌려준다**(차감 취소).
 - 같은 `Idempotency-Key` 질문을 처리하는 중에 다시 보내면(동시에 두 번) 질문 수를 다시 차감하지 않고 AI도 다시 부르지 않는다. 먼저 보낸 질문의 분석이 이미 저장됐으면 그 결과를, 아직 처리 중이면 `409 INVALID_STATE`("같은 질문을 처리하고 있습니다")를 돌려준다. 다만 차감한 지 **2분**이 지나도 분석이 없으면 먼저 보낸 요청이 끊긴 것으로 보고(이 요청은 60초에 끊긴다) 다시 차감하지 않고 이어서 처리한다. 422(지원 불가·기간 밖)로 끝난 질문은 차감한 채로 두고 멱등키 기록만 정리하므로, 같은 키로 다시 보내면 새 질문으로 다시 차감한다.

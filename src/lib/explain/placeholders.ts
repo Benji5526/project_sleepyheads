@@ -5,6 +5,9 @@ import type { Figure } from "@/contracts";
 
 const PLACEHOLDER_RE = /\{\{(f\d+)\}\}/g;
 
+/** 값이 null이어도 글자가 곧 값인 증감률 부호 전환 표시 (TECH §6.4) */
+const SIGN_CHANGE_TEXT = new Set(["흑자전환", "적자전환", "적자지속"]);
+
 /** 자리표시자를 뺀 나머지에서 "연도·분기 표기"로 봐줄 접미사 (개수 표현 "4개 분기" 포함). */
 // "개"는 "4개 분기"·"3개 연도"처럼 기간 개수일 때만 — "3개 사업부" 같은 지어낸 개수는 막는다.
 const ALLOWED_NUMBER_CONTEXT_RE = /^(년|개월|월|분기|개\s?(분기|연도|년)|Q[1-4])/;
@@ -37,8 +40,9 @@ export function fillPlaceholders(rawText: string, figures: Record<string, Figure
   let ok = true;
   const text = rawText.replace(PLACEHOLDER_RE, (_match, id: string) => {
     const figure = figures[id];
-    // 없는 ID, 또는 값이 없는 숫자("계산 불가")를 가리키는 문장은 버린다 — "계산 불가 증가" 같은 문장 방지
-    if (!figure || figure.value === null) {
+    // 없는 ID, 또는 값이 없는 숫자("계산 불가")를 가리키는 문장은 버린다 — "계산 불가 증가" 같은 문장 방지.
+    // 부호 전환("흑자전환" 등)은 value가 null이어도 사유가 없고 글자가 곧 값이라 그대로 쓴다
+    if (!figure || (figure.value === null && !SIGN_CHANGE_TEXT.has(figure.display))) {
       ok = false;
       return "";
     }

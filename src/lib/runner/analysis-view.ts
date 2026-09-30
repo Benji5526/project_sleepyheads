@@ -49,7 +49,7 @@ export async function toAnalysisView(
     stopReason: row.stop_reason,
     decline:
       row.status === "declined" && row.decline_category
-        ? await fetchDeclineMessage(row.decline_category, client)
+        ? await fetchDeclineMessage(row.decline_category, client, row.question)
         : null,
     request: row.analysis_request,
     clarification: row.clarification,

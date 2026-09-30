@@ -47,12 +47,34 @@ export function debtRatio(
   return isFinancial ? { ...result, footnoteMark: "※" } : result;
 }
 
+export type SignChange = "흑자전환" | "적자전환" | "적자지속";
+
+/**
+ * 증감률 결과. 부호가 바뀌면 비율 대신 글자로 보여 준다(TECH §6.4) — 이때 value는 null이고 사유는 없다.
+ * 적자 −1억 → 흑자 +56억을 "+5,672%"로 쓰면 크기가 잘못 읽히고, 차트 축도 망가진다.
+ */
+export type ChangeComputed =
+  Computed<number> | { value: null; reason?: undefined; signChange: SignChange };
+
+/** 이전 ≤ 0 → 이번 > 0 흑자전환, 이전 > 0 → 이번 ≤ 0 적자전환, 둘 다 < 0 적자지속 (TECH §6.4) */
+export function signChangeOf(current: bigint, previous: bigint): SignChange | null {
+  const zero = BigInt(0);
+  if (previous <= zero && current > zero) return "흑자전환";
+  if (previous > zero && current <= zero) return "적자전환";
+  if (previous < zero && current < zero) return "적자지속";
+  return null;
+}
+
+/** labelSignChange: 이익 지표(영업이익·순이익)일 때만 true — 매출이 0이 되는 것은 "적자전환"이 아니다 */
 function periodOverPeriodChange(
   current: Computed<bigint>,
   base: Computed<bigint> | undefined,
-): Computed<number> {
+  labelSignChange: boolean,
+): ChangeComputed {
   if (current.value == null) return { value: null, reason: current.reason };
   if (!base || base.value == null) return { value: null, reason: "NO_PREV_PERIOD" };
+  const signChange = labelSignChange ? signChangeOf(current.value, base.value) : null;
+  if (signChange) return { value: null, signChange };
   if (base.value === BigInt(0)) return { value: null, reason: "ZERO_DENOMINATOR" };
 
   const diff = current.value - base.value;
@@ -64,16 +86,18 @@ function periodOverPeriodChange(
 export function yoy(
   current: Computed<bigint>,
   sameQuarterLastYear: Computed<bigint> | undefined,
-): Computed<number> {
-  return periodOverPeriodChange(current, sameQuarterLastYear);
+  labelSignChange = false,
+): ChangeComputed {
+  return periodOverPeriodChange(current, sameQuarterLastYear, labelSignChange);
 }
 
 /** QoQ = (이번 − 직전 분기) ÷ |직전 분기| × 100. */
 export function qoq(
   current: Computed<bigint>,
   previousQuarter: Computed<bigint> | undefined,
-): Computed<number> {
-  return periodOverPeriodChange(current, previousQuarter);
+  labelSignChange = false,
+): ChangeComputed {
+  return periodOverPeriodChange(current, previousQuarter, labelSignChange);
 }
 
 /** TTM 지배주주 순이익 = 최근 4개 달력 분기 지배주주 순이익 합. 넷 중 하나라도 없으면 계산 불가. */

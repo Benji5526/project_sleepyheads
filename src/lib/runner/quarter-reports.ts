@@ -36,6 +36,9 @@ export function mapCalendarRangeToFiscalQuarters(
 }
 
 /** 위 대응표에 필요한 최소 보고서 목록 (WU-105 `reportsNeededForFiscalQuarters` 그대로 위임). */
-export function reportsForCalendarRange(fiscalRefs: Map<Quarter, FiscalRef>): ReportRef[] {
-  return reportsNeededForFiscalQuarters([...fiscalRefs.values()]);
+export function reportsForCalendarRange(
+  fiscalRefs: Map<Quarter, FiscalRef>,
+  accMt = 12,
+): ReportRef[] {
+  return reportsNeededForFiscalQuarters([...fiscalRefs.values()], accMt);
 }

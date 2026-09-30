@@ -60,7 +60,7 @@ export const POST = route(
     // 재요청 안전: 같은 멱등키로 이미 만들어진 분석이 있으면 그대로 돌려준다 (질문 수 재차감 없음).
     const { data: existing, error: existingError } = await supabase
       .from("analyses")
-      .select("id, project_id, status, decline_category")
+      .select("id, project_id, question, status, decline_category")
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
     if (existingError) throw existingError;
@@ -104,6 +104,9 @@ export const POST = route(
       if (interpreted.type === "out_of_range") {
         throw new HttpError("OUT_OF_RANGE", interpreted.message);
       }
+      if (interpreted.type === "too_large") {
+        throw new HttpError("TOO_LARGE", interpreted.message);
+      }
       result = interpreted;
     } catch (err) {
       if (err instanceof HttpError) {
@@ -142,7 +145,7 @@ export const POST = route(
     const { data: insertedRow, error: insertError } = await supabase
       .from("analyses")
       .insert(row)
-      .select("id, project_id, status, decline_category")
+      .select("id, project_id, question, status, decline_category")
       .single();
     if (insertError?.code === UNIQUE_VIOLATION && isIdempotencyConflict(insertError)) {
       // 같은 멱등키 질문을 다른 요청이 먼저 저장했다 (WU-114, 마이그레이션 전 옛 consume_quota 등).
@@ -190,7 +193,7 @@ async function findByIdempotencyKey(
 ) {
   const { data, error } = await supabase
     .from("analyses")
-    .select("id, project_id, status, decline_category")
+    .select("id, project_id, question, status, decline_category")
     .eq("owner_id", userId)
     .eq("idempotency_key", idempotencyKey)
     .maybeSingle();

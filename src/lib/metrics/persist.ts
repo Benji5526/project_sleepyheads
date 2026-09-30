@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadAccountMap } from "@/lib/financials/account-map";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { FsDiv, ReprtCode, StandardMetric } from "@/lib/financials/types";
+import { fiscalYearOfReport } from "@/lib/financials/period";
 import { mapFiscalQuarterToCalendar } from "./calendar-quarter";
 import { balanceSheetQuarterValue, flowQuarterValue, type ReportAmounts } from "./fiscal-quarter";
 import {
@@ -91,7 +92,7 @@ export async function computeCalendarQuarterMetrics(
     accountMap.map((row) => [row.account_id, row.metric as StandardMetric]),
   );
   const fsDiv = reportRows[0].fs_div;
-  const byYear = groupByYearReportMetric(reportRows, accountIdToMetric);
+  const byYear = groupByYearReportMetric(reportRows, accountIdToMetric, company.accMt);
 
   const byCalendarQuarter = new Map<
     string,
@@ -266,9 +267,15 @@ async function loadCompany(admin: SupabaseClient, corpCode: string): Promise<Com
   return { accMt: row.acc_mt, isFinancial: row.sectors?.is_financial ?? false };
 }
 
+/**
+ * 보고서 값을 **엔진의 회계연도(시작한 해)** 로 묶는다. DB의 bsns_year는 OpenDART 연도(보고서 기간이
+ * 끝난 해)라, 12월 외 결산은 같은 기(期)의 사업보고서가 1·3분기보고서와 다른 해에 들어 있다
+ * — 그대로 묶으면 "제40기 연간 − 제41기 3분기 누적"처럼 다른 기끼리 빼게 된다.
+ */
 function groupByYearReportMetric(
   rows: ReportValueDbRow[],
   accountIdToMetric: Map<string, StandardMetric>,
+  accMt: number,
 ): ReportsByYearAndCode {
   const result: ReportsByYearAndCode = new Map();
 
@@ -276,8 +283,9 @@ function groupByYearReportMetric(
     const metric = accountIdToMetric.get(row.account_id);
     if (!metric) continue; // account_map에 없는(우리가 추적하지 않는) 계정은 무시한다.
 
-    if (!result.has(row.bsns_year)) result.set(row.bsns_year, {});
-    const byReport = result.get(row.bsns_year)!;
+    const fiscalYear = fiscalYearOfReport(row.bsns_year, row.reprt_code, accMt);
+    if (!result.has(fiscalYear)) result.set(fiscalYear, {});
+    const byReport = result.get(fiscalYear)!;
     if (!byReport[row.reprt_code]) byReport[row.reprt_code] = {};
     byReport[row.reprt_code]![metric] = {
       amount3m: row.amount_3m == null ? null : BigInt(row.amount_3m),

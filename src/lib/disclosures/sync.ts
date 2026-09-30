@@ -70,48 +70,66 @@ export async function ensureDisclosures(
     : formatDartDate(addDays(new Date(), -INITIAL_LOOKBACK_DAYS));
 
   const items = bgnDe <= endDe ? await fetchDisclosureList(corpCode, bgnDe, endDe, options) : [];
-  // 원 공시를 먼저 저장해 둬야 뒤이은 정정 공시가 그 행을 찾아 묶을 수 있다.
-  items.sort((a, b) => a.rcept_dt.localeCompare(b.rcept_dt));
+  // 원 공시를 정정 공시보다 앞에 두어 같은 목록 안에서 바로 묶을 수 있게 한다 (같은 날은 접수번호 순).
+  items.sort(
+    (a, b) => a.rcept_dt.localeCompare(b.rcept_dt) || a.rcept_no.localeCompare(b.rcept_no),
+  );
 
   const rules = await loadIssueRules(admin);
 
-  let insertedCount = 0;
-  let lowVolumeCount = 0;
+  // 공시마다 DB를 오가면 1년 치(수백 건)를 받는 첫 조회가 실행 시간 안에 끝나지 않아 확인 상태가
+  // 저장되지 못했다(→ 매번 처음부터 다시 조회·지분변동 건수 중복). 분류는 메모리에서 하고 저장은 한 번에.
   let lastRceptDt = syncState?.last_rcept_dt ?? null;
+  const rows: Record<string, unknown>[] = [];
+  const lowVolume = new Map<string, { count: number; lastRceptDt: string }>();
+  const originalsInList = new Map<string, string>(); // 정정 접두어 뗀 제목 → 원 공시 접수번호
 
   for (const item of items) {
     if (!lastRceptDt || item.rcept_dt > lastRceptDt) lastRceptDt = item.rcept_dt;
 
-    const classification = classifyDisclosure(item.report_nm, rules);
+    // OpenDART 제목 끝에 공백이 붙어 온다 — 그대로 두면 정정 공시가 원 공시 제목과 달라 묶이지 않는다
+    const reportNm = item.report_nm.trim();
+    const classification = classifyDisclosure(reportNm, rules);
     if (!classification) continue; // 분류표에 없는 공시 — 근거 자료로 쓰지 않으니 저장하지 않는다.
 
     if (classification.importance === "low") {
-      await incrementLowVolumeCount(admin, corpCode, classification.tag, item.rcept_dt);
-      lowVolumeCount += 1;
+      const prev = lowVolume.get(classification.tag);
+      lowVolume.set(classification.tag, {
+        count: (prev?.count ?? 0) + 1,
+        lastRceptDt: item.rcept_dt,
+      });
       continue;
     }
 
-    const isCorrection = isCorrectionReport(item.report_nm);
+    const isCorrection = isCorrectionReport(reportNm);
+    const baseTitle = stripCorrectionPrefix(reportNm);
     const originalRceptNo = isCorrection
-      ? await findOriginalRceptNo(admin, corpCode, stripCorrectionPrefix(item.report_nm))
+      ? (originalsInList.get(baseTitle) ?? (await findOriginalRceptNo(admin, corpCode, baseTitle)))
       : null;
+    if (!isCorrection) originalsInList.set(baseTitle, item.rcept_no);
 
-    await upsertDisclosure(admin, {
+    rows.push({
       rcept_no: item.rcept_no,
       corp_code: corpCode,
-      report_nm: item.report_nm,
+      report_nm: reportNm,
       rcept_dt: toIsoDate(item.rcept_dt),
       issue_tag: classification.tag,
       importance: classification.importance,
       is_correction: isCorrection,
       original_rcept_no: originalRceptNo,
     });
-    insertedCount += 1;
+  }
+
+  await upsertDisclosures(admin, rows);
+  let lowVolumeCount = 0;
+  for (const [tag, { count, lastRceptDt: tagLast }] of lowVolume) {
+    await incrementLowVolumeCount(admin, corpCode, tag, tagLast, count);
+    lowVolumeCount += count;
   }
 
   await writeSyncState(admin, corpCode, lastRceptDt);
 
-  return { corpCode, fromCache: false, insertedCount, lowVolumeCount };
+  return { corpCode, fromCache: false, insertedCount: rows.length, lowVolumeCount };
 }
 
 async function fetchDisclosureList(
@@ -188,12 +206,17 @@ async function findOriginalRceptNo(
   return (data as { rcept_no: string } | null)?.rcept_no ?? null;
 }
 
-async function upsertDisclosure(
+/** 여러 공시를 한 번에 저장한다 (한 요청에 너무 크지 않게 500건씩). */
+async function upsertDisclosures(
   admin: SupabaseClient,
-  row: Record<string, unknown>,
+  rows: Record<string, unknown>[],
 ): Promise<void> {
-  const { error } = await admin.from("disclosures").upsert([row], { onConflict: "rcept_no" });
-  if (error) throw new Error(`disclosures 저장 실패: ${error.message}`);
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await admin
+      .from("disclosures")
+      .upsert(rows.slice(i, i + 500), { onConflict: "rcept_no" });
+    if (error) throw new Error(`disclosures 저장 실패: ${error.message}`);
+  }
 }
 
 /** 지분변동(하)은 개별 행 대신 (기업, 태그) 단위 건수만 올린다 (완료조건, §15.6). */
@@ -202,6 +225,7 @@ async function incrementLowVolumeCount(
   corpCode: string,
   issueTag: string,
   rceptDt: string,
+  added: number,
 ): Promise<void> {
   const { data, error: readError } = await admin
     .from("disclosure_low_volume_counts")
@@ -217,7 +241,7 @@ async function incrementLowVolumeCount(
       {
         corp_code: corpCode,
         issue_tag: issueTag,
-        disclosure_count: current + 1,
+        disclosure_count: current + added,
         last_rcept_dt: toIsoDate(rceptDt),
       },
     ],

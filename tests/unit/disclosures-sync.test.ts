@@ -135,6 +135,61 @@ describe("ensureDisclosures (WU-107, TECH §4.4·§15.5)", () => {
     expect(correction.issue_tag).toBe("자본감소");
   });
 
+  it("OpenDART 제목 끝 공백이 있어도 정정 공시가 원 공시와 묶인다 (운영에서 묶이지 않던 문제)", async () => {
+    dartFetchMock.mockResolvedValueOnce(
+      listResponse([
+        item({
+          rcept_no: "20251014800003",
+          rcept_dt: "20251014",
+          report_nm: "주요사항보고서(감자결정) ",
+        }),
+        item({
+          rcept_no: "20251030800065",
+          rcept_dt: "20251030",
+          report_nm: "[기재정정]주요사항보고서(감자결정) ",
+        }),
+      ]),
+    );
+    const { client, tables } = dbWithIssueRules();
+
+    await ensureDisclosures(CORP_CODE, { client });
+
+    const disclosures = tables.disclosures as Record<string, unknown>[];
+    const correction = disclosures.find((d) => d.rcept_no === "20251030800065")!;
+    expect(correction.original_rcept_no).toBe("20251014800003");
+    expect(disclosures.every((d) => !(d.report_nm as string).endsWith(" "))).toBe(true);
+  });
+
+  it("이미 저장된 원 공시(이전 조회분)와도 묶인다", async () => {
+    dartFetchMock.mockResolvedValueOnce(
+      listResponse([
+        item({
+          rcept_no: "20260129800008",
+          rcept_dt: "20260129",
+          report_nm: "[기재정정]주요사항보고서(감자결정)",
+        }),
+      ]),
+    );
+    const { client, tables } = dbWithIssueRules({
+      disclosures: [
+        {
+          rcept_no: "20260108800001",
+          corp_code: CORP_CODE,
+          report_nm: "주요사항보고서(감자결정)",
+          rcept_dt: "2026-01-08",
+          is_correction: false,
+        },
+      ],
+    });
+
+    await ensureDisclosures(CORP_CODE, { client });
+
+    const correction = (tables.disclosures as Record<string, unknown>[]).find(
+      (d) => d.rcept_no === "20260129800008",
+    )!;
+    expect(correction.original_rcept_no).toBe("20260108800001");
+  });
+
   it("지분변동(하) 공시는 개별 행 없이 건수만 올린다 (완료조건)", async () => {
     dartFetchMock.mockResolvedValueOnce(
       listResponse([

@@ -30,7 +30,7 @@ ${SCOPE_TABLE}
 - unsupported_metric_requested: 질문이 위 metrics 목록에 없는 지표(예: 직원 만족도, 이직률, 시장점유율, ESG 점수 등)를 콕 집어 물었으면 true로 표시한다. 목록에 있는 지표를 함께 물었으면 그 지표는 metrics에 넣고, 목록 밖 지표만 물었으면 metrics는 빈 배열로 둔다. 질문에 지표 지정이 아예 없어서 기본 지표를 추론한 경우는 false.
 - period: 질문에 기간 표현이 있으면 specified=true, text에 원문 그대로("2023년", "최근 3년" 등)를 담는다. from/to는 몰라도 되면 null로 둔다(서버가 계산). 기간 표현이 없으면 specified=false, text=null.
 - group_by: 분기별이면 "quarter", 연도별이면 "year", 기업 비교면 "company", 섹터 비교면 "sector".
-- operations: 증감(QoQ/YoY)이나 비교가 필요하면 담는다. 없으면 빈 배열.
+- operations: 증감(QoQ/YoY)이나 비교가 필요하면 담는다. 여러 기업 값을 **더한 합계**("두 회사 매출 합계", "전체 매출 합", "섹터별 매출 합계")를 물으면 {op:"sum", metric, base:null, peers:null}을 담고, 섹터별 합계면 group_by="sector"로 둔다. 없으면 빈 배열.
 - needs_news: 원인 분석(cause)이거나 뉴스 단서가 필요해 보이면 true.
 - news_keywords: needs_news가 true일 때 검색에 쓸 핵심어(짧은 명사구).
 - charts: 화면에 보여줄 차트 후보 1개 이상.
