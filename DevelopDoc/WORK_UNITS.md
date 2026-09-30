@@ -83,7 +83,7 @@
 | WU-202 | 데이터 버전·재실행·새 버전 알림 | 🤖 | L | WU-201 | 🟨 |
 | WU-203 | 전처리 진단·확인 카드·원본/변환본 분리 | 🤖 | L | WU-202 | 🟨 |
 | WU-204 | 소유자 검사·탈퇴 시 삭제 | 🤖 | M | WU-201 | 🟨 |
-| **WU-299** | **Step 2 통과 테스트·배포 시연** | 👤🤖 | M | WU-201~204 | ⬜ |
+| **WU-299** | **Step 2 통과 테스트·배포 시연** | 👤🤖 | M | WU-201~204 | ✅ |
 
 ### Step 3 — 계획·실행·검증 흐름 + 뉴스 단서
 | WU | 이름 | 담당 | 규모 | 선행 | 상태 |
@@ -647,7 +647,7 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 **완료조건**
 - [x] 첫 질문 시 프로젝트가 만들어지고 `/p/[projectId]`로 이동한다 — Step 1부터 Q1이 만든다(`src/app/api/ask/route.ts` `createProject`). 근거: e2e `projects.spec.ts` "후속 질문은 같은 프로젝트에 쌓이고…"(첫 질문 → `/p/…?analysis=`)
 - [x] 후속 질문이 같은 프로젝트에 쌓이고, 해석 시 직전 분석 요청만 문맥으로 넘긴다 (토큰 측정) — 화면: 결과 아래 `ProjectPanel`(질문 기록 + 후속 질문 입력), Q1에 `projectId`. 서버: `fetchPreviousRequest`(같은 프로젝트·같은 회원의 가장 최근 `analysis_request` 하나, 거절 건너뜀) → `buildInterpretPrompt`에 system 메시지 1개 추가(첫 질문 지시문은 그대로). **토큰 측정(o200k 토크나이저, 2026-09-30)**: 지시문 1,058 → 후속 질문 1,234~1,241, **+176~183토큰(+17%)**, 결과 숫자·설명은 넣지 않아 분석 크기와 무관. 근거: `tests/unit/projects/follow-up-context.test.ts`(7개), e2e "후속 질문은 같은 프로젝트에 쌓이고…". 실제 AI가 문맥을 잘 쓰는지는 배포 뒤 확인(WU-299)
-- [ ] 분석마다 질문·분석 요청·데이터 버전·결과·설명이 저장된다 — 질문·분석 요청·결과·설명은 Step 1부터 저장(`src/lib/ask/persist.ts`, 실행기). **데이터 버전은 WU-202(예림)** 병합 뒤 체크 — P2는 `result.basis.dataVersionId`를 읽도록 준비됨(`owner-projects-and-delete.test.ts` "질문 기록을 오래된 순으로…데이터 버전")
+- [x] 분석마다 질문·분석 요청·데이터 버전·결과·설명이 저장된다 — 질문·분석 요청·결과·설명은 Step 1부터 저장(`src/lib/ask/persist.ts`, 실행기). 데이터 버전은 WU-202 병합으로 `step-route-versions.test.ts` "끝나면 데이터 버전을 저장하고 분석에 버전 ID·요청 해시를 남긴다". **운영 확인(2026-09-30 WU-299)**: 질문하면 바로 프로젝트로 저장되고 결과 위에 데이터 버전(`cb898301`)이 보임 — `STEP2_PASS_TEST.md` 시연 1
 - [x] `/me`에 내 프로젝트가 최근순으로 보이고, 누르면 열린다 — P1(최근 활동순, 후속 질문 저장 시 `projects.updated_at` 갱신), 프로젝트를 누르면 질문 기록(P2)이 펼쳐지고 질문을 누르면 열림, 머리글 "내 분석" 링크. 근거: `owner-projects-and-delete.test.ts` P1 5개, e2e "머리글의 '내 분석'으로 들어가…"
 - [x] "내 분석" 목록에서 거절된 질문이 `답변 불가`로 표시된다 (WU-113에서 옮김 — 거절은 이미 `status = declined`로 저장됨) — `/me` 질문 기록·결과 화면 질문 기록 둘 다. 근거: e2e "거절된 후속 질문은 질문 기록에 '답변 불가'로…", "머리글의 '내 분석'으로…"
 
@@ -663,7 +663,7 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 
 **완료조건**
 - [x] 분석마다 `dataset_versions`(출처 목록·계산식 버전·해시)가 연결된다 — `tests/unit/api/step-route-versions.test.ts` "끝나면 데이터 버전을 저장…", `tests/unit/db/dataset-versions.test.ts`
-- [ ] 로그아웃 → 재로그인 후 [같은 조건으로 재실행] 결과 숫자가 원래와 **완전히 같다** — 서버 재현성은 `tests/accuracy/preprocess-versions.test.ts`(정정 공시가 새로 들어와도 같은 숫자)로 확인, 배포 주소 확인은 WU-299
+- [x] 로그아웃 → 재로그인 후 [같은 조건으로 재실행] 결과 숫자가 원래와 **완전히 같다** — 서버 재현성은 `tests/accuracy/preprocess-versions.test.ts`(정정 공시가 새로 들어와도 같은 숫자). **운영 확인(2026-09-30 WU-299)**: 재로그인 → 재실행 "숫자가 원래 결과와 모두 같습니다", 데이터 버전 그대로, 질문 수 차감 없음 — `STEP2_PASS_TEST.md` 시연 2·3
 - [x] 재실행은 AI를 부르지 않는다 (질문 수 미차감) — `tests/unit/api/rerun-preprocess-route.test.ts` "같은 조건 재실행: AI·질문 수 없이…", e2e `versions.spec.ts`
 - [x] 같은 분석 요청 + 같은 데이터 버전이면 결과·설명을 다시 만들지 않고 재사용한다 (TECH §4.10, WU-110에서 옮김) — `step-route-versions.test.ts` "…AI를 부르지 않고 그 설명을 쓴다" (숫자는 DB만으로 다시 계산, 외부 호출 없음)
 - [x] 새 공시(정정 포함)가 반영된 뒤 이전 분석을 열면 "이전 데이터 버전 기준" + "새 데이터 버전 있음"이 보인다 — `preprocess-versions.test.ts` "새 정정 공시가 반영돼도…", 표시는 `VersionBar.tsx`. ⚠ 정정 공시가 나왔을 때 재무 값을 다시 받는(force) 경로는 아직 없다 (WU-105/107 후속)
@@ -680,7 +680,7 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 | 선행 | WU-202 |
 
 **완료조건**
-- [ ] TECH §9의 진단 5종이 각각 샘플에서 발견된다 — 결측·정정 중복은 고정 샘플(`preprocess-versions.test.ts`), 연결/별도·결산월·분기 경계는 진단 만들기 단위 테스트(`versions-preprocess.test.ts`)만. 실제 기업 샘플 확인 남음
+- [ ] TECH §9의 진단 5종이 각각 샘플에서 발견된다 — 결측·정정 중복은 고정 샘플(`preprocess-versions.test.ts`), 연결/별도·결산월·분기 경계는 진단 만들기 단위 테스트(`versions-preprocess.test.ts`)만. 실제 기업 샘플: **결측 ✅ 운영에서 확인**(하이브 2023Q3 당기순이익, 12행 → 11행, 2026-09-30 WU-299). 정정 중복은 운영 DB에 정정 공시 행이 아직 0건이라 못 봄, 나머지 3종도 실제 기업 확인 남음
 - [x] 확인이 필요한 항목(결측·정정 중복·연결/별도 혼재)은 **계산 전에** 진단 카드가 뜨고, 처리 방식·영향 행 수·처리 전후 행 수·합계가 보인다 — 서버(계산 전 `awaiting_preprocess` + `diagnoses`): `step-route-versions.test.ts`. 화면(병준): `DiagnosisPanel` — 항목·영향 행 수·선택지별 처리 전후 행 수·합계, 기본값 선택, 확인 필요 항목을 모두 골라야 Q5, 자동 처리 항목은 선택지 없이 표시. 근거: e2e `projects.spec.ts` "확인할 항목·영향 행 수·처리 전후…", "다른 처리 방식을 골라 계산하면…"
 - [x] 결측·중복을 넣은 샘플에서 **처리 전후 행 수와 합계 변화가 미리 계산한 값과 일치**한다 — `preprocess-versions.test.ts` (손 계산표는 파일 맨 위)
 - [x] 원본(`report_values`)은 처리 후에도 바뀌지 않는다 — `preprocess-versions.test.ts` "…원본 report_values는 바뀌지 않는다"
@@ -698,7 +698,7 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 | 선행 | WU-201 |
 
 **완료조건**
-- [ ] 회원 B가 회원 A의 프로젝트 ID·분석 ID로 **모든 API**(`GET`·`rerun`·`step`·`cancel`·`preprocess`·`boards`)를 직접 요청하면 404 — 지금 구현된 경로 ✅: P2·Q1(`projectId`, 질문 수 차감 전)·Q2·Q3·Q4가 404이고 남의 행에 쓰기 0건. 구현 전 경로(Q5~Q9·B1·B2)는 지금 501이며, **구현된 뒤 404가 아니면 같은 테스트가 실패**한다. 근거: `tests/unit/api/owner-routes.test.ts`(13개). rerun·preprocess 병합 뒤 WU-299에서 체크
+- [x] 회원 B가 회원 A의 프로젝트 ID·분석 ID로 **모든 API**(`GET`·`rerun`·`step`·`cancel`·`preprocess`·`boards`)를 직접 요청하면 404 — 지금 구현된 경로 ✅: P2·Q1(`projectId`, 질문 수 차감 전)·Q2·Q3·Q4가 404이고 남의 행에 쓰기 0건. 구현 전 경로(Q5~Q9·B1·B2)는 지금 501이며, **구현된 뒤 404가 아니면 같은 테스트가 실패**한다. 근거: `tests/unit/api/owner-routes.test.ts`(13개). WU-299(2026-09-30): rerun·preprocess도 `ownedOrNotFound`를 거친다(코드 확인), 운영에서 남의 분석 Q2 404 확인. ⚠ 테스트에서 Q5·Q6이 아직 "구현 전" 묶음(501도 허용)이라 "구현된 경로"로 옮겨야 한다 — 병준 트랙에 부탁
 - [x] 회원 B가 A의 `/p/[projectId]` 주소로 들어가면 "찾을 수 없음" 화면 — Q2 404 → `AnalysisScreen` "분석을 찾을 수 없습니다", 질문 기록·후속 질문 입력도 안 보임. 근거: e2e "없는(또는 남의) 프로젝트 주소는 '찾을 수 없음' 화면"
 - [x] 서버 검사를 일부러 빼도 RLS가 막는다 (이중 차단 테스트) — 실제 Postgres(PGlite)에서 B 세션으로 A의 프로젝트·분석·회원 정보·사용량 읽기 0행, 수정·삭제 영향 0행, A 명의 생성·A 프로젝트에 끼워 넣기 거부, 회원 데이터 표 전부 RLS 켜짐. 근거: `tests/unit/api/owner-rls.test.ts` "RLS 이중 차단"(5개)
 - [x] 탈퇴 시 해당 회원의 `profiles`·`projects`·`analyses`·`analysis_steps`·`dataset_versions`·`boards`·`news_clues`·`usage_daily`가 0행 — A6 `DELETE /api/me`: Auth 사용자 삭제(연쇄 삭제) → 세션 끊기 → `delete_my_data`. 회원을 가리키는 모든 외래 키가 `on delete cascade`인지 검사해 **앞으로 생길 표(`analysis_steps` 등)도 빠지면 테스트가 실패**. 근거: `owner-rls.test.ts` "탈퇴 시 삭제"(4개), `owner-projects-and-delete.test.ts` A6(7개). 운영에서 실제 탈퇴는 WU-299에서 시험 계정으로 확인
@@ -708,13 +708,13 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 
 ### WU-299 Step 2 통과 테스트·배포 시연 👤
 **완료조건 — 수업 통과 테스트 대응**
-- [ ] 결측·중복을 넣은 샘플에서 처리 전후 행 수와 합계 변화가 예상과 일치 (WU-203)
-- [ ] 재로그인 후 같은 데이터 버전·저장된 분석 설정으로 재실행하면 같은 수치 (분석 글 문구 동일성은 요구하지 않음)
-- [ ] B가 A의 프로젝트 ID·주소를 직접 요청하면 거부 (WU-204)
-- [ ] 데이터가 바뀌면 이전 분석이 어느 버전 기준인지 식별된다 (WU-202)
+- [x] 결측·중복을 넣은 샘플에서 처리 전후 행 수와 합계 변화가 예상과 일치 (WU-203) — `preprocess-versions.test.ts` 손 계산 일치 + 운영 하이브 결측 카드 12행 → 11행 (`STEP2_PASS_TEST.md` #1)
+- [x] 재로그인 후 같은 데이터 버전·저장된 분석 설정으로 재실행하면 같은 수치 (분석 글 문구 동일성은 요구하지 않음) — 운영 시연 2·3, 전처리 선택이 있는 분석도 재실행 같은 숫자 (시연 4)
+- [x] B가 A의 프로젝트 ID·주소를 직접 요청하면 거부 (WU-204) — `owner-routes.test.ts`·`owner-rls.test.ts` + 운영에서 다른 팀원 분석 주소 404 (시연 5)
+- [x] 데이터가 바뀌면 이전 분석이 어느 버전 기준인지 식별된다 (WU-202) — `preprocess-versions.test.ts` "새 정정 공시가 반영돼도…" + 운영 결과 위 데이터 버전 표시
 
 **완료조건 — 시연**
-- [ ] 배포 주소에서 저장 → 재로그인 → 재실행 → 전처리 확인 카드를 시연했다
+- [x] 배포 주소에서 저장 → 재로그인 → 재실행 → 전처리 확인 카드를 시연했다 — 2026-09-30 현준 계정, `STEP2_PASS_TEST.md` §2 (탈퇴는 시험 계정이 없어 자동 테스트로 대신). 시연 중 찾은 문제: 질문에 적은 기간이 무시됨(예림 트랙) — 같은 문서 §3
 
 ---
 
