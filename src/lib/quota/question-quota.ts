@@ -100,13 +100,40 @@ export async function getQuestionUsage(
 }
 
 /** 같은 멱등키 질문의 차감 기록 상태 (PR #19 리뷰 후속) */
-export type ConsumptionState = "fresh" | "stale" | "missing";
+export type ConsumptionState = "fresh" | "stale" | "missing" | "settled";
+
+/** 422로 끝난 질문의 결과 — 같은 키 재전송에 그대로 돌려준다 */
+export interface SettledOutcome {
+  code: "UNSUPPORTED_QUESTION" | "OUT_OF_RANGE" | "TOO_LARGE";
+  message: string;
+}
+
+interface ConsumptionRow {
+  created_at: string;
+  outcome_code: SettledOutcome["code"] | null;
+  outcome_message: string | null;
+}
+
+async function readConsumption(
+  userId: string,
+  idempotencyKey: string,
+  client: SupabaseClient,
+): Promise<ConsumptionRow | null> {
+  const { data, error } = await client
+    .from("quota_consumptions")
+    .select("created_at, outcome_code, outcome_message")
+    .eq("user_id", userId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+  if (error) throw new Error(`질문 차감 기록 조회 실패: ${error.message}`);
+  return data as ConsumptionRow | null;
+}
 
 /**
  * 이 멱등키로 차감된 질문이 아직 "처리 중"인지.
  * `POST /api/ask`는 Vercel이 60초(maxDuration)에 끊으므로, 차감한 지 `staleAfterMs`가 지났는데
  * 분석이 없다면 먼저 보낸 요청은 이미 끊긴 것이다(`stale`). 기록이 없으면 `missing`
- * — 그사이 환불됐거나 422로 정리된 것이라, 호출한 쪽은 차감부터 다시 해야 한다.
+ * — 그사이 환불된 것이라, 호출한 쪽은 차감부터 다시 해야 한다. 422로 끝난 질문은 `settled`.
  */
 export async function getConsumptionState(
   userId: string,
@@ -115,31 +142,61 @@ export async function getConsumptionState(
   client: SupabaseClient = getSupabaseAdmin(),
   now: Date = new Date(),
 ): Promise<ConsumptionState> {
-  const { data, error } = await client
-    .from("quota_consumptions")
-    .select("created_at")
-    .eq("user_id", userId)
-    .eq("idempotency_key", idempotencyKey)
-    .maybeSingle();
-  if (error) throw new Error(`질문 차감 기록 조회 실패: ${error.message}`);
-  const createdAt = (data as { created_at: string } | null)?.created_at;
-  if (!createdAt) return "missing";
-  return now.getTime() - new Date(createdAt).getTime() >= staleAfterMs ? "stale" : "fresh";
+  const row = await readConsumption(userId, idempotencyKey, client);
+  if (!row) return "missing";
+  if (row.outcome_code) return "settled";
+  return now.getTime() - new Date(row.created_at).getTime() >= staleAfterMs ? "stale" : "fresh";
+}
+
+/** `settled` 기록에 남긴 422 결과 (없으면 null) */
+export async function getSettledOutcome(
+  userId: string,
+  idempotencyKey: string,
+  client: SupabaseClient = getSupabaseAdmin(),
+): Promise<SettledOutcome | null> {
+  const row = await readConsumption(userId, idempotencyKey, client);
+  if (!row?.outcome_code) return null;
+  return { code: row.outcome_code, message: row.outcome_message ?? "" };
 }
 
 /**
- * 차감은 그대로 두고 멱등키 기록만 지운다: 지원하지 않는 질문(422)처럼 차감한 채 분석 없이 끝난 질문.
- * 기록을 남겨 두면 2분 뒤 같은 키로 다른 질문을 보내 "끊긴 요청"으로 공짜 처리될 수 있다.
- * 지운 뒤 같은 키로 다시 보내면 새 질문으로 다시 차감한다.
+ * 끊긴(stale) 질문을 이어받는다 — 차감 시각을 지금으로 바꾸는 **조건부 갱신**이라, 같은 순간에 두 요청이
+ * 이어받으려 해도 하나만 true다 (나머지는 "같은 질문 처리 중"). 이어받은 요청마저 끊기면 다시 2분 뒤에 이어받을 수 있다.
+ */
+export async function takeOverStaleConsumption(
+  userId: string,
+  idempotencyKey: string,
+  staleAfterMs: number,
+  client: SupabaseClient = getSupabaseAdmin(),
+  now: Date = new Date(),
+): Promise<boolean> {
+  const cutoff = new Date(now.getTime() - staleAfterMs).toISOString();
+  const { data, error } = await client
+    .from("quota_consumptions")
+    .update({ created_at: now.toISOString() })
+    .eq("user_id", userId)
+    .eq("idempotency_key", idempotencyKey)
+    .lte("created_at", cutoff)
+    .is("outcome_code", null)
+    .select("idempotency_key");
+  if (error) throw new Error(`끊긴 질문 이어받기 실패: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
+/**
+ * 차감은 그대로 두고 멱등키 기록에 422 결과를 남긴다: 지원하지 않는 질문(422)처럼 차감한 채 분석 없이 끝난 질문.
+ * 같은 키로 다시 오면 차감·AI 호출 없이 이 결과를 돌려준다 (Phase 1 후속 — 전에는 기록을 지워 재전송이 또 차감됐다).
+ * 결과가 남아 있으니 2분 뒤 같은 키로 다른 질문을 보내도 "끊긴 요청"으로 공짜 처리되지 않는다.
  */
 export async function settleQuestionQuota(
   userId: string,
   idempotencyKey: string,
+  outcome: SettledOutcome,
   client: SupabaseClient = getSupabaseAdmin(),
 ): Promise<void> {
   const { error } = await client
     .from("quota_consumptions")
-    .delete()
+    .update({ outcome_code: outcome.code, outcome_message: outcome.message })
     .eq("user_id", userId)
     .eq("idempotency_key", idempotencyKey);
   if (error) throw new Error(`질문 차감 기록 정리 실패: ${error.message}`);

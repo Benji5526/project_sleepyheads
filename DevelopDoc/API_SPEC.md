@@ -559,7 +559,7 @@ interface Analysis {
 오류: `400`, `401`, `403`, `404`(projectId), `409 INVALID_STATE`(같은 질문 처리 중), `422 UNSUPPORTED_QUESTION`, `422 OUT_OF_RANGE`, `413 TOO_LARGE`(비교 기업 5곳 초과, 질문 1회 사용), `429 QUOTA_EXCEEDED`, `429 DECLINE_LIMIT`, `429 RATE_LIMITED`, `503 SERVICE_BUDGET`, `503 LLM_UNAVAILABLE`
 
 - 질문 해석이 AI 장애로 실패하면 `503 LLM_UNAVAILABLE`이며 **질문 수를 돌려준다**(차감 취소).
-- 같은 `Idempotency-Key` 질문을 처리하는 중에 다시 보내면(동시에 두 번) 질문 수를 다시 차감하지 않고 AI도 다시 부르지 않는다. 먼저 보낸 질문의 분석이 이미 저장됐으면 그 결과를, 아직 처리 중이면 `409 INVALID_STATE`("같은 질문을 처리하고 있습니다")를 돌려준다. 다만 차감한 지 **2분**이 지나도 분석이 없으면 먼저 보낸 요청이 끊긴 것으로 보고(이 요청은 60초에 끊긴다) 다시 차감하지 않고 이어서 처리한다. 422(지원 불가·기간 밖)로 끝난 질문은 차감한 채로 두고 멱등키 기록만 정리하므로, 같은 키로 다시 보내면 새 질문으로 다시 차감한다.
+- 같은 `Idempotency-Key` 질문을 처리하는 중에 다시 보내면(동시에 두 번) 질문 수를 다시 차감하지 않고 AI도 다시 부르지 않는다. 먼저 보낸 질문의 분석이 이미 저장됐으면 그 결과를, 아직 처리 중이면 `409 INVALID_STATE`("같은 질문을 처리하고 있습니다")를 돌려준다. 다만 차감한 지 **2분**이 지나도 분석이 없으면 먼저 보낸 요청이 끊긴 것으로 보고(이 요청은 60초에 끊긴다) 다시 차감하지 않고 이어서 처리한다 — 두 요청이 동시에 이어받으려 하면 차감 기록의 조건부 갱신으로 **하나만** 이어받고 나머지는 `409`. 422(지원 불가·기간 밖)·413으로 끝난 질문은 차감한 채로 두고 **결과를 차감 기록에 남기므로**, 같은 키로 다시 보내면(응답을 못 받은 화면 등) 차감·AI 호출 없이 같은 오류를 돌려준다 (Phase 1 후속, 마이그레이션 `20260930180000`).
 - `422`(지원 불가·기간 밖)와 **`declined`(범위 밖 거절)는 질문 수를 차감한다** (판정에 AI 비용이 들고, 반복 오남용을 막기 위함). 화면에 "질문 1회가 사용되었습니다"를 함께 안내한다.
 - 거절이 하루 `max_declines_per_day`(10회)를 넘으면 이후 질문은 판정 없이 `429 DECLINE_LIMIT`.
 - 후속 질문(`projectId` 있음)도 매번 새로 범위를 판정한다.
@@ -635,6 +635,10 @@ interface Analysis {
 | `wait_preprocess` | 진단 카드 표시 → Q5 |
 
 - 취소된 분석이면 `409 INVALID_STATE` (외부 호출 없음).
+- 구현 (WU-302, `src/lib/runner/steps/engine.ts`): 계획(`analyses.plan`)의 다음 단계 하나를 `TOOLS[도구]`로 실행하고 `analysis_steps`에 남긴다. **단순 질문은 한 요청 안에서 끝까지**, 복합 질문은 한 요청에 한 단계. 계획 없이 `queued`가 된 분석(되묻기 답·최신 데이터 재분석)은 여기서 계획을 만들고, 복합이면 `awaiting_approval`로 돌려 `next: "done"`(화면이 계획 카드를 보여 줌).
+- 같은 단계를 다른 요청이 실행 중이면 실행하지 않고 `status: "running"`, `lastStep.status: "running"`, `next: "step"` — 화면은 잠깐 기다렸다 다시 부른다. 맡은 요청이 끊겨 320초 넘게 `running`인 단계는 다음 요청이 재시도 1회로 세고 다시 맡는다.
+- 재시도(외부 API 오류·시간 초과, `max_retries_per_step`)는 다음 Q4에서 한다. 선택 단계(`get_peers`·`get_disclosures`·`search_news`)는 끝내 실패해도 건너뛰고 계속, 필수 단계가 실패하면 `failed`(결과가 이미 있으면 `partial`).
+- 상한은 다음 단계를 시작하기 전에 검사한다: 단계 수·AI 비용은 모든 질문, 실행 시간(단계 시간 합)은 복합 질문만 → `partial` + `stopReason`.
 
 ### Q5 `POST /api/analyses/:id/preprocess` 🛡️ (Step 2)
 - 상태가 `awaiting_preprocess`일 때만.
@@ -671,12 +675,14 @@ interface Analysis {
 - 상태가 `awaiting_approval`일 때만. **승인 전에는 외부 호출·계산을 하지 않는다.**
 
 요청: 본문 없음 → 응답 `200` `{ "data": { "status": "queued" } }` → Q4 반복
+- 계획의 `approvedAt`을 채운다. 다른 상태면 `409`, 남의 것은 `404`. 두 번 눌러도 한 번만 바뀐다 (상태 조건부 갱신).
 
 ### Q8 `POST /api/analyses/:id/cancel` 🛡️ (Step 3)
 - `awaiting_approval` / `awaiting_preprocess` / `queued` / `running`에서 가능. 이미 끝난 분석이면 `409`.
 - 취소 후 들어오는 Q4는 외부 호출 없이 거부된다. 진행 중이던 단계는 끝나는 대로 결과를 버린다.
 
 응답 `200` → `{ "data": { "status": "canceled", "stopReason": "USER_CANCELED" } }`
+- 계획 카드 [닫기]도 이 호출이다 (`awaiting_approval` → `canceled`). 남의 것은 `404`.
 
 ### Q9 `POST /api/analyses/:id/rewrite` 🛡️ · 질문 1회 차감 (Step 4)
 - 헤더: `Idempotency-Key` 필수

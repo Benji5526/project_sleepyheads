@@ -22,7 +22,11 @@ const state = vi.hoisted(() => ({
   winnerSaved: false,
   alreadyConsumed: false,
   alreadyConsumedSeq: [] as boolean[],
-  consumptionState: "fresh" as "fresh" | "stale" | "missing",
+  consumptionState: "fresh" as "fresh" | "stale" | "missing" | "settled",
+  takeOverWins: true,
+  takeOvers: 0,
+  settledOutcome: null as null | { code: string; message: string },
+  settledWith: [] as unknown[],
   interpretResult: { type: "analysis" } as { type: string; message?: string },
   settled: 0,
   settleFails: false,
@@ -85,7 +89,13 @@ vi.mock("@/lib/quota/question-quota", async (importOriginal) => ({
   },
   refundQuestionQuota: async () => {},
   getConsumptionState: async () => state.consumptionState,
-  settleQuestionQuota: async () => {
+  takeOverStaleConsumption: async () => {
+    state.takeOvers += 1;
+    return state.takeOverWins;
+  },
+  getSettledOutcome: async () => state.settledOutcome,
+  settleQuestionQuota: async (_u: string, _k: string, outcome: unknown) => {
+    state.settledWith.push(outcome);
     state.settled += 1;
     if (state.settleFails) throw new Error("db down");
   },
@@ -131,6 +141,10 @@ beforeEach(() => {
   state.alreadyConsumed = false;
   state.alreadyConsumedSeq = [];
   state.consumptionState = "fresh";
+  state.takeOverWins = true;
+  state.takeOvers = 0;
+  state.settledOutcome = null;
+  state.settledWith = [];
   state.interpretResult = { type: "analysis" };
   state.settled = 0;
   state.settleFails = false;
@@ -187,6 +201,30 @@ describe("POST /api/ask 동시 중복 요청", () => {
     expect((await res.json()).data.analysisId).toBe("a-mine");
     expect(state.interpreted).toBe(1);
     expect(state.consumed).toBe(1); // 다시 차감하지 않는다 (consume_quota가 already_consumed로 알려 줌)
+    expect(state.takeOvers).toBe(1);
+  });
+
+  it("끊긴 질문을 두 요청이 동시에 이어받으면 하나만 처리하고 나머지는 409 (Phase 1 후속)", async () => {
+    state.alreadyConsumed = true;
+    state.consumptionState = "stale";
+    state.takeOverWins = false; // 다른 요청이 조건부 갱신을 먼저 성공
+    const res = await ask();
+    expect(res.status).toBe(409);
+    expect(state.interpreted).toBe(0);
+  });
+
+  it("422로 끝난 질문을 같은 키로 다시 보내면 차감·AI 호출 없이 같은 422 (Phase 1 후속)", async () => {
+    state.alreadyConsumed = true;
+    state.consumptionState = "settled";
+    state.settledOutcome = { code: "UNSUPPORTED_QUESTION", message: "지원하지 않는 질문" };
+    const res = await ask();
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toMatchObject({
+      code: "UNSUPPORTED_QUESTION",
+      message: "지원하지 않는 질문",
+    });
+    expect(state.consumed).toBe(1); // consume_quota가 already_consumed → 새로 차감하지 않음
+    expect(state.interpreted).toBe(0);
   });
 
   it("그사이 기록이 사라졌으면(먼저 요청이 환불) 공짜로 처리하지 않고 다시 차감한다", async () => {
@@ -207,11 +245,15 @@ describe("POST /api/ask 동시 중복 요청", () => {
     expect(state.interpreted).toBe(0);
   });
 
-  it("지원하지 않는 질문(422)은 차감한 채로 두고 멱등키 기록만 정리한다", async () => {
+  it("지원하지 않는 질문(422)은 차감한 채로 두고 멱등키 기록에 결과를 남긴다", async () => {
     state.interpretResult = { type: "unsupported_question", message: "지원하지 않는 질문" };
     const res = await ask();
     expect(res.status).toBe(422);
     expect(state.settled).toBe(1);
+    expect(state.settledWith[0]).toEqual({
+      code: "UNSUPPORTED_QUESTION",
+      message: "지원하지 않는 질문",
+    });
   });
 
   it("422 뒤 기록 정리가 실패해도 500이 아니라 원래 422를 돌려준다", async () => {

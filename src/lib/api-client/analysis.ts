@@ -1,5 +1,5 @@
 // 기업 찾기·질문·결과 호출 (API_SPEC S1, Q1~Q4). 화면은 이 함수만 쓰고 fetch를 직접 부르지 않는다.
-import type { Analysis, CompanyRef } from "@/contracts";
+import type { Analysis, AnalysisStatus, CompanyRef, StopReason } from "@/contracts";
 import { apiFetch } from "./http";
 import {
   mockAsk,
@@ -8,6 +8,14 @@ import {
   mockSearchCompanies,
   mockStep,
 } from "./mock-analysis";
+import {
+  isMockComplexQuestion,
+  isMockStepsAnalysis,
+  mockApprove,
+  mockAskComplex,
+  mockCancel,
+  mockStepsStep,
+} from "./mock-steps";
 import { MOCK_MODE } from "./mode";
 import type { AskResponse, ClarifyResponse, StepResponse, WithRemaining } from "./types";
 
@@ -26,7 +34,8 @@ export function ask(
   idempotencyKey: string,
   projectId: string | null = null,
 ): Promise<WithRemaining<AskResponse>> {
-  if (MOCK_MODE) return mockAsk(question);
+  if (MOCK_MODE)
+    return isMockComplexQuestion(question) ? mockAskComplex(question) : mockAsk(question);
   return apiFetch<AskResponse>("/api/ask", {
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },
@@ -51,8 +60,27 @@ export function clarify(id: string, optionId: string): Promise<WithRemaining<Cla
 
 /** Q4 다음 단계 1개 실행 */
 export function runStep(id: string): Promise<WithRemaining<StepResponse>> {
-  if (MOCK_MODE) return mockStep(id);
+  if (MOCK_MODE) return isMockStepsAnalysis(id) ? mockStepsStep(id) : mockStep(id);
   return apiFetch<StepResponse>(`/api/analyses/${encodeURIComponent(id)}/step`, {
     method: "POST",
   });
+}
+
+/** Q7 계획 카드 [분석 시작] — 이후 Q4를 반복한다 (WU-301) */
+export function approve(id: string): Promise<WithRemaining<{ status: AnalysisStatus }>> {
+  if (MOCK_MODE) return mockApprove(id);
+  return apiFetch<{ status: AnalysisStatus }>(`/api/analyses/${encodeURIComponent(id)}/approve`, {
+    method: "POST",
+  });
+}
+
+/** Q8 취소 — 계획 카드 닫기, 실행 중 [취소] (WU-301·302) */
+export function cancelAnalysis(
+  id: string,
+): Promise<WithRemaining<{ status: AnalysisStatus; stopReason: StopReason }>> {
+  if (MOCK_MODE) return mockCancel(id);
+  return apiFetch<{ status: AnalysisStatus; stopReason: StopReason }>(
+    `/api/analyses/${encodeURIComponent(id)}/cancel`,
+    { method: "POST" },
+  );
 }
