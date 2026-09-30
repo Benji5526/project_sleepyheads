@@ -72,6 +72,29 @@ export function ExplanationPanel({
       </button>
     );
 
+  // 투자 포인트가 근거로 단 뉴스 → 아래 "뉴스 단서"의 몇 번째 기사인지 (화면 번호 1부터)
+  const newsOrder = new Map(explanation.newsClues.map((n, i) => [n.newsId, i + 1]));
+  const showNews = (newsId: string) => {
+    const item = document.getElementById(`news-clue-${newsId}`);
+    item?.scrollIntoView({ behavior: "smooth", block: "center" });
+    item?.focus({ preventScroll: true });
+  };
+  // 링크(a)가 아니라 버튼 — 분석 글 안의 링크는 RSS가 준 기사 주소뿐이어야 한다 (TECH §10.2)
+  const newsButtons = (newsIds: string[]) =>
+    newsIds
+      .filter((id) => newsOrder.has(id))
+      .map((id) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => showNews(id)}
+          className="ml-1.5 whitespace-nowrap text-sm text-accent underline underline-offset-4"
+          aria-label={`근거 뉴스 ${newsOrder.get(id)}번 보기`}
+        >
+          뉴스 {newsOrder.get(id)}
+        </button>
+      ));
+
   return (
     <article className="space-y-5">
       <div data-testid="explanation-main" className="space-y-4">
@@ -113,12 +136,17 @@ export function ExplanationPanel({
                     {insight.inferred && (
                       <span
                         className="ml-1.5 whitespace-nowrap text-xs text-muted"
-                        title="숫자를 바탕으로 한 해석이 들어간 문장입니다"
+                        title={
+                          insight.newsIds.length > 0
+                            ? "뉴스 보도를 바탕으로 한 추정입니다 — 확인된 사실이 아닙니다"
+                            : "숫자를 바탕으로 한 해석이 들어간 문장입니다"
+                        }
                       >
                         (추정)
                       </span>
                     )}
                     {chartButton(insight.chartRef, "차트 보기")}
+                    {newsButtons(insight.newsIds)}
                   </p>
                 </li>
               ))}
@@ -157,8 +185,15 @@ export function ExplanationPanel({
             차트(공시 자료)만 씁니다.
           </p>
           <ul className="mt-2 space-y-3">
-            {explanation.newsClues.map((n) => (
-              <li key={n.newsId} data-testid="news-clue">
+            {explanation.newsClues.map((n, i) => (
+              <li
+                key={n.newsId}
+                id={`news-clue-${n.newsId}`}
+                tabIndex={-1}
+                data-testid="news-clue"
+                className="scroll-mt-4 rounded-md outline-offset-4 focus:outline-2 focus:outline-accent"
+              >
+                <span className="sr-only">{i + 1}번 뉴스. </span>
                 {/* 링크는 RSS가 준 주소 그대로 (TECH §10.2). http(s)가 아니면 링크로 만들지 않는다 */}
                 {isWebUrl(n.url) ? (
                   <a

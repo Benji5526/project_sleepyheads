@@ -301,3 +301,145 @@ describe("buildExplanation", () => {
     expect(result.insights).toHaveLength(0);
   });
 });
+
+// WU-305: 뉴스 단서를 근거로 쓰는 규칙 — 결론도 뉴스 없이 원인을 단정하지 않는다
+const NEWS = [
+  {
+    newsId: "n1",
+    title: "SK하이닉스, HBM 공급 확대",
+    press: "한국경제",
+    publishedAt: "2026-07-24T01:00:00.000Z",
+    url: "https://news.google.com/rss/articles/abc?oc=5",
+    gist: "한국경제는 HBM 공급 확대를 보도했다.",
+  },
+  {
+    newsId: "n2",
+    title: "SK하이닉스 공장 증설",
+    press: "연합뉴스",
+    publishedAt: "2026-07-20T01:00:00.000Z",
+    url: "https://news.google.com/rss/articles/def?oc=5",
+    gist: "",
+  },
+];
+
+describe("buildExplanation — 뉴스 근거 (WU-305)", () => {
+  it("뉴스가 없으면 결론의 원인 문장도 버린다 (남은 문장만)", () => {
+    const result = buildExplanation({
+      ai: baseAi({
+        conclusion: ["영업이익이 {{f1}} 늘었습니다.", "HBM 수요 증가 때문에 이익이 늘었습니다."],
+      }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: [],
+      hasNews: false,
+      mixedScope: false,
+    });
+    expect(result.conclusion).toEqual(["영업이익이 +12.3% 늘었습니다."]);
+  });
+
+  it("결론이 원인 문장뿐이면 설명 생성 실패 (지어낸 원인을 내보내지 않는다)", () => {
+    const result = buildExplanation({
+      ai: baseAi({ conclusion: ["HBM 수요 증가 때문에 영업이익이 {{f1}} 늘었습니다."] }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: [],
+      hasNews: false,
+      mixedScope: false,
+    });
+    expect(result.status).toBe("failed");
+  });
+
+  it("원인을 모른다고 밝히는 결론 문장은 원인 주장이 아니다 — 뉴스 없이도 남는다", () => {
+    const result = buildExplanation({
+      ai: baseAi({
+        conclusion: [
+          "영업이익이 {{f1}} 늘었습니다.",
+          "다만 제공된 뉴스는 증가 원인을 설명하지 않아, 이 자료만으로는 배경을 특정하기 어렵습니다.",
+        ],
+      }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: [],
+      hasNews: false,
+      mixedScope: false,
+    });
+    expect(result.conclusion).toHaveLength(2);
+    // "원인은 수요 때문으로 알 수 없다" 같은 섞인 문장은 여전히 원인 주장으로 본다
+    const mixed = buildExplanation({
+      ai: baseAi({
+        conclusion: [
+          "영업이익이 {{f1}} 늘었습니다.",
+          "수요 증가 때문이며 다른 원인은 알 수 없습니다.",
+        ],
+      }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: [],
+      hasNews: false,
+      mixedScope: false,
+    });
+    expect(mixed.conclusion).toHaveLength(1);
+  });
+
+  it("AI가 인용한 뉴스가 있으면 결론의 배경 문장이 남고, 그 뉴스가 뉴스 단서에 보인다", () => {
+    const result = buildExplanation({
+      ai: baseAi({
+        conclusion: [
+          "영업이익이 {{f1}} 늘었습니다.",
+          "한국경제 보도처럼 HBM 공급 확대 영향으로 이익이 늘어난 것으로 보입니다.",
+        ],
+        news_clues: [{ news_id: "n1", relevance: "HBM 공급 확대" }],
+      }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: NEWS,
+      hasNews: true,
+      mixedScope: false,
+    });
+    expect(result.conclusion).toHaveLength(2);
+    expect(result.newsClues.map((n) => n.newsId)).toEqual(["n1"]);
+  });
+
+  it("없는 뉴스 ID를 인용했다고 해도 결론의 원인 문장은 버린다", () => {
+    const result = buildExplanation({
+      ai: baseAi({
+        conclusion: ["영업이익이 {{f1}} 늘었습니다.", "HBM 공급 확대 때문에 이익이 늘었습니다."],
+        news_clues: [{ news_id: "n9", relevance: "없는 기사" }],
+      }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: NEWS,
+      hasNews: true,
+      mixedScope: false,
+    });
+    expect(result.conclusion).toEqual(["영업이익이 +12.3% 늘었습니다."]);
+    expect(result.newsClues).toEqual([]);
+  });
+
+  it("뉴스 근거를 단 원인 투자 포인트는 남고, 인용하지 않은 뉴스는 뉴스 단서에 보이지 않는다", () => {
+    const result = buildExplanation({
+      ai: baseAi({
+        insights: [
+          {
+            kind: "positive",
+            text: "한국경제 보도처럼 HBM 공급 확대 덕분에 이익이 늘어난 것으로 보입니다.",
+            figure_ids: ["f1"],
+            news_ids: ["n1"],
+            chart_ref: "c1",
+            inferred: true,
+          },
+        ],
+        // 결론이 원인을 말하지 않았으면 AI가 밝힌 인용 목록만으로는 뉴스를 붙이지 않는다
+        news_clues: [{ news_id: "n2", relevance: "증설" }],
+      }),
+      figures: FIGURES,
+      charts: CHARTS,
+      newsClues: NEWS,
+      hasNews: true,
+      mixedScope: false,
+    });
+    expect(result.insights).toHaveLength(1);
+    expect(result.insights[0].newsIds).toEqual(["n1"]);
+    expect(result.newsClues.map((n) => n.newsId)).toEqual(["n1"]);
+  });
+});

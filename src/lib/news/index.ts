@@ -12,6 +12,7 @@
 //     clues:     NewsClue[],   // 0~5건. 그대로 `generateExplanation({ newsClues })`와 `Explanation.newsClues`에
 //     notes:     string[],     // 실행 기록(analysis_steps)에 남길 사유. 기사 제목·본문은 넣지 않는다
 //     searches:  number,       // 이번에 쓴 RSS 검색 수 (캐시 포함, 최대 2)
+//     rssCalls:  number,       // 그중 캐시를 못 써서 실제로 RSS를 부른 수 (실행 기록 외부 호출 수)
 //     gistUsage: LlmUsage | null,  // 요지 AI 1회의 토큰·비용 (부르지 않았으면 null)
 //   }
 //
@@ -32,7 +33,7 @@ import { readNewsCache, writeNewsCache } from "./cache";
 import { writeNewsGists, type GistArticle } from "./gist";
 import { DomainPacer, type GuardedFetchDeps } from "./guarded-fetch";
 import { buildRssUrl, buildSearchQuery, type NewsPeriod } from "./query";
-import { dedupeNewsItems, normalizeTitle, rankNewsItems } from "./rank";
+import { dedupeNewsItems, rankNewsItems, titleMentionsCompany } from "./rank";
 import { parseRss, type RssItem } from "./rss";
 
 export const MAX_SEARCHES_PER_QUESTION = 2;
@@ -52,6 +53,8 @@ export interface FindNewsCluesResult {
   clues: NewsClue[];
   notes: string[];
   searches: number;
+  /** 캐시를 못 써서 실제로 RSS를 부른 수 (도구 사용량 `externalCalls`는 캐시 적중을 세지 않는다) */
+  rssCalls: number;
   gistUsage: LlmUsage | null;
 }
 
@@ -66,7 +69,7 @@ export interface FindNewsCluesDeps extends GuardedFetchDeps {
 // 같은 서버 인스턴스 안에서는 질문이 달라도 도메인 간격을 함께 지킨다
 const sharedPacer = new DomainPacer();
 
-type SearchOutcome = { items: RssItem[]; note?: string };
+type SearchOutcome = { items: RssItem[]; note?: string; fetched?: true };
 
 async function search(
   query: string,
@@ -78,25 +81,25 @@ async function search(
 
   let xml: string;
   try {
+    // 한도 초과(QuotaExceededError)는 호출 전에 막히므로 fetched가 아니다
     xml = await newsFetch(buildRssUrl(query), {
       userId: input.userId,
       analysisId: input.analysisId,
       client: deps.client,
     });
   } catch (error) {
-    return {
-      items: [],
-      note:
-        error instanceof QuotaExceededError
-          ? "뉴스 검색 하루 한도 도달 — 뉴스 없이 진행"
-          : "뉴스 RSS 호출 실패 — 뉴스 없이 진행",
-    };
+    if (error instanceof QuotaExceededError) {
+      return { items: [], note: "뉴스 검색 하루 한도 도달 — 뉴스 없이 진행" };
+    }
+    return { items: [], note: "뉴스 RSS 호출 실패 — 뉴스 없이 진행", fetched: true };
   }
 
   const items = parseRss(xml);
-  if (items === null) return { items: [], note: "뉴스 RSS 형식 오류 — 뉴스 없이 진행" };
+  if (items === null) {
+    return { items: [], note: "뉴스 RSS 형식 오류 — 뉴스 없이 진행", fetched: true };
+  }
   await writeNewsCache(deps.client, query, items, deps.now);
-  return { items };
+  return { items, fetched: true };
 }
 
 /**
@@ -105,8 +108,8 @@ async function search(
  * (2026-09-30 현준님 결정. 요지 검사는 gist.ts `isAcceptableGist`).
  */
 function isUsableItem(item: RssItem, companyName: string): boolean {
-  const name = normalizeTitle(companyName);
-  return name !== "" && normalizeTitle(item.title).includes(name);
+  // 기업명이 다른 낱말의 앞부분이면 제외 ("하이브로자임"·"현대차증권") — rank.ts titleMentionsCompany
+  return titleMentionsCompany(item.title, companyName);
 }
 
 function summarizeReasons(reasons: string[]): string[] {
@@ -121,6 +124,7 @@ export async function findNewsClues(
 ): Promise<FindNewsCluesResult> {
   const notes: string[] = [];
   let searches = 0;
+  let rssCalls = 0;
   try {
     const client = deps.client ?? getSupabaseAdmin();
     const now = deps.now ?? new Date();
@@ -133,6 +137,7 @@ export async function findNewsClues(
     for (let i = 0; i < MAX_SEARCHES_PER_QUESTION && i < queries.length; i += 1) {
       const outcome = await search(queries[i], input, { client, now });
       searches += 1;
+      if (outcome.fetched) rssCalls += 1;
       if (outcome.note) notes.push(outcome.note);
       pool = [...pool, ...outcome.items];
 
@@ -157,7 +162,7 @@ export async function findNewsClues(
     ).slice(0, MAX_CLUES);
     if (picked.length === 0) {
       if (notes.length === 0) notes.push("관련 뉴스 없음");
-      return { clues: [], notes, searches, gistUsage: null };
+      return { clues: [], notes, searches, rssCalls, gistUsage: null };
     }
 
     // 3) 본문 (선택) — 허용될 때만, 메모리에서만
@@ -203,7 +208,7 @@ export async function findNewsClues(
       url: item.link,
       gist: gist.gists.get(`n${index + 1}`) ?? "",
     }));
-    return { clues, notes, searches, gistUsage: gist.usage };
+    return { clues, notes, searches, rssCalls, gistUsage: gist.usage };
   } catch (error) {
     // 여기까지 오면 예상 못 한 오류다 — 그래도 분석은 뉴스 없이 계속한다
     console.error(`[news:${input.analysisId ?? "unknown"}] 뉴스 단서 실패`, error);
@@ -211,6 +216,7 @@ export async function findNewsClues(
       clues: [],
       notes: [...notes, "뉴스 단서 처리 중 오류 — 뉴스 없이 진행"],
       searches,
+      rssCalls,
       gistUsage: null,
     };
   }

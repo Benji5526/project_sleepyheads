@@ -148,11 +148,14 @@ describe("findNewsClues (WU-304)", () => {
     const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(serveRss(SKHYNIX_ITEMS));
     const { run, db } = deps();
 
-    await run();
-    await run();
+    const first = await run();
+    const second = await run();
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(db.newsCalls()).toBe(1);
+    // 도구 사용량(externalCalls)은 캐시 적중을 세지 않는다 — 검색 수와 실제 호출 수를 따로 준다
+    expect(first).toMatchObject({ searches: 1, rssCalls: 1 });
+    expect(second).toMatchObject({ searches: 1, rssCalls: 0 });
   });
 
   it("하루 지난 캐시는 쓰지 않는다", async () => {
