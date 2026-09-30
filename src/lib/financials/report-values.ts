@@ -25,6 +25,8 @@ export interface EnsureReportValuesOptions extends DartFetchOptions {
    * 기존 report_values 행은 지우지 않고 새 행을 추가한 뒤 `superseded_by`로 잇는다(§5.1).
    */
   force?: boolean;
+  /** 테스트에서 지금 시각을 바꿀 때만 쓴다. */
+  now?: () => Date;
 }
 
 export interface EnsureReportValuesResult {
@@ -63,7 +65,7 @@ export async function ensureReportValues(
 
   if (!force) {
     const cached = await readFetchState(admin, corpCode, bsnsYear, reprtCode);
-    if (cached) {
+    if (cached && isUsableFetchState(cached, options.now?.() ?? new Date())) {
       return {
         corpCode,
         bsnsYear,
@@ -172,6 +174,19 @@ async function fetchStatement(
 interface FetchStateRow {
   fs_div_used: FsDiv | null;
   rcept_no: string | null;
+  checked_at: string;
+}
+
+/**
+ * "아직 없음"(CFS·OFS 모두 013)으로 기록된 보고서를 다시 확인하기까지의 간격.
+ * 분기가 끝나고 보고서가 제출되기 전(약 45일)에 받은 013을 영원히 믿으면, 제출 뒤에도 그 분기가
+ * 계속 빈칸으로 나온다. 값을 찾은 보고서는 정정 공시 재수집(force) 전까지 다시 부르지 않는다.
+ */
+export const EMPTY_REPORT_RECHECK_MS = 24 * 60 * 60 * 1000;
+
+function isUsableFetchState(row: FetchStateRow, now: Date): boolean {
+  if (row.fs_div_used !== null) return true;
+  return now.getTime() - new Date(row.checked_at).getTime() < EMPTY_REPORT_RECHECK_MS;
 }
 
 async function readFetchState(
@@ -182,7 +197,7 @@ async function readFetchState(
 ): Promise<FetchStateRow | null> {
   const { data, error } = await admin
     .from("report_fetch_state")
-    .select("fs_div_used, rcept_no")
+    .select("fs_div_used, rcept_no, checked_at")
     .eq("corp_code", corpCode)
     .eq("bsns_year", bsnsYear)
     .eq("reprt_code", reprtCode)
