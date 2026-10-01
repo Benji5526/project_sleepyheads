@@ -8,7 +8,7 @@ import { ACCOUNT_MAP_SEED_ROWS } from "../fixtures/mock/account-map";
 import { createFakeFinancialsDb } from "../unit/helpers/fake-financials-db";
 import compareAnswers from "../regression/answers/compare.json";
 import edgeAnswers from "../regression/answers/edge.json";
-import skHynixAnswers from "../regression/answers/sk-hynix.json";
+import skHynixAnswers from "../regression/answers/skhynix.json";
 import dongwonMobility from "./fixtures/dongwon-mobility.json";
 import kbFinancial from "./fixtures/kb-financial.json";
 import samsungElectronics from "./fixtures/samsung-electronics.json";
@@ -191,7 +191,7 @@ beforeEach(() => {
 });
 
 const files: [string, Record<string, unknown>, string][] = [
-  ["sk-hynix", skHynixAnswers, "SK하이닉스"],
+  ["skhynix", skHynixAnswers, "SK하이닉스"],
   ["compare", compareAnswers, "SK하이닉스"],
   ["edge", edgeAnswers, "SK하이닉스"],
 ];
@@ -199,11 +199,18 @@ const files: [string, Record<string, unknown>, string][] = [
 /** 이 테스트에 원문 fixture가 있는 정답만 (부채비율 비교는 compare-financial.test.ts가 다른 fixture로 확인) */
 const COVERED_ELSEWHERE = new Set(["compare#debt_ratio_2024q4_with_financial"]);
 
+/** 이 테스트 형식(질문 + 숫자 목록)인가 */
+function isDetailed(raw: unknown): raw is Answer {
+  return typeof raw === "object" && raw !== null && "question" in raw && "figures" in raw;
+}
+
 describe("회귀 세트 숫자 정답 ↔ 엔진 (tests/regression/answers)", () => {
   for (const [file, answers, fallback] of files) {
     for (const [key, raw] of Object.entries(answers)) {
       if (key.startsWith("_")) continue;
       const answer = raw as Answer;
+      // 회귀 세트 형식(company·metric·period 한 줄 — tests/regression/regression.test.ts가 돌린다)은 건너뛴다
+      if (!isDetailed(answer)) continue;
       if (answer.synthetic || COVERED_ELSEWHERE.has(`${file}#${key}`)) continue;
       it(`answers/${file}.json#${key} — "${answer.question}"`, async () => {
         const companies = companiesIn(answer, fallback);
@@ -225,7 +232,7 @@ describe("정답 파일 모양 (회귀 세트가 answerRef로 가리킨다)", ()
     "answers/%s.json: 키마다 질문·기간·지표·숫자가 있고 원문 근거가 있다",
     (_file, answers) => {
       for (const [key, raw] of Object.entries(answers)) {
-        if (key.startsWith("_")) continue;
+        if (key.startsWith("_") || !isDetailed(raw)) continue;
         const answer = raw as Answer & { rceptNo?: string[]; fixture?: string; inputs?: unknown };
         expect(answer.question, key).toBeTruthy();
         expect(answer.metrics.length, key).toBeGreaterThan(0);

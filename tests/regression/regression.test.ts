@@ -65,13 +65,8 @@ function fixedAiOutput(id: string): unknown | null {
  * 지금은 기대와 다른 게 정상인 케이스 — **지금 나오는 결과(`now`)를 그대로** 확인한다. 고쳐지면 결과가 바뀌어
  * 빨간불이 되므로 그때 여기서 빼면 된다. `it.fails`를 쓰지 않는 이유: 다른 이유로 깨져도 초록불이 되기 때문.
  */
-export const KNOWN_PENDING: Record<string, { reason: string; now: Record<string, unknown> }> = {
-  "r05-per": {
-    reason:
-      "WU-502 병합 전 — 질문 해석 확정(validate)이 Step 5 지표(per)를 아직 '지원 불가'로 거절한다 (예림)",
-    now: { kind: "error", errorCode: "UNSUPPORTED_QUESTION" },
-  },
-};
+// r05-per는 Phase 4 통합(WU-502 병합)으로 풀렸다 — 지금은 비어 있다
+export const KNOWN_PENDING: Record<string, { reason: string; now: Record<string, unknown> }> = {};
 
 // ---------------------------------------------------------------------------
 // 가짜로 바꾸는 것: AI·DB·전자공시만. 질문 해석·검사·계산 코드는 진짜다.
@@ -131,6 +126,16 @@ const COMPANIES: CompanyRow[] = [
     acc_mt: 12,
     sector_source: "manual",
     sectors: SEMI,
+  },
+  // r07 결측 (금융지주 매출)
+  {
+    corp_code: "00688996",
+    stock_code: "105560",
+    corp_name: "KB금융",
+    market: "KOSPI",
+    acc_mt: 12,
+    sector_source: "manual",
+    sectors: { name: "금융지주", is_financial: true },
   },
 ];
 const { client } = createFakeCompaniesClient(COMPANIES) as { client: SupabaseClient };
@@ -251,7 +256,8 @@ describe("회귀 세트 — 질문 해석 (AI 고정 응답, 비용 0)", () => {
       if (outcome.kind === "decline")
         expect(outcome.declineCategory).toBe(c.expect.declineCategory);
       // 고정 응답이 없는 케이스(서버 1차 필터·권한 검사)는 AI를 부르지 않는다
-      if (fixedAiOutput(c.id) === null) expect(state.aiCalls).toBe(0);
+      // 고정 응답이 없으면 AI 호출 0, 있으면 1번 — "AI 판정" 케이스가 1차 필터에 걸려 AI를 지나지 않는 것도 잡는다
+      expect(state.aiCalls).toBe(fixedAiOutput(c.id) === null ? 0 : 1);
     });
   }
 });
@@ -266,6 +272,8 @@ interface Answer {
   metric?: string;
   /** "2026Q2" 또는 연간이면 "2025" */
   period?: string;
+  /** 주가 지표(per·pbr·market_cap)의 기준일 "2026-09-30" */
+  priceDate?: string;
   /** 계산 규칙 정답 (입력 고정) */
   formula?: string;
   inputs?: { current: string; previous: string | null; profit?: boolean };
@@ -315,7 +323,7 @@ describe("회귀 세트 — 숫자 정답 (원문 fixture → 실제 계산 엔�
     it(`${c.id}: ${ref}`, async () => {
       const got = answer.formula
         ? formulaValue(answer.formula, answer.inputs!)
-        : await engineValue(answer.company!, answer.metric!, answer.period!);
+        : await engineValue(answer.company!, answer.metric!, answer.period!, answer.priceDate);
       if (typeof answer.value === "number" && typeof got.value === "number") {
         expect(got.value).toBeCloseTo(answer.value, 4);
       } else {

@@ -1,9 +1,15 @@
 {
-  "metrics": ["debt_ratio"],
+  "metrics": ["revenue"],
   "period": {
     "specified": true,
     "from": "2026Q2",
     "to": "2026Q2",
     "text": "2026년 2분기"
-  }
+  },
+  "companies": [
+    {
+      "query": "KB금융",
+      "role": "target"
+    }
+  ]
 }

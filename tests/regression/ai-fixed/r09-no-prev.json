@@ -2,9 +2,9 @@
   "metrics": ["operating_income", "qoq"],
   "period": {
     "specified": true,
-    "from": "2015Q1",
-    "to": "2015Q1",
-    "text": "2015년 1분기"
+    "from": "2016Q1",
+    "to": "2016Q1",
+    "text": "2016년 1분기"
   },
   "operations": [
     {

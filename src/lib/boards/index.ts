@@ -8,4 +8,4 @@ export {
   type SectorAggregateParams,
   type SectorAggregateRow,
 } from "./sector-aggregate";
-export { loadBoardResult, loadBoardRow, saveBoard, toBoardView } from "./store";
+export { loadAutoPeers, loadBoardResult, loadBoardRow, saveBoard, toBoardView } from "./store";

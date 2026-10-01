@@ -187,3 +187,10 @@ curl -H "Authorization: Bearer $CRON_SECRET" "https://projectsleepyheads.vercel.
 ```
 
 설명 작성이 실패하면 저장하지 않고 이전 예시를 그대로 둡니다.
+
+### 9.5 보안·운영 점검 결과 (WU-505, 2026-10-01 — 자세히는 [SECURITY_CHECK](DevelopDoc/SECURITY_CHECK.md))
+- **자동 확인 ✅**: 브라우저 번들(운영 JS 포함)에 서버 키 0건 · 저장소·커밋 기록에 비밀 값 0건 · 운영 표 32개 모두 RLS, 회원 표는 본인 정책만 · 권한이 센 DB 함수(SECURITY DEFINER) 8개는 회원이 직접 못 부름 · 뉴스 본문은 DB·로그에 없음
+- **남용 방어 ✅**: 분당 요청 제한, 회원 하루 질문 수, 외부 API 전체 상한, 질문당 단계·시간·AI 비용 상한
+- **사람이 확인할 것 👤**: Supabase 이메일 가입 꺼짐 · Site URL·Redirect URL과 구글 OAuth 리디렉션 주소 · OpenAI 키별 월 예산 상한 · Vercel 사용량
+- **⚠️ 무료 플랜은 자동 백업이 없다** — 시연 전 `supabase db dump`로 한 번 내려받아 보관
+- 다시 점검: `node scripts/security-check.mjs --url https://projectsleepyheads.vercel.app`

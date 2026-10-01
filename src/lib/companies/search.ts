@@ -47,6 +47,21 @@ export async function searchCompanies(
     return (data ?? []) as unknown as CompanyRow[];
   };
 
+  // 종목코드(6자리)면 코드가 같은 기업 (Phase 4 통합: 보드가 비교 기업 칩 이름을 종목코드로 찾는다 — STEP4_PASS_TEST §1.2 #2,
+  // 입력창 안내 "이름이나 종목코드로 찾기")
+  if (/^[0-9A-Z]{6}$/.test(trimmed)) {
+    const { data, error } = await admin
+      .from("companies")
+      .select(COMPANY_SELECT_COLUMNS)
+      .eq("stock_code", trimmed)
+      .limit(1);
+    if (error) throw new Error(`기업 검색 실패: ${error.message}`);
+    const byCode = ((data ?? []) as unknown as CompanyRow[])
+      .map(toCompanyRef)
+      .filter((company): company is CompanyRef => company !== null);
+    if (byCode.length > 0) return byCode;
+  }
+
   // 줄임말("현대차")이면 정식 이름(현대자동차)을 맨 앞에 — 이름에 "현대차"가 든 현대차증권만 뜨지 않게
   const canonical = canonicalCompanyName(trimmed);
   const rows = await find(trimmed);

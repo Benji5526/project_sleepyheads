@@ -1,10 +1,10 @@
 {
   "id": "r07-missing",
-  "title": "결측 — 계정 값이 없으면 계산 불가(MISSING_ACCOUNT)",
-  "question": "SK하이닉스 2026년 2분기 부채비율 알려줘",
+  "title": "결측 — 원문에 계정이 없으면 계산 불가(MISSING_ACCOUNT): 금융지주는 매출(영업수익) 합계 행이 없다",
+  "question": "KB금융 2026년 2분기 매출 알려줘",
   "kind": "normal",
   "expect": {
-    "metrics": ["debt_ratio"],
+    "metrics": ["revenue"],
     "period": {
       "from": "2026Q2",
       "to": "2026Q2"

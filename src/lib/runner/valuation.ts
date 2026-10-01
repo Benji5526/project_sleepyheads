@@ -243,8 +243,7 @@ export function buildValuationChart(
             ? DISPLAY_BY_REASON[reason]
             : undefined,
         basis: {
-          report:
-            key === "market_cap" ? `${PRICE_SOURCE} ${date ?? ""} 종가`.trim() : row.input.report,
+          report: key === "market_cap" ? "금융위원회 주식시세" : row.input.report, // 기준일은 화면이 basis.priceDate로 붙인다
           fsDiv: row.input.fsDiv,
           ...(date ? { priceDate: date } : {}),
         },

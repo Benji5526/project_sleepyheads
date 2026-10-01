@@ -104,6 +104,13 @@
           "account_nm": "매출액",
           "thstrm_amount": "3655717000000",
           "thstrm_add_amount": "3655717000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "dart_OperatingIncomeLoss",
+          "account_nm": "영업이익(손실)",
+          "thstrm_amount": "561798000000",
+          "thstrm_add_amount": "561798000000"
         }
       ]
     },

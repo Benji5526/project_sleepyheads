@@ -1,9 +1,10 @@
-import type { AnalysisRequestView, ResultObject } from "@/contracts";
+import type { AnalysisRequestView, CompanyRef, ResultObject } from "@/contracts";
 import { HttpError } from "@/lib/api/errors";
 import { ownedOrNotFound } from "@/lib/api/guards";
 import { ok } from "@/lib/api/respond";
 import { route } from "@/lib/api/route";
 import {
+  loadAutoPeers,
   loadBoardRow,
   parseBoardFilters,
   recomputeBoard,
@@ -41,13 +42,23 @@ async function loadAnalysisWithResult(supabase: SessionClient, id: string, userI
   return { ...analysis, result: analysis.result };
 }
 
+/** 원래 비교 기업: 질문에 적은 경쟁사, 없으면 get_peers 단계가 자동으로 고른 경쟁사 (실행 기록) */
+async function originalPeers(analysis: AnalysisRow): Promise<CompanyRef[]> {
+  const asked = analysis.analysis_request?.peers ?? [];
+  if (asked.length > 0) return asked;
+  return loadAutoPeers(getSupabaseAdmin(), analysis.id);
+}
+
 // B1 GET /api/boards/:id 🔑 🛡️ — API_SPEC B1 (WU-401)
 // 보드가 없으면(필터를 한 번도 안 바꿈) filters: {} + 원래 결과 + "ready".
 export const GET = route({ access: "member" }, async (ctx) => {
   const supabase = ctx.supabase!;
   const analysis = await loadAnalysisWithResult(supabase, ctx.params.id, ctx.userId!);
   const board = await loadBoardRow(supabase, analysis.id);
-  return ok(toBoardView(analysis, board));
+  const peers = await originalPeers(analysis);
+  // 질문에 적은 경쟁사는 화면이 분석 요청에서 이미 안다 — 자동 선택 경쟁사만 filters.peers로 알려 준다
+  const auto = analysis.analysis_request?.peers.length ? [] : peers;
+  return ok(toBoardView(analysis, board, auto));
 });
 
 // B2 PATCH /api/boards/:id 🔑 🛡️ — API_SPEC B2 (WU-401)
@@ -70,11 +81,13 @@ export const PATCH = route({ access: "member" }, async (ctx) => {
   const filters = parseBoardFilters(body, request.target.stockCode);
 
   const admin = getSupabaseAdmin();
+  // 자동 선택 경쟁사도 원래 비교 기업으로 — 기간만 바꿔도 비교 기업이 사라지지 않게
+  const peers = await originalPeers(analysis);
   const result = await recomputeBoard(
     {
       analysisId: analysis.id,
       ownerId: userId,
-      request,
+      request: { ...request, peers },
       datasetVersionId: analysis.dataset_version_id,
       filters,
     },
@@ -88,10 +101,14 @@ export const PATCH = route({ access: "member" }, async (ctx) => {
     result,
     updatedAt: new Date().toISOString(),
   });
+  const autoShown =
+    !filters.peers && !request.peers.length && peers.length > 0
+      ? { ...filters, peers: peers.map((p) => p.stockCode) }
+      : filters;
   return ok({
     id: analysis.id,
     analysisId: analysis.id,
-    filters,
+    filters: autoShown,
     result,
     explanationStatus: "stale" as const,
   });

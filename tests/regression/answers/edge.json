@@ -149,5 +149,34 @@
       "TTM = −1.3조 ≤ 0 → 적자, 지배주주지분 −2조 ≤ 0 → 자본잠식 (TECH §6.4)",
       "테스트: tests/unit/runner-valuation.test.ts"
     ]
+  },
+  "missing-account": {
+    "company": "kb",
+    "metric": "revenue",
+    "period": "2026Q2",
+    "value": null,
+    "reason": "MISSING_ACCOUNT",
+    "source": "KB금융 2026 반기보고서(20260814004200)에 영업수익 합계·ifrs-full_Revenue 행이 없다 — ANSWER_KEY.md §1.3"
+  },
+  "zero-denominator": {
+    "formula": "qoq",
+    "inputs": {
+      "current": "100",
+      "previous": "0"
+    },
+    "value": null,
+    "reason": "ZERO_DENOMINATOR",
+    "source": "TECH §6.4 계산 규칙 (입력 고정 — 실제 공시에서 직전 분기 매출 0은 드물다)"
+  },
+  "no-prev-period": {
+    "formula": "qoq",
+    "inputs": {
+      "current": "561798000000",
+      "previous": null,
+      "profit": true
+    },
+    "value": null,
+    "reason": "NO_PREV_PERIOD",
+    "source": "SK하이닉스 2016Q1 영업이익 561,798,000,000 (2016 1분기보고서 20160516001896). OpenDART 재무 API에 2015 1·반기·3분기보고서가 없어(013, 2026-10-01 조회) 2015Q4 = 2015 연간 − 3분기 누적을 구할 수 없다 → 직전 분기 없음"
   }
 }

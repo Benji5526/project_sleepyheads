@@ -32,6 +32,14 @@ const ROWS: CompanyRow[] = [
 ];
 
 describe("searchCompanies (WU-103, API_SPEC S1)", () => {
+  it("6자리 종목코드로도 찾는다 — 보드 비교 기업 칩이 숫자 대신 이름 (Phase 4 통합)", async () => {
+    const { client } = createFakeCompaniesClient(ROWS);
+    const result = await searchCompanies("000660", 10, { client });
+    expect(result.map((c) => c.name)).toEqual(["SK하이닉스"]);
+    // 개황이 아직 없는 기업은 코드로도 나오지 않는다 (이름 검색과 같은 규칙)
+    expect(await searchCompanies("111111", 10, { client })).toEqual([]);
+  });
+
   it("이름이 포함된 기업을 자동완성으로 돌려준다", async () => {
     const { client } = createFakeCompaniesClient(ROWS);
     const result = await searchCompanies("삼성", 10, { client });

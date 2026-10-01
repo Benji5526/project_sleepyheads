@@ -5,7 +5,8 @@
 // 이 파일은 dartFetch를 가짜로 바꾸는 vi.mock을 쓰는 테스트 파일에서만 불러야 한다 (regression.test.ts).
 import type { CompanyRef, NullReason, Quarter } from "@/contracts";
 import type { DartFinancialStatementItem } from "@/lib/financials/types";
-import { qoq, yoy } from "@/lib/metrics/formulas";
+import { marketCap, pbr, per, qoq, yoy } from "@/lib/metrics/formulas";
+import { joinFinancialsWithPrices } from "@/lib/price/join";
 import type { Computed } from "@/lib/metrics/types";
 import { ensureCompanyFinancials, type CompanyFinancials } from "@/lib/runner/company-financials";
 import dongwonMobility from "../accuracy/fixtures/dongwon-mobility.json";
@@ -15,6 +16,7 @@ import samsungElectronics from "../accuracy/fixtures/samsung-electronics.json";
 import sewonPrecision from "../accuracy/fixtures/sewon-precision.json";
 import shinhanFinancial from "../accuracy/fixtures/shinhan-financial.json";
 import skHynix from "../accuracy/fixtures/sk-hynix.json";
+import skHynixValuation from "../accuracy/fixtures/sk-hynix-valuation.json";
 import { ACCOUNT_MAP_SEED_ROWS } from "../fixtures/mock/account-map";
 import { createFakeFinancialsDb } from "../unit/helpers/fake-financials-db";
 
@@ -53,17 +55,39 @@ export const FIXTURES: Record<string, AccuracyFixture> = {
   leeno: leenoIndustrial as AccuracyFixture,
 };
 
+/**
+ * 주가 지표(WU-502)용 원문: 지배주주 순이익·지분 행 + 주가 API 응답 (SK하이닉스, 2026-10-01 조회).
+ * 같은 보고서의 매출 등 행(sk-hynix.json)에 지배주주 행을 덧붙인다.
+ */
+const VALUATION = skHynixValuation as {
+  corp_code: string;
+  reports: (Omit<FixtureReport, "thstrm_nm"> & { thstrm_nm?: string })[];
+  prices: {
+    basDt: string;
+    srtnCd: string;
+    itmsNm: string;
+    clpr: string | number;
+    lstgStCnt: string | number;
+  }[];
+};
+
+function sameReport(params: Record<string, string | number | undefined>) {
+  return (r: { bsns_year: string; reprt_code: string; fs_div: string }) =>
+    r.bsns_year === String(params.bsns_year) &&
+    r.reprt_code === params.reprt_code &&
+    r.fs_div === params.fs_div;
+}
+
 /** 가짜 OpenDART 응답 — fixture에 없는 보고서는 013(조회된 데이터 없음) */
 export function fakeDartResponse(params: Record<string, string | number | undefined>) {
   const fixture = Object.values(FIXTURES).find((f) => f.corp_code === params.corp_code);
-  const report = fixture?.reports.find(
-    (r) =>
-      r.bsns_year === String(params.bsns_year) &&
-      r.reprt_code === params.reprt_code &&
-      r.fs_div === params.fs_div,
-  );
+  const report = fixture?.reports.find(sameReport(params));
+  const extra =
+    params.corp_code === VALUATION.corp_code
+      ? (VALUATION.reports.find(sameReport(params))?.rows ?? [])
+      : [];
   if (!fixture || !report) return { status: "013", message: "조회된 데이타가 없습니다." };
-  const list: DartFinancialStatementItem[] = report.rows.map((row) => ({
+  const list: DartFinancialStatementItem[] = [...report.rows, ...extra].map((row) => ({
     rcept_no: report.rcept_no,
     reprt_code: report.reprt_code,
     bsns_year: report.bsns_year,
@@ -150,17 +174,19 @@ const ANNUAL_RE = /^annual:(revenue|operating_income|net_income)$/;
  * 정답 한 줄을 엔진으로 계산한다.
  * - metric: CalendarQuarterMetrics 칸(revenue·operating_income·net_income·operating_margin·debt_ratio …),
  *   `qoq:<지표>`·`yoy:<지표>`, `annual:<지표>`(연도 합)
- * - per·pbr·market_cap은 주가 결합(WU-502, 예림)이 병합된 뒤 여기에 연결한다 — 지금은 "아직 연결 전" 오류
+ * - per·pbr·market_cap(WU-502): `period` 분기의 TTM 지배주주 순이익·지배주주지분에 `priceDate` 종가를 결합한다
+ *   (주가는 fixture의 주가 API 응답 — 결합 검사 `joinFinancialsWithPrices`와 계산식은 서버와 같은 함수)
  */
 export async function engineValue(
   company: string,
   metric: string,
   period: string,
+  priceDate?: string,
 ): Promise<EngineValue> {
-  if (/^(per|pbr|market_cap)$/.test(metric)) {
-    throw new Error(`${metric}: 주가 결합(WU-502) 병합 뒤 회귀 엔진에 연결 (통합 때)`);
-  }
   const financials = await financialsOf(company);
+  if (/^(per|pbr|market_cap)$/.test(metric)) {
+    return valuationValue(company, financials, metric, period as Quarter, priceDate);
+  }
   const at = (q: Quarter) => financials.metricsByQuarter.get(q)?.metrics;
 
   const annual = ANNUAL_RE.exec(metric);
@@ -191,6 +217,40 @@ export async function engineValue(
   // 정답 파일의 지표 이름 오타가 "계정 값 없음"으로 조용히 통과하지 않게
   if (!Object.hasOwn(metrics, metric)) throw new Error(`엔진에 없는 지표 이름: ${metric}`);
   return fromComputed(metrics[metric as keyof typeof metrics] as Computed<bigint>);
+}
+
+function valuationValue(
+  company: string,
+  financials: CompanyFinancials,
+  metric: string,
+  quarter: Quarter,
+  priceDate: string | undefined,
+): EngineValue {
+  const fixture = FIXTURES[company];
+  if (fixture.corp_code !== VALUATION.corp_code || !priceDate) {
+    throw new Error(`${metric}: 주가 fixture가 있는 기업(skHynix)·priceDate가 필요합니다`);
+  }
+  const metrics = financials.metricsByQuarter.get(quarter)?.metrics;
+  const joined = joinFinancialsWithPrices({
+    financials: [
+      { corpCode: fixture.corp_code, stockCode: fixture.stock_code, name: fixture.corp_name },
+    ],
+    listings: [],
+    prices: VALUATION.prices.map((p) => ({
+      stockCode: p.srtnCd,
+      baseDate: `${p.basDt.slice(0, 4)}-${p.basDt.slice(4, 6)}-${p.basDt.slice(6, 8)}`,
+      closePrice: BigInt(p.clpr),
+      listedShares: BigInt(p.lstgStCnt),
+      name: p.itmsNm,
+    })),
+    baseDate: priceDate,
+  });
+  const price = joined.rows[0].price;
+  const cap = marketCap(price?.closePrice, price?.listedShares);
+  if (metric === "market_cap") return fromComputed(cap);
+  const ttm = metrics?.ttm_owners_ni ?? { value: null, reason: "MISSING_ACCOUNT" as const };
+  const equity = metrics?.owners_equity ?? { value: null, reason: "MISSING_ACCOUNT" as const };
+  return fromComputed(metric === "per" ? per(cap, ttm) : pbr(cap, equity));
 }
 
 /**

@@ -22,6 +22,22 @@ export async function fetchScopeBlockPatterns(
   return (data ?? []) as ScopeBlockPattern[];
 }
 
+/** 낱말 사이에 붙을 수 있는 조사 — "이전 지시**를** 무시", "비밀 키**를**", "시스템 프롬프트**의**" */
+const PARTICLE = "(?:을|를|은|는|이|가|의|도|에|에게|와|과|랑|하고)?";
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * 패턴 → 정규식. 낱말 사이는 띄어쓰기가 없어도 되고 조사가 붙어도 된다 — 부분일치만으로는 "이전 지시를 무시"가
+ * "이전 지시 무시"에 걸리지 않아 AI까지 갔다 (Phase 4 회귀 세트 RESULTS.md §3, 비용만 들고 AI가 거절).
+ */
+function patternRegExp(pattern: string): RegExp {
+  const words = normalizeForScopeMatch(pattern).split(" ").map(escapeRegExp);
+  return new RegExp(words.join(`${PARTICLE}\\s*`));
+}
+
 /** 하나라도 일치하면 그 카테고리(보통 "manipulation")를 돌려준다. */
 export function matchScopeBlockPattern(
   question: string,
@@ -29,7 +45,7 @@ export function matchScopeBlockPattern(
 ): string | null {
   const normalizedQuestion = normalizeForScopeMatch(question);
   for (const { pattern, category } of patterns) {
-    if (normalizedQuestion.includes(normalizeForScopeMatch(pattern))) return category;
+    if (patternRegExp(pattern).test(normalizedQuestion)) return category;
   }
   return null;
 }

@@ -44,7 +44,8 @@ insert into decline_messages (category, message, suggestions) values
 
 -- ============================================================
 -- scope_block_patterns (서버 1차 필터 — 명백한 조작 문구)
--- 실제 매칭은 애플리케이션 레이어에서 소문자·공백 정규화 후 부분일치로 수행한다.
+-- 실제 매칭은 애플리케이션 레이어에서 소문자·공백 정규화 후, 낱말 사이 띄어쓰기·조사("를"·"의" 등)를 허용해
+-- 비교한다 (src/lib/ask/scope-filter.ts — "이전 지시를 무시"도 "이전 지시 무시"에 걸린다).
 -- ============================================================
 insert into scope_block_patterns (pattern, category) values
   ('이전 지시 무시', 'manipulation'),
@@ -56,7 +57,12 @@ insert into scope_block_patterns (pattern, category) values
   ('너는 이제', 'manipulation'),
   ('역할을 바꿔', 'manipulation'),
   ('api 키 알려줘', 'manipulation'),
-  ('api key', 'manipulation');
+  ('api key', 'manipulation'),
+  -- Phase 4 통합 (회귀 세트 RESULTS.md §3 — AI까지 가서 비용이 들던 것)
+  ('비밀 키', 'manipulation'),
+  ('환경 변수', 'manipulation'),
+  ('지시문 전체', 'manipulation'),
+  ('지시 무시', 'manipulation');
 
 -- ============================================================
 -- sectors (TECH §8) — 금융 5개만 is_financial = true (TECH §7 금융업 판정)

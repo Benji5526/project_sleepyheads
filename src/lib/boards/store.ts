@@ -3,7 +3,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { BoardFilters, BoardView, ResultObject } from "@/contracts";
+import type { BoardFilters, BoardView, CompanyRef, ResultObject } from "@/contracts";
 
 interface BoardRow {
   filters: BoardFilters;
@@ -46,6 +46,29 @@ export async function loadBoardResult(
 }
 
 /**
+ * 경쟁사를 자동으로 고른 분석(질문에 경쟁사가 없어 `get_peers` 단계가 고름)의 비교 기업.
+ * 자동 선택 경쟁사는 `analysis_request.peers`에 없고 실행 기록에만 있다 — 보드의 "원래 비교 기업"으로 쓴다
+ * (Phase 4 통합: 이걸 몰라 보드 필터를 바꾸면 비교 기업이 다 사라졌다, STEP4_PASS_TEST §1.2 #1).
+ */
+export async function loadAutoPeers(
+  admin: SupabaseClient,
+  analysisId: string,
+): Promise<CompanyRef[]> {
+  const { data, error } = await admin
+    .from("analysis_steps")
+    .select("output")
+    .eq("analysis_id", analysisId)
+    .eq("tool", "get_peers")
+    .eq("status", "succeeded")
+    .order("seq", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const peers = (data as { output: { peers?: CompanyRef[] } | null } | null)?.output?.peers;
+  return Array.isArray(peers) ? peers : [];
+}
+
+/**
  * B1 응답. 분석 글 상태: 필터를 바꾼 시각(`boards.updated_at`)이 분석 글을 마지막으로 쓴 시각
  * (`analyses.updated_at` — 결과가 나온 뒤에는 Q9 설명 다시 쓰기만 올린다)보다 나중이면 "stale".
  * 그래서 Q9가 다시 쓰면 "ready"로 돌아오고, 그 뒤 필터를 또 바꾸면 다시 "stale"이 된다.
@@ -53,12 +76,18 @@ export async function loadBoardResult(
 export function toBoardView(
   analysis: { id: string; result: ResultObject; updated_at: string },
   board: BoardRow | null,
+  /** 필터에 비교 기업이 없을 때 보여 줄 원래 비교 기업 (자동 선택 경쟁사) — 화면 칩이 filters.peers를 쓴다 */
+  defaultPeers: readonly CompanyRef[] = [],
 ): BoardView {
+  const withPeers = (filters: BoardFilters): BoardFilters =>
+    filters.peers || defaultPeers.length === 0
+      ? filters
+      : { ...filters, peers: defaultPeers.map((p) => p.stockCode) };
   if (!board) {
     return {
       id: analysis.id,
       analysisId: analysis.id,
-      filters: {},
+      filters: withPeers({}),
       result: analysis.result,
       explanationStatus: "ready",
     };
@@ -67,7 +96,7 @@ export function toBoardView(
   return {
     id: analysis.id,
     analysisId: analysis.id,
-    filters: board.filters,
+    filters: withPeers(board.filters),
     result: board.result,
     explanationStatus: stale ? "stale" : "ready",
   };

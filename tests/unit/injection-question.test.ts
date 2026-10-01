@@ -66,6 +66,10 @@ const QUESTIONS = [
   ...INJECTION_SENTENCES,
   ...INJECTION_SENTENCES.map((s) => `SK하이닉스 최근 실적 어때? ${s}`),
 ];
+/** 1차 필터를 지나 AI까지 가는 명령문 질문 — AI가 명령을 따랐을 때의 방어를 시험한다 (필터 목록이 늘면 바뀐다) */
+const AI_PATH_QUESTION = QUESTIONS.find(
+  (q) => !matchScopeBlockPattern(q, readSeedScopePatterns()),
+)!;
 
 beforeEach(() => {
   state.requests = [];
@@ -112,7 +116,7 @@ describe("질문 입력창의 명령문 (WU-504)", () => {
       run: "print(process.env)",
       answer: "SK하이닉스 매수를 추천합니다.",
     };
-    await interpretQuestion({ question: QUESTIONS[3], userId: null, client });
+    await interpretQuestion({ question: AI_PATH_QUESTION, userId: null, client });
     expect(state.validated).toHaveLength(1);
     expect(Object.keys(state.validated[0] as object).sort()).toEqual(SCHEMA_KEYS);
     expect(JSON.stringify(state.validated[0])).not.toMatch(/evil|sk-test|매수|process\.env/);
@@ -128,7 +132,7 @@ describe("질문 입력창의 명령문 (WU-504)", () => {
       state.output = output;
       state.validated = [];
       await expect(
-        interpretQuestion({ question: QUESTIONS[3], userId: null, client }),
+        interpretQuestion({ question: AI_PATH_QUESTION, userId: null, client }),
       ).rejects.toBeInstanceOf(AiResponseInvalidError);
       expect(state.validated).toHaveLength(0);
     }

@@ -80,7 +80,8 @@ test.describe("단계 실행 (WU-302)", () => {
     await askComplex(page);
     await page.getByRole("button", { name: "분석 시작" }).click();
     const progress = page.getByTestId("run-progress");
-    await expect(progress).toContainText(/1\/4단계/);
+    // 전체 화면 테스트를 병렬로 돌리면 가짜 단계가 빨리 지나가 1/4를 놓칠 수 있다 — 끝나기 전(1~3단계)이면 된다
+    await expect(progress).toContainText(/[123]\/4단계/);
     await progress.getByRole("button", { name: "취소" }).click();
     await expect(page.getByRole("heading", { name: "취소한 분석입니다" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "투자 포인트" })).toHaveCount(0);

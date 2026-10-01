@@ -6,14 +6,12 @@ import { createFakeDb, sessionClient } from "./owner-fake-db";
 
 // WU-204 "회원 B가 회원 A의 프로젝트 ID·분석 ID로 모든 API를 직접 요청하면 404".
 // 가짜 DB는 RLS 없이 A의 행을 그대로 돌려준다 — 서버의 소유자 검사만으로 막히는지 본다
-// (RLS 쪽은 owner-rls.test.ts). 아직 구현 전인 경로(rerun·preprocess·cancel·approve·rewrite·boards)는
-// 지금은 501이고, 구현된 뒤에도 404가 아니면(= 남의 것을 처리하면) 이 테스트가 실패한다.
+// (RLS 쪽은 owner-rls.test.ts). Phase 3에 구현된 Q9·B1·B2도 이제 404만 허용한다 (Phase 4 통합).
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const A_PROJECT = "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1";
 const A_ANALYSIS = "a2a2a2a2-a2a2-4a2a-8a2a-a2a2a2a2a2a2";
-const A_BOARD = "a3a3a3a3-a3a3-4a3a-8a3a-a3a3a3a3a3a3";
 const KEY = "33333333-3333-4333-8333-333333333333";
 
 const db = vi.hoisted(() => ({ current: null as ReturnType<typeof createFakeDb> | null }));
@@ -142,14 +140,14 @@ describe("회원 B가 A의 ID로 부르면 404 — 구현된 경로", () => {
   });
 });
 
-describe("아직 구현 전인 경로(Phase 3) — 남의 ID에 절대 200대로 답하지 않는다 (지금 501, 구현 후 404여야 함)", () => {
+describe("Phase 3에 구현된 경로 (Q9·B1·B2) — 남의 분석 ID면 404만 (보드 ID = 분석 ID)", () => {
   it.each([
     ["Q9 rewrite", () => call(routes.Q9.POST, "POST", "/api/analyses/x/rewrite", A_ANALYSIS)],
-    ["B1 GET boards", () => call(routes.B.GET, "GET", "/api/boards/x", A_BOARD)],
-    ["B2 PATCH boards", () => call(routes.B.PATCH, "PATCH", "/api/boards/x", A_BOARD, {})],
+    ["B1 GET boards", () => call(routes.B.GET, "GET", "/api/boards/x", A_ANALYSIS)],
+    ["B2 PATCH boards", () => call(routes.B.PATCH, "PATCH", "/api/boards/x", A_ANALYSIS, {})],
   ])("%s", async (_name, send) => {
     const res = await send();
-    expect([404, 501]).toContain(res.status);
+    expect(res.status).toBe(404);
     expect(db.current!.writes).toEqual([]);
   });
 });

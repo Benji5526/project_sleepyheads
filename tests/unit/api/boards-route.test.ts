@@ -75,6 +75,8 @@ const state = vi.hoisted(() => ({
   resolved: [] as string[],
   /** 이미 확인한 보고서(report_fetch_state) "corp|year" — B2 새 보고서 한도. 그 해의 보고서 4종을 다 본 것으로 친다 */
   fetchedYears: [] as string[],
+  /** get_peers 단계가 자동으로 고른 경쟁사 */
+  autoPeers: [] as CompanyRef[],
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -103,6 +105,19 @@ vi.mock("@/lib/supabase/admin", () => ({
         return { error: null };
       },
       select: () => ({
+        // analysis_steps: 자동 선택 경쟁사 (get_peers 단계 출력)
+        eq: () => {
+          const steps = {
+            eq: () => steps,
+            order: () => steps,
+            limit: () => steps,
+            maybeSingle: async () => ({
+              data: state.autoPeers.length > 0 ? { output: { peers: state.autoPeers } } : null,
+              error: null,
+            }),
+          };
+          return steps;
+        },
         in: async (_col: string, corps: string[]) => ({
           data:
             table === "report_fetch_state"
@@ -227,6 +242,7 @@ beforeEach(() => {
   state.llmCalls = 0;
   state.quotaCalls = 0;
   state.resolved = [];
+  state.autoPeers = [];
   state.fetchedYears = knownYears(TARGET, 2014, 2026).concat(knownYears(SAMSUNG, 2014, 2026));
 });
 
@@ -491,5 +507,39 @@ describe("B2 PATCH /api/boards/:id", () => {
     expect(state.runs[0].request.aggregate).toBeUndefined();
     const flags: string[] = (await res.json()).data.result.basis.flags;
     expect(flags[0]).toBe("합계 풀림 — 비교 기업을 모두 빼서 SK하이닉스 분기별 추이로 보여 줍니다");
+  });
+
+  it("경쟁사를 자동으로 고른 분석: 기간만 바꿔도 비교 기업이 사라지지 않고, 응답 filters.peers에 그 종목코드 (Phase 4 통합)", async () => {
+    state.analysis!.analysis_request = { ...REQUEST, intent: "compare", groupBy: "company" };
+    state.autoPeers = [SAMSUNG];
+    const res = await patch({ filters: { period: { from: "2024Q1", to: "2026Q2" } } });
+    expect(res.status).toBe(200);
+    expect(state.runs[0].request.peers).toEqual([SAMSUNG]);
+    expect((await res.json()).data.filters).toEqual({
+      period: { from: "2024Q1", to: "2026Q2" },
+      peers: [SAMSUNG.stockCode],
+    });
+  });
+
+  it("자동 선택 경쟁사를 다 빼면(peers: []) 정말 빠진다 — 기본값은 필터에 비교 기업이 없을 때만", async () => {
+    state.autoPeers = [SAMSUNG];
+    const res = await patch({ filters: { peers: [] } });
+    expect(res.status).toBe(200);
+    expect(state.runs[0].request.peers).toEqual([]);
+  });
+});
+
+describe("B1 자동 선택 경쟁사", () => {
+  it("필터를 바꾼 적 없어도 filters.peers에 자동 선택 경쟁사 종목코드 — 화면 칩이 채워진다", async () => {
+    state.autoPeers = [SAMSUNG];
+    const body = (await (await get()).json()).data;
+    expect(body.filters).toEqual({ peers: [SAMSUNG.stockCode] });
+    expect(body.explanationStatus).toBe("ready");
+  });
+
+  it("질문에 경쟁사를 적은 분석은 그대로 filters {} (화면이 분석 요청에서 안다)", async () => {
+    state.analysis!.analysis_request = { ...REQUEST, peers: [SAMSUNG] };
+    state.autoPeers = [SAMSUNG];
+    expect((await (await get()).json()).data.filters).toEqual({});
   });
 });

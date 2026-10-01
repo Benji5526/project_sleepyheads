@@ -921,7 +921,7 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 
 **완료조건**
 - [x] 종목별 주가는 하루 1회만 호출된다 — `price-daily.test.ts` "처음 부르면 주가 API 1회 … 같은 날 다시 부르면 0회", "다음 날에는 다시 1회"
-- [x] SK하이닉스 시가총액 = 종가 × 상장주식수, 기준일이 함께 표시된다 — `runner-valuation.test.ts` "카드에 시가총액·PER·PBR + 기준일", 실제 값 `tests/accuracy/regression-answers.test.ts` `answers/sk-hynix.json#per_20260930` (2026-09-30 종가 1,776,000 × 730,492,365 = 1,297조 3,544억 원, API `mrktTotAmt`와 일치, PER 8.01배·PBR 4.94배)
+- [x] SK하이닉스 시가총액 = 종가 × 상장주식수, 기준일이 함께 표시된다 — `runner-valuation.test.ts` "카드에 시가총액·PER·PBR + 기준일", 실제 값 `tests/accuracy/regression-answers.test.ts` `answers/skhynix.json#per_20260930` (2026-09-30 종가 1,776,000 × 730,492,365 = 1,297조 3,544억 원, API `mrktTotAmt`와 일치, PER 8.01배·PBR 4.94배)
 - [x] TTM 순이익 ≤ 0 → PER `적자`, 지배주주지분 ≤ 0 → PBR `자본잠식` — `runner-valuation.test.ts` "TTM ≤ 0 → PER '적자' …", `price-join.test.ts` 계산식
 - [x] 테스트: 보통주 종목코드 중복 샘플 → **결합 중단 + 경고** — `price-join.test.ts` "보통주 종목코드 중복 샘플", `runner-valuation.test.ts` "보통주 종목코드 중복(기업 목록에 같은 기업 코드 둘)"
 - [x] 테스트: 같은 종목·기준일 가격 2행 샘플 → **결합 중단 + 경고** — `price-join.test.ts` "같은 종목·기준일 가격 2행 샘플", `runner-valuation.test.ts` "같은 종목·기준일 가격 2행 → 결합 중단"
@@ -947,7 +947,7 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 - [x] **범위 판정 세트는 실제 AI로도 실행**해 거절 정확도(범위 밖 거절)와 오거절(범위 안인데 거절)을 따로 기록했다 — AI 판정은 고정 응답으로는 검증할 수 없음 — `scripts/regression-scope-live.test.ts` 25문항: 거절 14/14, 오거절 0/11 (RESULTS.md §3, `scope-live-2026-10-01.json`)
 - [x] 실제 AI로 1회 돌린 결과와 비용도 따로 기록했다 (TECH T4 모델 평가 근거) — `gpt-6-luna` 24회 호출, 입력 37,214·출력 5,764 토큰, **$0.0066**, 평균 3.4초 (RESULTS.md §3)
 
-> **숫자 정답 (예림, Phase 4)**: `tests/regression/answers/` — `sk-hynix.json`(`recent_2026q2`·`trend_2025q3_2026q2`·`qoq_yoy_2026q2`·`annual_2025`·`per_20260930`), `compare.json`(`op_margin_2026q2_skhynix_samsung`·`debt_ratio_2024q4_with_financial`), `edge.json`(`missing_account_kb_revenue`·`no_prev_period_2016q1_qoq`·`no_report_2015q1`·`sign_change_dongwon_2025q4_ni_yoy`·`zero_denominator_synthetic`·`per_deficit_synthetic`). OpenDART 원문·주가 API 값을 엔진 없이 손 계산(2026Q2 기준). 원문이 있는 정답은 `tests/accuracy/regression-answers.test.ts`가 실제 엔진과 대조(10건 통과). 케이스 파일(`cases/*.json`)·실행·CI는 현준님.
+> **숫자 정답 (예림, Phase 4)**: `tests/regression/answers/` — `skhynix.json`(`recent_2026q2`·`trend_2025q3_2026q2`·`qoq_yoy_2026q2`·`annual_2025`·`per_20260930`), `compare.json`(`op_margin_2026q2_skhynix_samsung`·`debt_ratio_2024q4_with_financial`), `edge.json`(`missing_account_kb_revenue`·`no_prev_period_2016q1_qoq`·`no_report_2015q1`·`sign_change_dongwon_2025q4_ni_yoy`·`zero_denominator_synthetic`·`per_deficit_synthetic`). OpenDART 원문·주가 API 값을 엔진 없이 손 계산(2026Q2 기준). 원문이 있는 정답은 `tests/accuracy/regression-answers.test.ts`가 실제 엔진과 대조(10건 통과). 케이스 파일(`cases/*.json`)·실행·CI는 현준님.
 
 ---
 
