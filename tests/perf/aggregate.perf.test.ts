@@ -1,5 +1,6 @@
 // @vitest-environment node
 // WU-403 대용량 측정 (TECH §12.5·§20). 실행: npx vitest run -c tests/perf/vitest.config.mts
+// 집계는 예림님 DB 함수 aggregate_sector_metrics(보드 B2와 같은 것)로 잰다 (Phase 4, Phase 3에서 남은 것).
 // 결과는 tests/perf/results.json에 쓰고, 사람이 읽는 표는 tests/perf/RESULTS.md에 옮긴다.
 import { writeFileSync } from "node:fs";
 import { cpus, platform, release, totalmem } from "node:os";
@@ -20,6 +21,7 @@ import {
   AGGREGATE_SQL,
   createSchemaDb,
   fillSynthetic,
+  PERIOD,
   SYNTHETIC,
   syntheticQuarterCount,
 } from "./synthetic-db";
@@ -35,7 +37,7 @@ const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.len
 /**
  * 같은 일을 RUNS번 해서 가운데 시간(ms)과, 한 번 할 때 늘어난 메모리(MB)의 최댓값을 잰다.
  * heapMb = JS 힙(서버 코드가 쥔 행·객체), arrayBuffersMb = ArrayBuffer(PGlite WASM 메모리·결과 버퍼 포함).
- * `--expose-gc` 없이 돌면 gc를 강제할 수 없어 값이 흔들린다 — 방식끼리 비교하는 용도로만 쓴다.
+ * `--expose-gc`로 매번 gc 뒤에 잰다 (vitest.config.mts) — 방식끼리 비교하는 용도로 쓴다.
  */
 async function measure<T>(fn: () => Promise<T>) {
   const times: number[] = [];
@@ -60,6 +62,17 @@ async function measure<T>(fn: () => Promise<T>) {
   };
 }
 
+interface AggregateRow {
+  sector_name: string;
+  period: string;
+  metric: string;
+  total: string;
+  company_count: number;
+}
+
+const aggregate = (sql: string, metrics: string[]) =>
+  db.query<AggregateRow>(sql, [PERIOD.from, PERIOD.to, metrics, SYNTHETIC.calcVersion]);
+
 beforeAll(async () => {
   db = await createSchemaDb();
   const t0 = performance.now();
@@ -74,9 +87,11 @@ beforeAll(async () => {
     gcExposed: typeof globalThis.gc === "function",
   };
   results.data = {
+    table: "calendar_quarter_metrics",
+    aggregateFunction: "aggregate_sector_metrics",
+    calcVersion: SYNTHETIC.calcVersion,
     companies: SYNTHETIC.companies,
     quarters: syntheticQuarterCount(),
-    accounts: 1,
     rows: inserted,
     fillSeconds: Math.round((performance.now() - t0) / 100) / 10,
   };
@@ -87,11 +102,12 @@ afterAll(async () => {
   await db?.close();
 });
 
-describe("WU-403 가상 12만 행", () => {
+describe("WU-403 가상 12만 행 — 예림님 집계 함수 aggregate_sector_metrics", () => {
   it("상장사 2,700곳 × 44개 분기 ≈ 12만 행이 들어갔고, 행 수 추정이 실제와 같다", () => {
     const data = results.data as { rows: number };
     expect(data.rows).toBe(SYNTHETIC.companies * syntheticQuarterCount());
     expect(data.rows).toBeGreaterThan(110_000);
+    // calendar_quarter_metrics는 (기업, 분기)마다 한 줄에 지표가 모두 들어 있다 → 원자료 행 = 기업 × 분기 × 1
     const estimate = estimateAggregateRows({
       companies: SYNTHETIC.companies,
       quarters: syntheticQuarterCount(),
@@ -101,42 +117,60 @@ describe("WU-403 가상 12만 행", () => {
     expect(estimate).toBe(data.rows);
   });
 
-  it("섹터별·연도별 집계를 DB 안 SQL로 — 결과만 돌려받는다", async () => {
-    const sector = await measure(() => db.query(AGGREGATE_SQL.sectorByYear, ["revenue"]));
-    const year = await measure(() => db.query(AGGREGATE_SQL.byYear, ["revenue"]));
-    const sectorRows = sector.value.rows as { rows: number }[];
-    // 집계에 쓰인 원자료 행 = 전체, 서버로 온 행 = 섹터 수 × 연도 수
-    expect(sectorRows.reduce((s, r) => s + r.rows, 0)).toBe(
-      (results.data as { rows: number }).rows,
+  it("섹터별 × 연도별 합계를 DB 함수로 — 결과 행만 돌려받는다 (모든 기업이 들어간다)", async () => {
+    const one = await measure(() => aggregate(AGGREGATE_SQL.sectorByYear, ["revenue"]));
+    const three = await measure(() =>
+      aggregate(AGGREGATE_SQL.sectorByYear, ["revenue", "operating_income", "net_income"]),
     );
+    const rows = one.value.rows;
+    // 한 해의 섹터별 기업 수를 더하면 전체 기업 수 (모든 기업이 4분기를 다 가짐)
+    const firstYear = String(SYNTHETIC.years.from);
+    const companiesInYear = rows
+      .filter((r) => r.period.startsWith(firstYear))
+      .reduce((s, r) => s + r.company_count, 0);
+    expect(companiesInYear).toBe(SYNTHETIC.companies);
     results.sqlAggregate = {
       sectorByYear: {
-        ms: sector.ms,
-        heapMb: sector.heapMb,
-        arrayBuffersMb: sector.arrayBuffersMb,
-        rowsScanned: sectorRows.reduce((s, r) => s + r.rows, 0),
-        rowsReturned: sectorRows.length,
-        payloadKb: Math.round(JSON.stringify(sector.value.rows).length / 1024),
+        metrics: 1,
+        ms: one.ms,
+        heapMb: one.heapMb,
+        arrayBuffersMb: one.arrayBuffersMb,
+        rowsScanned: (results.data as { rows: number }).rows,
+        rowsReturned: rows.length,
+        payloadKb: Math.round(JSON.stringify(rows).length / 1024),
       },
-      byYear: {
-        ms: year.ms,
-        heapMb: year.heapMb,
-        rowsReturned: year.value.rows.length,
-        payloadKb: Math.round(JSON.stringify(year.value.rows).length / 1024),
+      sectorByYear3Metrics: {
+        metrics: 3,
+        ms: three.ms,
+        heapMb: three.heapMb,
+        rowsReturned: three.value.rows.length,
+        payloadKb: Math.round(JSON.stringify(three.value.rows).length / 1024),
       },
     };
   });
 
-  it("비교: 원자료를 서버로 전부 가져와 JS로 묶으면 느리고 메모리를 많이 쓴다", async () => {
+  it("섹터별 × 분기별도 DB 함수로 — 점이 500개를 넘어 '연도로 키우세요' 안내", async () => {
+    const quarter = await measure(() => aggregate(AGGREGATE_SQL.sectorByQuarter, ["revenue"]));
+    const points = quarter.value.rows.length;
+    results.sectorByQuarter = {
+      ms: quarter.ms,
+      heapMb: quarter.heapMb,
+      rowsReturned: points,
+      notice: chartPointsNotice(points),
+    };
+    expect(chartPointsNotice(points)).toContain("연도");
+  });
+
+  it("비교: 원자료를 서버로 전부 가져와 JS로 묶으면 서버로 오는 양이 훨씬 많다", async () => {
     const naive = await measure(async () => {
-      const { rows } = await db.query<{ sector_id: string; bsns_year: number; amount: string }>(
+      const { rows } = await db.query<{ sector_id: string; cal_year: number; revenue: string }>(
         AGGREGATE_SQL.allRows,
-        ["revenue"],
+        [SYNTHETIC.calcVersion],
       );
       const sums = new Map<string, bigint>();
       for (const r of rows) {
-        const key = `${r.sector_id}:${r.bsns_year}`;
-        sums.set(key, (sums.get(key) ?? BigInt(0)) + BigInt(r.amount));
+        const key = `${r.sector_id}:${r.cal_year}`;
+        sums.set(key, (sums.get(key) ?? BigInt(0)) + BigInt(r.revenue));
       }
       return { rows: rows.length, groups: sums.size, bytes: JSON.stringify(rows).length };
     });
@@ -148,23 +182,20 @@ describe("WU-403 가상 12만 행", () => {
       payloadMb: mb(naive.value.bytes),
       groups: naive.value.groups,
     };
-    const sql = (results.sqlAggregate as { sectorByYear: { ms: number } }).sectorByYear;
     expect(naive.value.rows).toBeGreaterThan(100_000);
-    // 측정값으로 남기는 것이 목적이라 여기서는 방향만 본다
-    expect(naive.ms).toBeGreaterThan(sql.ms);
+    // 측정값은 결과표로 남기고, 여기서는 서버로 온 양만 본다 (시간은 기계마다 다르다)
+    const sql = (results.sqlAggregate as { sectorByYear: { payloadKb: number } }).sectorByYear;
+    expect(naive.value.bytes / 1024).toBeGreaterThan(sql.payloadKb * 100);
   });
 
-  it("차트 응답 시간: 집계 → 차트 점(섹터별 선, 연도별 점) → JSON까지", async () => {
+  it("차트 응답 시간: DB 함수 → 차트 점(섹터별 선, 연도별 점) → JSON까지", async () => {
     const chart = await measure(async () => {
-      const { rows } = await db.query<{ sector: string; year: number; total: string }>(
-        AGGREGATE_SQL.sectorByYear,
-        ["revenue"],
-      );
+      const { rows } = await aggregate(AGGREGATE_SQL.sectorByYear, ["revenue"]);
       const series = new Map<string, { x: string; value: number }[]>();
       for (const r of rows) {
-        const points = series.get(r.sector) ?? [];
-        points.push({ x: String(r.year), value: Number(BigInt(r.total) / BigInt(100_000_000)) });
-        series.set(r.sector, points);
+        const points = series.get(r.sector_name) ?? [];
+        points.push({ x: r.period, value: Number(BigInt(r.total) / BigInt(100_000_000)) });
+        series.set(r.sector_name, points);
       }
       const body = JSON.stringify({
         series: [...series].map(([key, points]) => ({ key, points })),
@@ -180,29 +211,18 @@ describe("WU-403 가상 12만 행", () => {
     expect(chartPointsNotice(chart.value.points)).toBeNull();
   });
 
-  it("분기 단위로 섹터별을 그리면 점이 500개를 넘어 '연도로 키우세요' 안내", async () => {
-    const { rows } = await db.query<{ n: number }>(
-      `select count(*)::int n from (
-         select s.name, rv.bsns_year, rv.reprt_code from report_values rv
-         join companies c on c.corp_code = rv.corp_code join sectors s on s.id = c.sector_id
-         group by 1, 2, 3) t`,
-    );
-    results.quarterlySectorPoints = { points: rows[0].n, notice: chartPointsNotice(rows[0].n) };
-    expect(chartPointsNotice(rows[0].n)).toContain("연도");
-  });
-
-  it("15만 행 한도: 12만 행은 통과, 계정 2개(약 24만 행)는 TOO_LARGE", () => {
+  it("15만 행 한도: 12만 행은 통과, 기업이 2배(약 24만 행)면 TOO_LARGE", () => {
     const one = { companies: SYNTHETIC.companies, quarters: syntheticQuarterCount(), accounts: 1 };
     expect(() => assertAggregateSize(one)).not.toThrow();
     let message = "";
     try {
-      assertAggregateSize({ ...one, accounts: 2 });
+      assertAggregateSize({ ...one, companies: one.companies * 2 });
     } catch (err) {
       message = (err as Error).message;
     }
     results.limit = {
       maxRows: MAX_AGGREGATE_ROWS,
-      twoAccountsRows: estimateAggregateRows({ ...one, accounts: 2 }),
+      doubleCompaniesRows: estimateAggregateRows({ ...one, companies: one.companies * 2 }),
       message,
     };
     expect(message).toContain("줄여");

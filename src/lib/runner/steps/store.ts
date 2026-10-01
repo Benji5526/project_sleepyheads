@@ -72,6 +72,8 @@ export interface EngineStore {
   /** 조건부 갱신: 지금 상태가 `onlyIf` 중 하나일 때만. 바꿨으면 true */
   updateAnalysis(id: string, patch: AnalysisPatch, onlyIf?: AnalysisStatus[]): Promise<boolean>;
   listSteps(analysisId: string): Promise<StepRow[]>;
+  /** 이 회원의 실행 대기·실행 중(queued·running) 분석 중 `before`보다 오래 바뀌지 않은 것 (WU-501 정리 후보) */
+  listIdleRuns(ownerId: string, before: string): Promise<string[]>;
   /** 새 단계 줄을 만든다. 같은 (analysis_id, seq)가 이미 있으면 false (다른 요청이 먼저 맡음) */
   insertStep(analysisId: string, ownerId: string, row: StepRow): Promise<boolean>;
   /** 조건부 갱신: 지금 줄이 `expect`(상태, startedAt)와 같을 때만. 바꿨으면 true — 동시 요청 중 하나만 맡는다 */
@@ -224,6 +226,19 @@ export function createSupabaseEngineStore(
         .order("seq", { ascending: true });
       if (error) throw error;
       return ((data ?? []) as StepDb[]).map(toStepRow);
+    },
+
+    async listIdleRuns(ownerId, before) {
+      const { data, error } = await admin
+        .from("analyses")
+        .select("id")
+        .eq("owner_id", ownerId)
+        .in("status", ["queued", "running"])
+        .lt("updated_at", before)
+        .order("updated_at", { ascending: true })
+        .limit(20);
+      if (error) throw error;
+      return ((data ?? []) as { id: string }[]).map((r) => r.id);
     },
 
     async insertStep(analysisId, ownerId, row) {

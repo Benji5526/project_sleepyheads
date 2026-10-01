@@ -50,6 +50,15 @@ export function createMemoryStore(analysis: EngineAnalysis): {
       Object.assign(state.analysis, rest);
       return true;
     },
+    async listIdleRuns(_owner, before) {
+      const { status, updated_at: updatedAt } = state.analysis as {
+        status: string;
+        updated_at?: string;
+      };
+      return (status === "queued" || status === "running") && (updatedAt ?? "") < before
+        ? [state.analysis.id]
+        : [];
+    },
     async listSteps() {
       return structuredClone([...state.steps].sort((a, b) => a.seq - b.seq));
     },

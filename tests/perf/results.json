@@ -9,11 +9,13 @@
     "gcExposed": true
   },
   "data": {
+    "table": "calendar_quarter_metrics",
+    "aggregateFunction": "aggregate_sector_metrics",
+    "calcVersion": "v3",
     "companies": 2700,
     "quarters": 44,
-    "accounts": 1,
     "rows": 118800,
-    "fillSeconds": 2.3
+    "fillSeconds": 3.2
   },
   "estimate": {
     "estimate": 118800,
@@ -22,41 +24,45 @@
   },
   "sqlAggregate": {
     "sectorByYear": {
-      "ms": 427.6,
-      "heapMb": 1.1,
-      "arrayBuffersMb": 34.6,
+      "metrics": 1,
+      "ms": 815.2,
+      "heapMb": 1.6,
+      "arrayBuffersMb": 68.5,
       "rowsScanned": 118800,
       "rowsReturned": 374,
-      "payloadKb": 24
+      "payloadKb": 45
     },
-    "byYear": {
-      "ms": 59.9,
-      "heapMb": 0.3,
-      "rowsReturned": 11,
-      "payloadKb": 1
+    "sectorByYear3Metrics": {
+      "metrics": 3,
+      "ms": 1818.3,
+      "heapMb": 2.3,
+      "rowsReturned": 1122,
+      "payloadKb": 139
     }
   },
+  "sectorByQuarter": {
+    "ms": 1038.8,
+    "heapMb": 2,
+    "rowsReturned": 1496,
+    "notice": "차트 점이 1496개로 많습니다 — 묶음 단위를 분기에서 연도로 키우면 보기 쉽습니다."
+  },
   "serverAggregate": {
-    "ms": 1201.2,
-    "heapMb": 99.5,
+    "ms": 1633.6,
+    "heapMb": 92.3,
     "arrayBuffersMb": 0,
     "rowsTransferred": 118800,
-    "payloadMb": 15.6,
+    "payloadMb": 15.1,
     "groups": 374
   },
   "chartResponse": {
-    "ms": 399.7,
+    "ms": 841.4,
     "points": 374,
     "payloadKb": 11,
     "notice": null
   },
-  "quarterlySectorPoints": {
-    "points": 1496,
-    "notice": "차트 점이 1496개로 많습니다 — 묶음 단위를 분기에서 연도로 키우면 보기 쉽습니다."
-  },
   "limit": {
     "maxRows": 150000,
-    "twoAccountsRows": 237600,
-    "message": "처리 한도(150,000행)를 넘었습니다 — 약 237,600행. 기간이나 비교 기업 수를 줄여 주세요 (예: 기간을 27분기 이하로, 또는 기업을 1,704곳 이하로)."
+    "doubleCompaniesRows": 237600,
+    "message": "처리 한도(150,000행)를 넘었습니다 — 약 237,600행. 기간이나 비교 기업 수를 줄여 주세요 (예: 기간을 27분기 이하로, 또는 기업을 3,409곳 이하로)."
   }
 }
