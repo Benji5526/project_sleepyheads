@@ -531,6 +531,11 @@ describe("설명 재사용이 거의 확실하면 뉴스를 건너뛴다 (Phase 
     const writer = calls.find((c) => c.tool === "write_explanation")!;
     const news = writer.ctx.previous.find((p) => p.tool === "search_news")!;
     expect((news.output as { notes: string[] }).notes).not.toContain(NEWS_SKIPPED_FOR_REUSE);
+    // 뉴스 단계 기록을 실제 결과로 바꿔 둔다 — 외부 호출·비용이 맞고, 분석 글을 다시 해도 뉴스를 또 찾지 않는다
+    const row = memory.steps.find((s) => s.tool === "search_news")!;
+    expect(row.outputSummary).toContain("분석 글 직전에 찾음");
+    expect(row.externalCalls).toBe(1);
+    expect((row.output as { notes: string[] }).notes).not.toContain(NEWS_SKIPPED_FOR_REUSE);
   });
 
   it("후보가 없으면 지금처럼 뉴스를 검색한다", async () => {

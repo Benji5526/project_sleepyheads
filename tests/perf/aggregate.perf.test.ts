@@ -1,5 +1,5 @@
 // @vitest-environment node
-// WU-403 대용량 측정 (TECH §12.5·§20). 실행: npx vitest run -c tests/perf/vitest.config.ts
+// WU-403 대용량 측정 (TECH §12.5·§20). 실행: npx vitest run -c tests/perf/vitest.config.mts
 // 결과는 tests/perf/results.json에 쓰고, 사람이 읽는 표는 tests/perf/RESULTS.md에 옮긴다.
 import { writeFileSync } from "node:fs";
 import { cpus, platform, release, totalmem } from "node:os";
@@ -32,20 +32,32 @@ let db: PGlite;
 const mb = (bytes: number) => Math.round((bytes / 1024 / 1024) * 10) / 10;
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
-/** 같은 일을 RUNS번 해서 가운데 시간(ms)과, 한 번 할 때 늘어난 힙 메모리(MB)를 잰다 */
+/**
+ * 같은 일을 RUNS번 해서 가운데 시간(ms)과, 한 번 할 때 늘어난 메모리(MB)의 최댓값을 잰다.
+ * heapMb = JS 힙(서버 코드가 쥔 행·객체), arrayBuffersMb = ArrayBuffer(PGlite WASM 메모리·결과 버퍼 포함).
+ * `--expose-gc` 없이 돌면 gc를 강제할 수 없어 값이 흔들린다 — 방식끼리 비교하는 용도로만 쓴다.
+ */
 async function measure<T>(fn: () => Promise<T>) {
   const times: number[] = [];
   let value!: T;
   let heapDelta = 0;
+  let bufferDelta = 0;
   for (let i = 0; i < RUNS; i++) {
     globalThis.gc?.();
-    const heapBefore = process.memoryUsage().heapUsed;
+    const before = process.memoryUsage();
     const t0 = performance.now();
     value = await fn();
     times.push(performance.now() - t0);
-    heapDelta = Math.max(heapDelta, process.memoryUsage().heapUsed - heapBefore);
+    const after = process.memoryUsage();
+    heapDelta = Math.max(heapDelta, after.heapUsed - before.heapUsed);
+    bufferDelta = Math.max(bufferDelta, after.arrayBuffers - before.arrayBuffers);
   }
-  return { value, ms: Math.round(median(times) * 10) / 10, heapMb: mb(Math.max(0, heapDelta)) };
+  return {
+    value,
+    ms: Math.round(median(times) * 10) / 10,
+    heapMb: mb(Math.max(0, heapDelta)),
+    arrayBuffersMb: mb(Math.max(0, bufferDelta)),
+  };
 }
 
 beforeAll(async () => {
@@ -59,6 +71,7 @@ beforeAll(async () => {
     cores: cpus().length,
     memoryGb: Math.round(totalmem() / 1024 ** 3),
     database: "PGlite 0.5.8 (WASM Postgres, 같은 프로세스 안 메모리 DB)",
+    gcExposed: typeof globalThis.gc === "function",
   };
   results.data = {
     companies: SYNTHETIC.companies,
@@ -100,6 +113,7 @@ describe("WU-403 가상 12만 행", () => {
       sectorByYear: {
         ms: sector.ms,
         heapMb: sector.heapMb,
+        arrayBuffersMb: sector.arrayBuffersMb,
         rowsScanned: sectorRows.reduce((s, r) => s + r.rows, 0),
         rowsReturned: sectorRows.length,
         payloadKb: Math.round(JSON.stringify(sector.value.rows).length / 1024),
@@ -129,6 +143,7 @@ describe("WU-403 가상 12만 행", () => {
     results.serverAggregate = {
       ms: naive.ms,
       heapMb: naive.heapMb,
+      arrayBuffersMb: naive.arrayBuffersMb,
       rowsTransferred: naive.value.rows,
       payloadMb: mb(naive.value.bytes),
       groups: naive.value.groups,

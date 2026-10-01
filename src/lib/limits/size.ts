@@ -2,7 +2,7 @@
 // 보드 필터 다시 계산(B2, 예림)이 계산하기 **전에** 부른다. 함수 이름·인자는 잠금, 안은 측정(tests/perf/RESULTS.md)으로 다듬었다.
 //
 // 측정(2026-10-01, 가상 118,800행 = 2,700곳 × 44분기 × 1계정, PGlite): 행 수 추정 = 실제 행 수(정확히 일치),
-// 섹터별×연도별 DB 안 집계 0.46초·서버 메모리 약 1MB. 같은 일을 원자료를 서버로 가져와 하면 1.2초·92MB·15.6MB 전송.
+// 섹터별×연도별 DB 안 집계 0.43초·서버 힙 1.1MB. 같은 일을 원자료를 서버로 가져와 하면 1.2초·99.5MB·15.6MB 전송.
 // → 15만 행 한도는 그대로 둔다(한도 근처에서도 1초 안팎). 30초 상한은 DB가 크게 느려졌을 때를 위한 안전장치다.
 import { HttpError } from "@/lib/api/errors";
 
@@ -60,8 +60,9 @@ export function assertAggregateSize(size: AggregateSize): void {
 
 /** 점이 많은 차트 안내 (없으면 null) — 결과의 `basis.flags`나 차트 주석에 붙인다 */
 export function chartPointsNotice(points: number): string | null {
+  // 문구는 첫 버전 그대로 둔다 — 다른 트랙(B2 결과의 basis.flags)이 이 문장을 그대로 쓴다
   return points > MAX_CHART_POINTS
-    ? `차트 점이 ${points.toLocaleString("ko-KR")}개로 많습니다(한 차트 ${MAX_CHART_POINTS}개까지) — 묶음 단위를 분기에서 연도로 키우거나 기간·기업 수를 줄이면 보기 쉽습니다.`
+    ? `차트 점이 ${points}개로 많습니다 — 묶음 단위를 분기에서 연도로 키우면 보기 쉽습니다.`
     : null;
 }
 

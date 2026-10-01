@@ -373,10 +373,22 @@ async function withLateNews(
       p.tool === "search_news" &&
       (p.output as { notes?: string[] }).notes?.includes(NEWS_SKIPPED_FOR_REUSE),
   );
-  const planned = analysis.plan?.steps.find((s) => s.tool === "search_news");
+  const planned = analysis.plan?.steps.find((s) => s.seq === skipped?.seq);
   if (!skipped || !planned) return previous;
+  const now = deps.now ?? Date.now;
+  const t0 = now();
   const fresh = await runTool(planned, analysis, previous, deps).catch(() => null);
   if (fresh?.status !== "succeeded") return previous;
+  // 뉴스 단계 줄을 실제 결과로 바꿔 둔다 — 실행 기록·외부 호출·AI 비용(상한)이 맞고, 분석 글 단계를 다시 해도
+  // (재시도·복구) 뉴스를 또 찾지 않는다
+  await deps.store.updateStep(analysis.id, skipped.seq, {
+    output: fresh.output,
+    inputSummary: fresh.inputSummary,
+    outputSummary: `${fresh.outputSummary} (분석 글을 다시 쓸 수 없어 분석 글 직전에 찾음)`,
+    durationMs: Math.max(0, Math.round(now() - t0)),
+    externalCalls: fresh.usage.externalCalls,
+    llmCostUsd: fresh.usage.llmCostUsd,
+  });
   return previous.map((p) => (p === skipped ? { ...p, output: fresh.output } : p));
 }
 

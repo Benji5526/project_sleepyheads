@@ -71,7 +71,9 @@ describe("차트 점 500개", () => {
   it("500개 이하는 안내 없음, 넘으면 연도로 키우라는 안내 (분기 섹터별 1,496점)", () => {
     expect(chartPointsNotice(MAX_CHART_POINTS)).toBeNull();
     expect(chartPointsNotice(374)).toBeNull();
-    expect(chartPointsNotice(1496)).toContain("1,496개");
+    expect(chartPointsNotice(1496)).toBe(
+      "차트 점이 1496개로 많습니다 — 묶음 단위를 분기에서 연도로 키우면 보기 쉽습니다.",
+    );
     expect(chartPointsNotice(501)).toContain("연도");
   });
 });
