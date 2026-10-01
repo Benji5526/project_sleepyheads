@@ -648,6 +648,8 @@ sequenceDiagram
 - 결과 왼쪽 차트 모음 = **분석 보드**(`boards`). 필터: 기간(프리셋 + 직접 선택), 비교 기업(추가·삭제).
 - 필터를 바꾸면 **같은 분석 요청에 필터만 덮어써서 서버가 다시 계산** → 보드의 모든 차트·표가 같은 조건으로 바뀜. AI 호출 없음.
 - 분석 글에는 "원래 조건 기준 설명입니다" + [설명 다시 쓰기](질문 1회 차감).
+- 서버 구현 (WU-401, 예림): `src/lib/boards/` — `parseBoardFilters`(검사) → `applyBoardFilters`(원래 요청에 기간·비교 기업만 덮어쓰기) → `recomputeBoard`(`assertAggregateSize` 뒤 `runAnalysis(…, { base: 원래 데이터 버전, peerComparisonChart: true })`) → `saveBoard`. `base`가 있으면 실행기는 원래 출처의 보고서를 그대로 쓰고 빠진 보고서만 받으며(`ensureCompanyFinancialsOver`), 전처리 선택(최초 공시·별도 통일)은 새로 받은 보고서에만 적용한다. Q9는 `loadBoardResult(analysisId, client)`로 보드 결과(없으면 원래 결과)를 읽는다.
+- 섹터 합계는 DB 함수 `aggregate_sector_metrics(from, to, metrics, by_year, calc_version)`가 `calendar_quarter_metrics` 전체를 DB 안에서 더해 결과 행만 돌려준다(§12.5). 금액 지표 4개(매출·영업이익·순이익·지배주주순이익)만, 연결 우선, 연도별은 1~4분기가 모두 있는 기업만. 서버는 `aggregateSectorMetrics`(한도 검사 뒤 호출, 30초에서 요청을 끊고 시간 초과면 413, 합계는 글자 → bigint)로 부르고, 회원·비로그인은 직접 실행할 수 없다.
 
 ### 12.5 대용량 처리 한도 (Step 4, F-B4)
 | 항목 | 한도 | 넘으면 |

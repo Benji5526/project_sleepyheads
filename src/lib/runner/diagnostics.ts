@@ -7,7 +7,7 @@ import { reportsNeededForFiscalQuarters } from "@/lib/financials/period";
 import type { CalendarQuarterMetrics } from "@/lib/metrics/persist";
 import { buildDiagnoses, type DiagnosisFacts } from "@/lib/preprocess/diagnose";
 import type { DataSource } from "@/lib/versions/version";
-import { financialsFromSources, type CompanyFinancials } from "./company-financials";
+import { financialsFromSources, sourceKeyOf, type CompanyFinancials } from "./company-financials";
 
 type BaseField = keyof CalendarQuarterMetrics;
 
@@ -153,14 +153,10 @@ export async function findFirstFilings(
       if (!set || set.size < 2) continue;
       // 접수번호는 접수일(YYYYMMDD)로 시작해 가장 작은 것이 최초 공시다
       const first = [...set].sort()[0];
-      if (first !== s.rceptNo) result.set(sourceKey(s), first);
+      if (first !== s.rceptNo) result.set(sourceKeyOf(s), first);
     }
   }
   return result;
-}
-
-export function sourceKey(s: Pick<DataSource, "corpCode" | "bsnsYear" | "reprtCode">): string {
-  return `${s.corpCode}|${s.bsnsYear}|${s.reprtCode}`;
 }
 
 /** 출처 중 정정 중복 보고서를 최초 공시로 바꾼 목록 (`collected`에 원래 최신 값) */
@@ -169,7 +165,7 @@ export function applyFirstFilings(
   firstFilings: ReadonlyMap<string, string>,
 ): DataSource[] {
   return sources.map((s) => {
-    const first = firstFilings.get(sourceKey(s));
+    const first = firstFilings.get(sourceKeyOf(s));
     if (!first || !s.fsDiv || !s.rceptNo) return s;
     return { ...s, rceptNo: first, collected: { fsDiv: s.fsDiv, rceptNo: s.rceptNo } };
   });

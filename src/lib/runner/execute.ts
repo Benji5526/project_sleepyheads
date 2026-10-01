@@ -20,7 +20,9 @@ import {
 } from "@/lib/versions/version";
 import {
   ensureCompanyFinancials,
+  ensureCompanyFinancialsOver,
   financialsFromSources,
+  sourceKeyOf,
   type CompanyFinancials,
 } from "./company-financials";
 import {
@@ -73,6 +75,17 @@ export interface RunAnalysisOptions extends ExecuteAnalysisOptions {
    * 진단을 돌려준다(회원 분석, `awaiting_preprocess`). false면 기본값으로 바로 계산한다(비로그인 예시).
    */
   requireConfirmation?: boolean;
+  /**
+   * 보드 필터 다시 계산(WU-401 B2): 원래 분석의 데이터 버전. 이 출처에 있는 보고서는 그대로 쓰고
+   * 새 기간·새 기업에 더 필요한 보고서만 새로 받는다. 원래 전처리 선택을 이어 쓰고, 새로 받은 보고서에만
+   * 선택을 적용한다. 진단에서 멈추지 않는다(새로 생긴 진단은 기본값).
+   */
+  base?: Pick<DataVersionContent, "sources" | "decisions">;
+  /**
+   * 보드에서 비교 기업을 넣었을 때: 분기·연도별 결과에 "기업 비교" 막대 차트를 더한다.
+   * (원래 분석이 기업 비교·합계면 그 차트가 이미 비교 기업을 따라 바뀌므로 더하지 않는다)
+   */
+  peerComparisonChart?: boolean;
 }
 
 export type RunAnalysisOutcome =
@@ -87,7 +100,7 @@ export type RunAnalysisOutcome =
     };
 
 /** YoY(4분기 전)까지 계산할 수 있게, 요청 범위보다 4분기 앞서서 데이터를 확보해 둔다. */
-const CHANGE_LOOKBACK_QUARTERS = 4;
+export const CHANGE_LOOKBACK_QUARTERS = 4;
 
 /** 기존 호출(비로그인 예시 등)용: 진단은 기본값으로 처리하고 결과만 돌려준다 */
 export async function executeAnalysis(
@@ -136,12 +149,28 @@ export async function runAnalysis(
     }
     decisions = options.version.decisions;
   } else {
+    // 보드 다시 계산이면 원래 출처를 그대로 두고 빠진 보고서만 받는다. 새로 받은 보고서 키를 모아 둔다
+    const freshKeys = new Set<string>();
     for (const company of companies) {
-      financialsByCorp.set(
-        company.corpCode,
-        await ensureCompanyFinancials(company, fetchFrom, request.period.to, toolOptions),
-      );
+      if (options.base) {
+        const over = await ensureCompanyFinancialsOver(
+          company,
+          fetchFrom,
+          request.period.to,
+          options.base.sources,
+          toolOptions,
+        );
+        for (const key of over.freshKeys) freshKeys.add(key);
+        financialsByCorp.set(company.corpCode, over);
+      } else {
+        financialsByCorp.set(
+          company.corpCode,
+          await ensureCompanyFinancials(company, fetchFrom, request.period.to, toolOptions),
+        );
+      }
     }
+    // 원래 출처에는 원래 선택이 이미 반영돼 있다 — 선택은 새로 받은 보고서에만 적용한다
+    const isFresh = (s: DataSource) => !options.base || freshKeys.has(sourceKeyOf(s));
 
     const samples = companies.map((company) => ({
       company,
@@ -152,17 +181,20 @@ export async function runAnalysis(
     if (options.requireConfirmation && hasUndecided(diagnoses, options.decisions)) {
       return { kind: "needs_preprocess", diagnoses };
     }
-    decisions = withDefaults(diagnoses, options.decisions ?? {});
+    decisions = withDefaults(diagnoses, { ...options.base?.decisions, ...options.decisions });
+    const firstFilings = options.base
+      ? new Map([...found.firstFilings].filter(([key]) => freshKeys.has(key)))
+      : found.firstFilings;
 
     // 선택 적용 — 원본(report_values)은 그대로 두고 계산에 쓸 출처만 바꾼다 (TECH §5.3)
     for (const company of companies) {
       const financials = financialsByCorp.get(company.corpCode)!;
       let sources = financials.sources ?? [];
       if (decisions.duplicate_correction === "first_filing") {
-        sources = applyFirstFilings(sources, found.firstFilings);
+        sources = applyFirstFilings(sources, firstFilings);
       }
       if (decisions.mixed_fs_div === "unify_ofs" && found.mixedCorps.has(company.corpCode)) {
-        sources = await unifyToOfs(sources, toolOptions);
+        sources = await unifyToOfs(sources, toolOptions, isFresh);
       }
       if (sources !== financials.sources) {
         financialsByCorp.set(
@@ -215,6 +247,7 @@ export async function runAnalysis(
         : []),
     ],
     toolOptions,
+    peerComparisonChart: options.peerComparisonChart ?? false,
   });
 
   return { kind: "done", result, version, versionHash, diagnoses };
@@ -224,10 +257,12 @@ export async function runAnalysis(
 async function unifyToOfs(
   sources: readonly DataSource[],
   options: { userId: string | null; analysisId: string | null; client: SupabaseClient },
+  /** 바꿀 보고서만 true (보드 다시 계산은 새로 받은 보고서만) */
+  applies: (s: DataSource) => boolean = () => true,
 ): Promise<DataSource[]> {
   const result: DataSource[] = [];
   for (const s of sources) {
-    if (s.fsDiv !== "CFS" || !s.rceptNo) {
+    if (s.fsDiv !== "CFS" || !s.rceptNo || !applies(s)) {
       result.push(s);
       continue;
     }
@@ -256,6 +291,8 @@ interface BuildResultInput {
   dataVersionId: string;
   extraFlags: string[];
   toolOptions: { userId: string | null; analysisId: string | null; client: SupabaseClient };
+  /** {@link RunAnalysisOptions.peerComparisonChart} */
+  peerComparisonChart?: boolean;
 }
 
 /** 계산된 재무 값으로 차트·표·숫자 ID를 만든다 (WU-110) */
@@ -297,18 +334,15 @@ async function buildResult(
     ? buildSumSeries(samples, periods, request.metrics, request.groupBy === "sector", allocator)
     : null;
 
+  const comparisonQuarters = () =>
+    new Map(
+      samples.map((s) => [
+        s.company.corpCode,
+        comparisonQuarter(s.financials, allowedFor(s.company.corpCode), request.period.to),
+      ]),
+    );
   const comparison = isComparison
-    ? buildCompanyComparisonSeries(
-        samples,
-        new Map(
-          samples.map((s) => [
-            s.company.corpCode,
-            comparisonQuarter(s.financials, allowedFor(s.company.corpCode), request.period.to),
-          ]),
-        ),
-        request.metrics,
-        allocator,
-      )
+    ? buildCompanyComparisonSeries(samples, comparisonQuarters(), request.metrics, allocator)
     : null;
 
   const { series, reportsUsed } = sumResult
@@ -343,24 +377,45 @@ async function buildResult(
         : undefined,
   );
 
+  // 보드에서 비교 기업을 넣은 분기·연도별 결과 (WU-401): 원래 차트는 대상 기업 그대로 두고 기업 비교 막대를 더한다
+  const peerComparison =
+    input.peerComparisonChart && !isSum && !isComparison && companies.length > 1
+      ? buildCompanyComparisonSeries(samples, comparisonQuarters(), request.metrics, allocator)
+      : null;
+  if (peerComparison) {
+    const added = buildCharts(
+      { ...request, groupBy: "company" },
+      peerComparison.chartSeries,
+      allocator.figures,
+      peerComparison.reportsUsed,
+      comparisonChartOptions(peerComparison),
+    );
+    const firstId = charts.length + 1;
+    added.forEach((chart, i) => charts.push({ ...chart, id: `c${firstId + i}` }));
+  }
+  const shownComparison = comparison ?? peerComparison;
+  const reportsInBasis = peerComparison
+    ? new Set([...reportsUsed, ...peerComparison.reportsUsed])
+    : reportsUsed;
+
   const disclosures =
     request.intent === "event"
       ? await fetchEventDisclosures(request.target, request.period, input.toolOptions)
       : [];
 
-  const basis = buildDataBasis(request, reportsUsed, targetFsDiv, input.dataVersionId);
+  const basis = buildDataBasis(request, reportsInBasis, targetFsDiv, input.dataVersionId);
   if (isSum)
     basis.flags.push(`합계: ${companies.map((c) => c.name).join("·")} ${companies.length}곳`);
   // 여러 기업을 나란히 놓거나 더할 때 금융사가 섞이면 매출·영업이익률을 공통 지표로 바꿔 읽는다 (TECH §7).
   // 분기·연도별은 대상 기업만 보여 주므로 붙이지 않는다
   const mixesFinancial =
-    comparison?.hasFinancial ?? (isSum && samples.some((s) => s.company.sector.isFinancial));
+    shownComparison?.hasFinancial ?? (isSum && samples.some((s) => s.company.sector.isFinancial));
   if (companies.length > 1 && mixesFinancial) basis.flags.push(FINANCIAL_CONVERSION_FLAG);
-  if (comparison) {
+  if (shownComparison) {
     basis.flags.push(
       ...comparisonFlags(
         samples,
-        comparison.quarterByCorp,
+        shownComparison.quarterByCorp,
         request.period.to,
         input.excludedByCorp,
       ),
@@ -369,7 +424,9 @@ async function buildResult(
   basis.flags.push(...input.extraFlags);
   basis.flags.push(...unavailableFlags(allocator.figures));
   // 표 아래 주석 (TECH §7 글자 그대로): 부채비율에 ※가 붙은 표
-  if (series.some((s) => s.footnoteMark === "※")) basis.flags.push(FINANCIAL_FOOTNOTE);
+  if ([...series, ...(peerComparison?.series ?? [])].some((s) => s.footnoteMark === "※")) {
+    basis.flags.push(FINANCIAL_FOOTNOTE);
+  }
 
   const rowKeys = isSum
     ? periods.map((p) => p.x)
