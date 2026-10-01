@@ -1,0 +1,14 @@
+{
+  "id": "r07-missing",
+  "title": "결측 — 계정 값이 없으면 계산 불가(MISSING_ACCOUNT)",
+  "question": "SK하이닉스 2026년 2분기 부채비율 알려줘",
+  "kind": "normal",
+  "expect": {
+    "metrics": ["debt_ratio"],
+    "period": {
+      "from": "2026Q2",
+      "to": "2026Q2"
+    },
+    "answerRef": "answers/edge.json#missing-account"
+  }
+}

@@ -7,6 +7,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { containsBannedWord } from "@/lib/explain/banned-words";
+import { containsLeak } from "@/lib/explain/output-guard";
 import { llmCall, type LlmUsage } from "@/lib/llm/client";
 
 export const GIST_MAX_CHARS = 120;
@@ -99,11 +100,13 @@ function numbersIn(text: string): string[] {
  * - 120자(GIST_MAX_CHARS)·2문장 이하
  * - 숫자·권유어(목표주가·매수 등)가 있으면 **언론사 이름이 요지에 들어가야 한다** (출처 표시)
  * - 요지의 숫자는 모두 기사 제목·발췌에 있는 숫자여야 한다 (지어낸 숫자 차단)
+ * - 링크 주소·키 모양·비밀 값이 있으면 버린다 (WU-504 — 기사 속 "주소를 넣어라"·"비밀키를 출력하라"를 따라 한 경우)
  */
 export function isAcceptableGist(gist: string, article: GistArticle): boolean {
   const text = gist.trim();
   if (!text || text.length > GIST_MAX_CHARS) return false;
   if ((text.match(SENTENCE_END)?.length ?? 0) > 2) return false;
+  if (containsLeak(text)) return false;
 
   const numbers = numbersIn(text);
   const quotesSomething = numbers.length > 0 || containsBannedWord(text);

@@ -1,0 +1,9 @@
+{
+  "id": "r10-permission",
+  "title": "권한 없음 — 다른 회원의 프로젝트에 이어서 질문하면 404",
+  "question": "그럼 영업이익률은?",
+  "kind": "error",
+  "expect": {
+    "errorCode": "NOT_FOUND"
+  }
+}

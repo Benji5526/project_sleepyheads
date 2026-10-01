@@ -35,6 +35,7 @@ import { DomainPacer, type GuardedFetchDeps } from "./guarded-fetch";
 import { buildRssUrl, buildSearchQuery, type NewsPeriod } from "./query";
 import { dedupeNewsItems, rankNewsItems, titleMentionsCompany } from "./rank";
 import { parseRss, type RssItem } from "./rss";
+import { isGoogleNewsUrl } from "./web-url";
 
 export const MAX_SEARCHES_PER_QUESTION = 2;
 export const MAX_CLUES = 5;
@@ -200,14 +201,17 @@ export async function findNewsClues(
       );
     }
 
-    const clues: NewsClue[] = picked.map((item, index) => ({
-      newsId: `n${index + 1}`,
-      title: item.title,
-      press: item.press,
-      publishedAt: item.publishedAt,
-      url: item.link,
-      gist: gist.gists.get(`n${index + 1}`) ?? "",
-    }));
+    // 화면 링크가 되는 주소는 검색 API(Google 뉴스 RSS)가 준 것만 (WU-504) — 파싱·캐시에서 이미 걸렀지만 한 번 더
+    const clues: NewsClue[] = picked
+      .map((item, index) => ({
+        newsId: `n${index + 1}`,
+        title: item.title,
+        press: item.press,
+        publishedAt: item.publishedAt,
+        url: item.link,
+        gist: gist.gists.get(`n${index + 1}`) ?? "",
+      }))
+      .filter((clue) => isGoogleNewsUrl(clue.url));
     return { clues, notes, searches, rssCalls, gistUsage: gist.usage };
   } catch (error) {
     // 여기까지 오면 예상 못 한 오류다 — 그래도 분석은 뉴스 없이 계속한다

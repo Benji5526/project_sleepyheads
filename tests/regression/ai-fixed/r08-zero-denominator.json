@@ -1,0 +1,17 @@
+{
+  "metrics": ["operating_income", "qoq"],
+  "period": {
+    "specified": true,
+    "from": "2026Q2",
+    "to": "2026Q2",
+    "text": "2026년 2분기"
+  },
+  "operations": [
+    {
+      "op": "change",
+      "metric": "operating_income",
+      "base": "QoQ",
+      "peers": null
+    }
+  ]
+}

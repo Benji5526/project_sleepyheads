@@ -1,0 +1,29 @@
+{
+  "intent": "compare",
+  "companies": [
+    {
+      "query": "SK하이닉스",
+      "role": "target"
+    },
+    {
+      "query": "삼성전자",
+      "role": "peer"
+    }
+  ],
+  "metrics": ["operating_income"],
+  "period": {
+    "specified": true,
+    "from": "2026Q2",
+    "to": "2026Q2",
+    "text": "2026년 2분기"
+  },
+  "group_by": "company",
+  "operations": [
+    {
+      "op": "compare",
+      "metric": "operating_income",
+      "base": null,
+      "peers": "삼성전자"
+    }
+  ]
+}

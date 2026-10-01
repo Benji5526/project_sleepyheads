@@ -1,0 +1,14 @@
+{
+  "id": "r04-compare",
+  "title": "정상 — 기업 비교",
+  "question": "SK하이닉스와 삼성전자 2026년 2분기 영업이익 비교해줘",
+  "kind": "normal",
+  "expect": {
+    "metrics": ["operating_income"],
+    "period": {
+      "from": "2026Q2",
+      "to": "2026Q2"
+    },
+    "answerRef": "answers/samsung.json#operating_income-2026Q2"
+  }
+}

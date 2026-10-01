@@ -8,6 +8,7 @@
 //   … 직원 만족도         → 지원하지 않는 지표(422)  … AI 장애          → AI 장애(503, 차감 없음)
 //   … 서버 오류           → 예상 못 한 서버 오류(500, 요청 ID 안내)
 //   SK하이닉스 … 뉴스      → 최근 실적 + 뉴스 단서 (WU-305)
+//   SK하이닉스 … PER·PBR·시가총액 → 주가 지표 결과 (WU-502 화면: 기준일·적자·자본잠식·결합 경고)
 import type { Analysis, CompanyRef } from "@/contracts";
 import { MOCK_COMPANIES, findMockCompany } from "../../../tests/fixtures/mock/companies";
 import {
@@ -18,6 +19,7 @@ import {
 import { withMockNewsClues } from "../../../tests/fixtures/mock/news-clues";
 import { samsungRevenueTrend } from "../../../tests/fixtures/mock/samsung-revenue-trend";
 import { skhynixRecent } from "../../../tests/fixtures/mock/skhynix-recent";
+import { skhynixValuation } from "../../../tests/fixtures/mock/skhynix-valuation";
 import { ApiRequestError } from "./errors";
 import { MOCK_QUESTIONS_LIMIT, nextKstMidnight, remainingQuestions } from "./mock-session";
 import { mockDelay, readMockState, updateMockState } from "./mock-store";
@@ -33,8 +35,12 @@ function detectCompany(question: string): CompanyRef | null {
   return MOCK_COMPANIES.find((c) => question.includes(c.name)) ?? null;
 }
 
-function resultFor(company: CompanyRef): Analysis {
-  return company.name === "SK하이닉스" ? skhynixRecent : samsungRevenueTrend;
+// 대문자 그대로만 — "operating"·"super" 같은 영어 낱말 속 per에 걸리지 않게
+const VALUATION = /PER|PBR|시가총액/;
+
+function resultFor(company: CompanyRef, question = ""): Analysis {
+  if (company.name !== "SK하이닉스") return samsungRevenueTrend;
+  return VALUATION.test(question) ? skhynixValuation : skhynixRecent;
 }
 
 function emptyAnalysis(question: string): Analysis {
@@ -62,7 +68,7 @@ function emptyAnalysis(question: string): Analysis {
 
 function withResult(base: Analysis, company: CompanyRef): Analysis {
   const question = base.question;
-  const fixture = structuredClone(resultFor(company));
+  const fixture = structuredClone(resultFor(company, question));
   const analysis: Analysis = { ...fixture, id: base.id, projectId: base.projectId, question };
 
   if (/설명 실패/.test(question) && analysis.explanation) {

@@ -1,0 +1,9 @@
+{
+  "id": "r12-out-of-scope",
+  "title": "범위 밖 — 기업 분석과 무관",
+  "question": "오늘 저녁 메뉴 추천해줘",
+  "kind": "decline",
+  "expect": {
+    "declineCategory": "out_of_scope"
+  }
+}

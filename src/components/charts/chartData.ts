@@ -71,12 +71,24 @@ export function isChangeSeries(key: string, label: string): boolean {
   return /yoy|qoq|change/i.test(key) || /대비|증감/.test(label);
 }
 
+/** 값이 없어도 그 자체가 답인 사유 — PER "적자", PBR "자본잠식" (TECH §6.4). 표에 "계산 불가"를 붙이지 않는다 */
+const VERDICT_REASONS: ReadonlySet<NullReason> = new Set(["DEFICIT", "CAPITAL_IMPAIRMENT"]);
+
 /** 표 한 칸에 쓸 글자 */
 export function cellText(cell: ChartCell | undefined): string {
   if (!cell) return "—";
-  if (cell.plotValue === null && cell.reason)
+  if (cell.plotValue === null && cell.reason) {
+    if (VERDICT_REASONS.has(cell.reason)) return NULL_REASON_LABEL[cell.reason];
     return `계산 불가 (${NULL_REASON_LABEL[cell.reason]})`;
+  }
   return cell.display;
+}
+
+/** 주가 기준일 "2026-09-30" → "기준일 9월 30일 종가" (PHASE4_PLAN §3.1). 모양이 다르면 받은 글자 그대로 */
+export function priceDateLabel(priceDate: string): string {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(priceDate);
+  if (!m) return `기준일 ${priceDate} 종가`;
+  return `기준일 ${Number(m[1])}월 ${Number(m[2])}일 종가`;
 }
 
 /** "2025Q3" → "2025년 3분기", "2025" → "2025년" (그 밖은 그대로) */

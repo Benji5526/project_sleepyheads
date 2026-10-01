@@ -1,0 +1,16 @@
+{
+  "intent": "trend",
+  "metrics": ["operating_income"],
+  "period": {
+    "specified": true,
+    "from": null,
+    "to": null,
+    "text": "최근 8분기"
+  },
+  "charts": [
+    {
+      "type": "line",
+      "metrics": ["operating_income"]
+    }
+  ]
+}

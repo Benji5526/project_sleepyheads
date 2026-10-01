@@ -1,0 +1,39 @@
+name: Regression
+
+# WU-503 회귀 세트 (tests/regression). AI는 고정 응답(ai-fixed/)이라 비용 0, 외부 API·DB도 부르지 않는다.
+# 실제 AI 범위 판정(scripts/regression-scope-live.test.ts)은 비용이 들어 여기서 돌리지 않는다.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: regression-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # 혹시 코드가 실제 호출을 하려 해도 키가 없어 바로 실패하게 (비용 0 보장)
+      OPENAI_API_KEY: ""
+      OPENDART_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: 회귀 세트 (질문 해석 + 숫자 정답, AI 고정 응답)
+        run: pnpm exec vitest run -c tests/regression/vitest.config.mts

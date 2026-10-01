@@ -1,0 +1,4 @@
+{
+  "has_out_of_scope_part": true,
+  "metrics": ["revenue", "operating_income", "net_income"]
+}
