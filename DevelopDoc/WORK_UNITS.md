@@ -108,7 +108,7 @@
 | WU | 이름 | 담당 | 규모 | 선행 | 상태 |
 |---|---|---|---|---|---|
 | WU-501 | 작업 큐 보강 (복구·중복 방지·장시간 취소) | 🤖 | M | WU-499 | 🟨 코드·DB 테스트 완료(Phase 4 A), 운영 확인 WU-599 |
-| WU-502 | 재무+주가 결합 (시가총액·PER·PBR, 키 중복·행 증가 검증) | 🤖 | L | WU-499 | ⬜ |
+| WU-502 | 재무+주가 결합 (시가총액·PER·PBR, 키 중복·행 증가 검증) | 🤖 | L | WU-499 | 🟨 서버 완료(예림, Phase 4) · 화면 ⓘ는 현준 |
 | WU-503 | 회귀 테스트 세트 (질문 10개 이상) | 🤖 | M | WU-501, WU-502 | ⬜ |
 | WU-504 | 프롬프트 주입 방어 검증 | 🤖 | M | WU-503 | ⬜ |
 | WU-505 | 배포 전 보안·운영 점검 (8항목) | 👤🤖 | M | WU-504 | 🟨 자동 점검 완료([SECURITY_CHECK](./SECURITY_CHECK.md)), 대시보드 확인 👤 현준 |
@@ -920,14 +920,14 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 | 선행 | WU-499 |
 
 **완료조건**
-- [ ] 종목별 주가는 하루 1회만 호출된다
-- [ ] SK하이닉스 시가총액 = 종가 × 상장주식수, 기준일이 함께 표시된다
-- [ ] TTM 순이익 ≤ 0 → PER `적자`, 지배주주지분 ≤ 0 → PBR `자본잠식`
-- [ ] 테스트: 보통주 종목코드 중복 샘플 → **결합 중단 + 경고**
-- [ ] 테스트: 같은 종목·기준일 가격 2행 샘플 → **결합 중단 + 경고**
-- [ ] 결합 전후 행 수가 실행 기록에 남고, 정상 결합에서 행이 늘지 않는다
-- [ ] 우선주가 보통주 계산에 섞이지 않는다
-- [ ] 화면의 PER·PBR ⓘ 계산식이 TECH §6.4와 같다
+- [x] 종목별 주가는 하루 1회만 호출된다 — `price-daily.test.ts` "처음 부르면 주가 API 1회 … 같은 날 다시 부르면 0회", "다음 날에는 다시 1회"
+- [x] SK하이닉스 시가총액 = 종가 × 상장주식수, 기준일이 함께 표시된다 — `runner-valuation.test.ts` "카드에 시가총액·PER·PBR + 기준일", 실제 값 `tests/accuracy/regression-answers.test.ts` `answers/sk-hynix.json#per_20260930` (2026-09-30 종가 1,776,000 × 730,492,365 = 1,297조 3,544억 원, API `mrktTotAmt`와 일치, PER 8.01배·PBR 4.94배)
+- [x] TTM 순이익 ≤ 0 → PER `적자`, 지배주주지분 ≤ 0 → PBR `자본잠식` — `runner-valuation.test.ts` "TTM ≤ 0 → PER '적자' …", `price-join.test.ts` 계산식
+- [x] 테스트: 보통주 종목코드 중복 샘플 → **결합 중단 + 경고** — `price-join.test.ts` "보통주 종목코드 중복 샘플", `runner-valuation.test.ts` "보통주 종목코드 중복(기업 목록에 같은 기업 코드 둘)"
+- [x] 테스트: 같은 종목·기준일 가격 2행 샘플 → **결합 중단 + 경고** — `price-join.test.ts` "같은 종목·기준일 가격 2행 샘플", `runner-valuation.test.ts` "같은 종목·기준일 가격 2행 → 결합 중단"
+- [x] 결합 전후 행 수가 실행 기록에 남고, 정상 결합에서 행이 늘지 않는다 — `runner-valuation.test.ts` "build_result 실행 기록" (`outputSummary` "주가 결합: 재무 1행 + 주가 2행 → 1행, 제외 1행(우선주 1)…"), `price-join.test.ts` "정상: … 결합 전후 행 수가 같다"
+- [x] 우선주가 보통주 계산에 섞이지 않는다 — `price-join.test.ts` "우선주는 보통주 계산에 섞이지 않는다", "build_result 실행 기록"(응답에 섞여 온 우선주 제외)
+- [ ] 화면의 PER·PBR ⓘ 계산식이 TECH §6.4와 같다 — **서버 쪽 완료**: 주가 지표 차트 `footnotes`에 TECH §6.4 계산식 글자 그대로(`VALUATION_FORMULAS`, `runner-valuation.test.ts`). 화면 ⓘ는 현준님(PHASE4_PLAN §3.1)
 
 ---
 
@@ -946,6 +946,8 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 - [ ] GitHub Actions에서 회귀 세트가 자동 실행된다 (AI는 고정 응답으로 대체해 비용 0)
 - [ ] **범위 판정 세트는 실제 AI로도 실행**해 거절 정확도(범위 밖 거절)와 오거절(범위 안인데 거절)을 따로 기록했다 — AI 판정은 고정 응답으로는 검증할 수 없음
 - [ ] 실제 AI로 1회 돌린 결과와 비용도 따로 기록했다 (TECH T4 모델 평가 근거)
+
+> **숫자 정답 (예림, Phase 4)**: `tests/regression/answers/` — `sk-hynix.json`(`recent_2026q2`·`trend_2025q3_2026q2`·`qoq_yoy_2026q2`·`annual_2025`·`per_20260930`), `compare.json`(`op_margin_2026q2_skhynix_samsung`·`debt_ratio_2024q4_with_financial`), `edge.json`(`missing_account_kb_revenue`·`no_prev_period_2016q1_qoq`·`no_report_2015q1`·`sign_change_dongwon_2025q4_ni_yoy`·`zero_denominator_synthetic`·`per_deficit_synthetic`). OpenDART 원문·주가 API 값을 엔진 없이 손 계산(2026Q2 기준). 원문이 있는 정답은 `tests/accuracy/regression-answers.test.ts`가 실제 엔진과 대조(10건 통과). 케이스 파일(`cases/*.json`)·실행·CI는 현준님.
 
 ---
 

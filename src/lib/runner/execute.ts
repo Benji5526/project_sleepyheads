@@ -55,11 +55,20 @@ import {
   quartersInRange,
   type CompanyMetricSample,
 } from "./series-builders";
+import {
+  buildValuationChart,
+  isPriceMetric,
+  prepareValuation,
+  valuationSummary,
+  type PreparedValuation,
+} from "./valuation";
 
 export interface ExecuteAnalysisOptions {
   userId?: string | null;
   analysisId?: string | null;
   client?: SupabaseClient;
+  /** 테스트용 시계 (주가 기준일·"최신 분기" 판정) */
+  now?: () => Date;
 }
 
 export interface RunAnalysisOptions extends ExecuteAnalysisOptions {
@@ -67,7 +76,8 @@ export interface RunAnalysisOptions extends ExecuteAnalysisOptions {
    * 재실행(WU-202 Q6 `useLatestData=false`): 이 데이터 버전의 출처·선택만으로 계산한다.
    * 외부 호출·진단 없음 — 그래서 언제 해도 같은 숫자가 나온다.
    */
-  version?: Pick<DataVersionContent, "sources" | "decisions">;
+  version?: Pick<DataVersionContent, "sources" | "decisions"> &
+    Partial<Pick<DataVersionContent, "priceDate">>;
   /** Q5에서 고른 전처리 선택 (없으면 기본값) */
   decisions?: PreprocessDecisions | null;
   /**
@@ -97,6 +107,8 @@ export type RunAnalysisOutcome =
       versionHash: string;
       /** 발견된 진단 (자동 처리 항목 포함) — 결과와 함께 저장해 두면 나중에도 보인다 */
       diagnoses: Diagnosis[];
+      /** 주가 지표(WU-502)를 계산했으면 결합 기록 — 실행 기록 `outputSummary`에 붙인다 (TECH §6.6 "기록") */
+      priceJoin: { summary: string; externalCalls: number } | null;
     };
 
 /** YoY(4분기 전)까지 계산할 수 있게, 요청 범위보다 4분기 앞서서 데이터를 확보해 둔다. */
@@ -133,42 +145,42 @@ export async function runAnalysis(
 
   if (options.version) {
     // 재실행: 저장된 출처(전처리 선택이 이미 반영된 접수번호·연결/별도)만 읽는다
-    for (const company of companies) {
-      financialsByCorp.set(
-        company.corpCode,
-        await financialsFromSources(
-          company,
-          fetchFrom,
-          request.period.to,
-          options.version.sources,
-          {
-            client,
-          },
-        ),
-      );
-    }
-    decisions = options.version.decisions;
+    const version = options.version;
+    const loaded = await Promise.all(
+      companies.map((company) =>
+        financialsFromSources(company, fetchFrom, request.period.to, version.sources, { client }),
+      ),
+    );
+    companies.forEach((company, i) => financialsByCorp.set(company.corpCode, loaded[i]));
+    decisions = version.decisions;
   } else {
     // 보드 다시 계산이면 원래 출처를 그대로 두고 빠진 보고서만 받는다. 새로 받은 보고서 키를 모아 둔다
+    // 기업들을 함께 받는다 (Phase 3 후속: 보드 B2에서 처음 보는 비교 기업 4~5곳을 한 곳씩 받으면 60초를 넘었다).
+    // 전자공시 동시 호출은 공통 호출기(dartFetch)가 프로세스 전체에서 5개로 묶으므로 여기서 더 묶지 않는다
     const freshKeys = new Set<string>();
-    for (const company of companies) {
-      if (options.base) {
+    const base = options.base;
+    // allSettled: 한 기업이 실패해도 나머지 수집이 응답 뒤에 남아 돌지 않게 모두 끝난 뒤 첫 오류를 던진다
+    const settled = await Promise.allSettled(
+      companies.map(async (company) => {
+        if (!base) {
+          return ensureCompanyFinancials(company, fetchFrom, request.period.to, toolOptions);
+        }
         const over = await ensureCompanyFinancialsOver(
           company,
           fetchFrom,
           request.period.to,
-          options.base.sources,
+          base.sources,
           toolOptions,
         );
         for (const key of over.freshKeys) freshKeys.add(key);
-        financialsByCorp.set(company.corpCode, over);
-      } else {
-        financialsByCorp.set(
-          company.corpCode,
-          await ensureCompanyFinancials(company, fetchFrom, request.period.to, toolOptions),
-        );
-      }
-    }
+        return over;
+      }),
+    );
+    const failed = settled.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failed) throw failed.reason;
+    settled.forEach((r, i) => {
+      if (r.status === "fulfilled") financialsByCorp.set(companies[i].corpCode, r.value);
+    });
     // 원래 출처에는 원래 선택이 이미 반영돼 있다 — 선택은 새로 받은 보고서에만 적용한다
     const isFresh = (s: DataSource) => !options.base || freshKeys.has(sourceKeyOf(s));
 
@@ -222,13 +234,38 @@ export async function runAnalysis(
     ),
   );
 
+  // 주가 지표 (WU-502): 기업마다 기준 분기(요청 범위 안 보고서가 있는 최근 분기)에 주가를 결합한다.
+  // 기준일이 데이터 버전에 들어가야 해서 버전 해시보다 먼저 한다
+  let valuation: PreparedValuation | null = null;
+  if (request.metrics.some(isPriceMetric)) {
+    const quarterByCorp = new Map(
+      companies.map((c) => [
+        c.corpCode,
+        comparisonQuarter(
+          financialsByCorp.get(c.corpCode)!,
+          requestedQuarters.filter((q) => !excludedByCorp.get(c.corpCode)?.has(q)),
+          request.period.to,
+        ),
+      ]),
+    );
+    valuation = await prepareValuation({
+      companies,
+      financialsByCorp,
+      quarterByCorp,
+      period: request.period,
+      priceDate: options.version?.priceDate ?? null,
+      ...toolOptions,
+      now: options.now,
+    });
+  }
+
   const sources: DataSource[] = companies.flatMap(
     (c) => financialsByCorp.get(c.corpCode)!.sources ?? [],
   );
   const version: DataVersionContent = {
     sources,
     calcVersion: CALC_VERSION,
-    priceDate: null,
+    priceDate: valuation?.priceDate ?? null,
     decisions,
   };
   const versionHash = hashDataVersion(version);
@@ -248,9 +285,13 @@ export async function runAnalysis(
     ],
     toolOptions,
     peerComparisonChart: options.peerComparisonChart ?? false,
+    valuation,
   });
 
-  return { kind: "done", result, version, versionHash, diagnoses };
+  const priceJoin = valuation
+    ? { summary: valuationSummary(valuation), externalCalls: valuation.externalCalls }
+    : null;
+  return { kind: "done", result, version, versionHash, diagnoses, priceJoin };
 }
 
 /** 연결(CFS)로 쓴 보고서를 별도(OFS)로 바꾼다. 별도가 없는 보고서(013)는 그대로 둔다 */
@@ -293,14 +334,21 @@ interface BuildResultInput {
   toolOptions: { userId: string | null; analysisId: string | null; client: SupabaseClient };
   /** {@link RunAnalysisOptions.peerComparisonChart} */
   peerComparisonChart?: boolean;
+  /** 주가 지표 (WU-502) — 없으면 주가 지표를 묻지 않은 질문 */
+  valuation?: PreparedValuation | null;
 }
 
 /** 계산된 재무 값으로 차트·표·숫자 ID를 만든다 (WU-110) */
 async function buildResult(
-  request: AnalysisRequestView,
+  fullRequest: AnalysisRequestView,
   input: BuildResultInput,
 ): Promise<ResultObject> {
   const { companies, financialsByCorp } = input;
+  // 주가 지표(시가총액·PER·PBR)는 아래 재무 차트가 아니라 주가 지표 카드·표로 따로 만든다
+  const request = {
+    ...fullRequest,
+    metrics: fullRequest.metrics.filter((m) => !isPriceMetric(m)),
+  };
   const fsDivByCorp = new Map<string, FsDiv>();
   for (const company of companies) {
     const financials = financialsByCorp.get(company.corpCode)!;
@@ -403,7 +451,22 @@ async function buildResult(
       ? await fetchEventDisclosures(request.target, request.period, input.toolOptions)
       : [];
 
+  // 주가 지표 카드(기업 하나)·표(여럿)를 맨 앞에 — 주가 지표를 물은 질문의 첫 답이다
+  const valuationChart = input.valuation
+    ? buildValuationChart(input.valuation, allocator, "c1")
+    : null;
+  if (valuationChart) {
+    charts.forEach((chart, i) => (chart.id = `c${i + 2}`));
+    charts.unshift(valuationChart.chart);
+    for (const r of input.valuation!.rows) reportsInBasis.add(r.input.report);
+  }
+
   const basis = buildDataBasis(request, reportsInBasis, targetFsDiv, input.dataVersionId);
+  if (input.valuation) {
+    basis.priceDate = input.valuation.priceDate;
+    // 결합을 멈췄으면 그 사유를 맨 앞에 (TECH §6.6 "결합 중단 + 경고")
+    basis.flags.unshift(...input.valuation.warnings);
+  }
   if (isSum)
     basis.flags.push(`합계: ${companies.map((c) => c.name).join("·")} ${companies.length}곳`);
   // 여러 기업을 나란히 놓거나 더할 때 금융사가 섞이면 매출·영업이익률을 공통 지표로 바꿔 읽는다 (TECH §7).
@@ -446,14 +509,25 @@ async function buildResult(
         ? ({ name: "연도", type: "text" } as const)
         : ({ name: "분기", type: "quarter" } as const);
 
-  const usedData = buildUsedData({
-    rowLabelColumn,
-    rowKeys,
-    series,
-    figures: allocator.figures,
-    period: request.period,
-    notes: basis.flags,
-  });
+  // 주가 지표만 물었으면 재무 차트가 없다 — "사용된 데이터"는 주가 지표 표로
+  const usedData =
+    valuationChart && series.length === 0
+      ? buildUsedData({
+          rowLabelColumn: { name: "기업", type: "text" },
+          rowKeys: valuationChart.rowKeys,
+          series: valuationChart.series,
+          figures: allocator.figures,
+          period: request.period,
+          notes: basis.flags,
+        })
+      : buildUsedData({
+          rowLabelColumn,
+          rowKeys,
+          series,
+          figures: allocator.figures,
+          period: request.period,
+          notes: basis.flags,
+        });
 
   return { basis, figures: allocator.figures, charts, disclosures, usedData };
 }

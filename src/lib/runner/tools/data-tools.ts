@@ -140,6 +140,7 @@ export const getDisclosures: Tool<"get_disclosures"> = async (input, ctx) => {
 export const buildResult: Tool<"build_result"> = async (_input, ctx) => {
   try {
     // 앞 get_financials 단계가 보고서를 이미 받아 두어 여기서는 외부 호출 없이 캐시로 끝난다
+    // (주가 지표를 물었으면 주가 API만 — 종목마다 하루 1회)
     const request = { ...ctx.request, peers: peersOf(ctx.previous, ctx.request.peers) };
     const outcome = await runAnalysis(request, {
       userId: ctx.userId,
@@ -161,8 +162,12 @@ export const buildResult: Tool<"build_result"> = async (_input, ctx) => {
         diagnoses: outcome.diagnoses,
       },
       inputSummary: `${request.metrics.join("·")}, ${request.groupBy} 묶음${request.peers.length > 0 ? `, 비교 ${request.peers.length}곳` : ""}`,
-      outputSummary: `차트 ${outcome.result.charts.length}개, 숫자 ${Object.keys(outcome.result.figures).length}개${unavailable > 0 ? ` (계산 불가 ${unavailable}개)` : ""}`,
-      usage: NO_USAGE,
+      outputSummary: [
+        `차트 ${outcome.result.charts.length}개, 숫자 ${Object.keys(outcome.result.figures).length}개${unavailable > 0 ? ` (계산 불가 ${unavailable}개)` : ""}`,
+        // 주가 결합 전후 행 수 (WU-502, TECH §6.6 "기록")
+        ...(outcome.priceJoin ? [outcome.priceJoin.summary] : []),
+      ].join(" · "),
+      usage: { externalCalls: outcome.priceJoin?.externalCalls ?? 0, llmCostUsd: 0 },
     };
   } catch (err) {
     return failure(err);

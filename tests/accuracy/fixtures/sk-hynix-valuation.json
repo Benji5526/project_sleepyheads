@@ -1,0 +1,192 @@
+{
+  "_source": "OpenDART fnlttSinglAcntAll.json(CFS) 원문에서 지배주주 순이익·지배주주지분 행(2025Q3~2026Q2 보고서)과 2016 1분기·2015 사업보고서 매출액 행만 옮김, 금융위원회_주식시세정보 getStockPriceInfo_V2(likeSrtnCd=000660, 2026-09-17~) 응답 중 필요한 필드만 (2026-10-01 조회). 2015 1·반기·3분기보고서는 013(없음).",
+  "corp_code": "00164779",
+  "stock_code": "000660",
+  "reports": [
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11014",
+      "fs_div": "CFS",
+      "rcept_no": "20251114001805",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "BS",
+          "account_id": "ifrs-full_EquityAttributableToOwnersOfParent",
+          "account_nm": "지배기업의 소유지분",
+          "thstrm_amount": "99985504000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossAttributableToOwnersOfParent",
+          "account_nm": "지배기업의 소유주지분",
+          "thstrm_amount": "12595195000000",
+          "thstrm_add_amount": "27699504000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2025",
+      "reprt_code": "11011",
+      "fs_div": "CFS",
+      "rcept_no": "20260317000635",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "BS",
+          "account_id": "ifrs-full_EquityAttributableToOwnersOfParent",
+          "account_nm": "지배기업의 소유지분",
+          "thstrm_amount": "120516178000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossAttributableToOwnersOfParent",
+          "account_nm": "지배기업의 소유주지분",
+          "thstrm_amount": "42919287000000",
+          "thstrm_add_amount": ""
+        }
+      ]
+    },
+    {
+      "bsns_year": "2026",
+      "reprt_code": "11013",
+      "fs_div": "CFS",
+      "rcept_no": "20260515002287",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "BS",
+          "account_id": "ifrs-full_EquityAttributableToOwnersOfParent",
+          "account_nm": "지배기업의 소유지분",
+          "thstrm_amount": "164291082000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossAttributableToOwnersOfParent",
+          "account_nm": "지배기업의 소유주지분",
+          "thstrm_amount": "40330176000000",
+          "thstrm_add_amount": "40330176000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2026",
+      "reprt_code": "11012",
+      "fs_div": "CFS",
+      "rcept_no": "20260814003509",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "BS",
+          "account_id": "ifrs-full_EquityAttributableToOwnersOfParent",
+          "account_nm": "지배기업의 소유지분",
+          "thstrm_amount": "262380610000000"
+        },
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs-full_ProfitLossAttributableToOwnersOfParent",
+          "account_nm": "지배기업의 소유주지분",
+          "thstrm_amount": "93820236000000",
+          "thstrm_add_amount": "134150412000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2016",
+      "reprt_code": "11013",
+      "fs_div": "CFS",
+      "rcept_no": "20160516001896",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "3655717000000",
+          "thstrm_add_amount": "3655717000000"
+        }
+      ]
+    },
+    {
+      "bsns_year": "2015",
+      "reprt_code": "11011",
+      "fs_div": "CFS",
+      "rcept_no": "20160516001867",
+      "use": "answer",
+      "rows": [
+        {
+          "sj_div": "CIS",
+          "account_id": "ifrs_Revenue",
+          "account_nm": "매출액",
+          "thstrm_amount": "18797998000000"
+        }
+      ]
+    }
+  ],
+  "prices": [
+    {
+      "basDt": "20260930",
+      "srtnCd": "000660",
+      "itmsNm": "SK하이닉스",
+      "clpr": "1776000",
+      "lstgStCnt": "730492365",
+      "mrktTotAmt": "1297354440240000"
+    },
+    {
+      "basDt": "20260929",
+      "srtnCd": "000660",
+      "itmsNm": "SK하이닉스",
+      "clpr": "1765000",
+      "lstgStCnt": "730492365",
+      "mrktTotAmt": "1289319024225000"
+    },
+    {
+      "basDt": "20260928",
+      "srtnCd": "000660",
+      "itmsNm": "SK하이닉스",
+      "clpr": "1768000",
+      "lstgStCnt": "730492365",
+      "mrktTotAmt": "1291510501320000"
+    },
+    {
+      "basDt": "20260923",
+      "srtnCd": "000660",
+      "itmsNm": "SK하이닉스",
+      "clpr": "1862000",
+      "lstgStCnt": "730492365",
+      "mrktTotAmt": "1360176783630000"
+    },
+    {
+      "basDt": "20260922",
+      "srtnCd": "000660",
+      "itmsNm": "SK하이닉스",
+      "clpr": "1840000",
+      "lstgStCnt": "730492365",
+      "mrktTotAmt": "1344105951600000"
+    },
+    {
+      "basDt": "20260921",
+      "srtnCd": "000660",
+      "itmsNm": "SK하이닉스",
+      "clpr": "1868000",
+      "lstgStCnt": "730492365",
+      "mrktTotAmt": "1364559737820000"
+    },
+    {
+      "basDt": "20260918",
+      "srtnCd": "000660",
+      "itmsNm": "SK하이닉스",
+      "clpr": "1857000",
+      "lstgStCnt": "730492365",
+      "mrktTotAmt": "1356524321805000"
+    },
+    {
+      "basDt": "20260917",
+      "srtnCd": "000660",
+      "itmsNm": "SK하이닉스",
+      "clpr": "1745000",
+      "lstgStCnt": "730492365",
+      "mrktTotAmt": "1274709176925000"
+    }
+  ]
+}

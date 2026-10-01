@@ -1,0 +1,78 @@
+{
+  "_meta": {
+    "source": "OpenDART fnlttSinglAcntAll.json 원문 값(접수번호 rcept_no)으로 손 계산 — 엔진 코드를 쓰지 않고 정수 덧셈·뺄셈·나눗셈. 퍼센트·배수는 소수 넷째 자리 반올림, 금액은 원. 기준: 2026Q2(11/14까지 최신 분기, PHASE4_PLAN §1-8). 계산식: TECH §6.4",
+    "answerKey": "tests/accuracy/ANSWER_KEY.md §8"
+  },
+  "op_margin_2026q2_skhynix_samsung": {
+    "question": "SK하이닉스랑 삼성전자 2분기 영업이익률 비교해줘",
+    "kind": "normal",
+    "metrics": ["operating_margin"],
+    "period": {
+      "from": "2026Q2",
+      "to": "2026Q2"
+    },
+    "groupBy": "company",
+    "figures": [
+      {
+        "label": "SK하이닉스 영업이익률 2026Q2",
+        "value": 76.3282,
+        "unit": "PERCENT",
+        "display": "+76.3%"
+      },
+      {
+        "label": "삼성전자 영업이익률 2026Q2",
+        "value": 52.1823,
+        "unit": "PERCENT",
+        "display": "+52.2%"
+      }
+    ],
+    "rceptNo": ["20260814003509", "20260814003699"]
+  },
+  "debt_ratio_2024q4_with_financial": {
+    "question": "SK하이닉스, 삼성전자, KB금융 2024년 말 부채비율 비교",
+    "kind": "normal",
+    "metrics": ["debt_ratio"],
+    "period": {
+      "from": "2024Q4",
+      "to": "2024Q4"
+    },
+    "groupBy": "company",
+    "figures": [
+      {
+        "label": "SK하이닉스 부채비율 2024Q4",
+        "value": 62.1512,
+        "unit": "PERCENT"
+      },
+      {
+        "label": "삼성전자 부채비율 2024Q4",
+        "value": 27.9319,
+        "unit": "PERCENT"
+      },
+      {
+        "label": "KB금융 부채비율 2024Q4",
+        "value": 1166.9786,
+        "unit": "PERCENT"
+      },
+      {
+        "label": "SK하이닉스 자기자본비율 2024Q4",
+        "value": 61.6708,
+        "unit": "PERCENT"
+      },
+      {
+        "label": "삼성전자 자기자본비율 2024Q4",
+        "value": 78.1666,
+        "unit": "PERCENT"
+      },
+      {
+        "label": "KB금융 자기자본비율 2024Q4",
+        "value": 7.8928,
+        "unit": "PERCENT"
+      }
+    ],
+    "flags": [
+      "금융업 포함 — 공통 지표로 변환",
+      "※ 금융회사는 고객 예금·보험계약 등이 부채로 잡히는 구조라 일반 기업보다 부채비율이 높게 나타날 수 있습니다."
+    ],
+    "fixture": "tests/fixtures/dart/financials/*_2024_11011_CFS.json"
+  }
+}

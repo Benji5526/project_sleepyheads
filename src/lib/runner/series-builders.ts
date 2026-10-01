@@ -38,7 +38,7 @@ export function quartersInRange(period: PeriodRange): Quarter[] {
 }
 
 /** 달력 분기 값의 근거 보고서 이름. 연도는 OpenDART 연도(보고서 기간이 끝난 해)로 보여 준다 */
-function reportBasis(quarter: Quarter, financials: CompanyFinancials): string {
+export function reportBasis(quarter: Quarter, financials: CompanyFinancials): string {
   const ref = financials.fiscalRefByQuarter.get(quarter);
   if (!ref) return "알 수 없음";
   const reports = reportsForFiscalQuarter(ref.bsnsYear, ref.quarter, financials.accMt ?? 12);

@@ -73,6 +73,8 @@ const state = vi.hoisted(() => ({
   llmCalls: 0,
   quotaCalls: 0,
   resolved: [] as string[],
+  /** 이미 확인한 보고서(report_fetch_state) "corp|year" — B2 새 보고서 한도. 그 해의 보고서 4종을 다 본 것으로 친다 */
+  fetchedYears: [] as string[],
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -100,6 +102,24 @@ vi.mock("@/lib/supabase/admin", () => ({
         if (table === "boards") state.saved.push(...rows);
         return { error: null };
       },
+      select: () => ({
+        in: async (_col: string, corps: string[]) => ({
+          data:
+            table === "report_fetch_state"
+              ? state.fetchedYears
+                  .map((key) => key.split("|"))
+                  .filter(([corp]) => corps.includes(corp))
+                  .flatMap(([corp, year]) =>
+                    ["11013", "11012", "11014", "11011"].map((reprt_code) => ({
+                      corp_code: corp,
+                      bsns_year: Number(year),
+                      reprt_code,
+                    })),
+                  )
+              : [],
+          error: null,
+        }),
+      }),
     }),
   }),
 }));
@@ -168,6 +188,10 @@ vi.mock("@/lib/versions/store", () => ({
 
 const { GET, PATCH } = await import("@/app/api/boards/[id]/route");
 
+function knownYears(company: CompanyRef, from: number, to: number): string[] {
+  return Array.from({ length: to - from + 1 }, (_, i) => `${company.corpCode}|${from + i}`);
+}
+
 function get() {
   return GET(new NextRequest(`http://localhost:3000/api/boards/${ANALYSIS}`), {
     params: Promise.resolve({ id: ANALYSIS }),
@@ -203,6 +227,7 @@ beforeEach(() => {
   state.llmCalls = 0;
   state.quotaCalls = 0;
   state.resolved = [];
+  state.fetchedYears = knownYears(TARGET, 2014, 2026).concat(knownYears(SAMSUNG, 2014, 2026));
 });
 
 describe("B1 GET /api/boards/:id", () => {
@@ -391,5 +416,80 @@ describe("B2 PATCH /api/boards/:id", () => {
     const res = await patch({ filters: {} });
     expect(res.status).toBe(200);
     expect(state.runs[0].options.base).toEqual({ sources: [], decisions: {} });
+  });
+
+  it("새로 받을 보고서가 60건을 넘으면 계산 전에 413 — 처음 보는 기업 (Phase 3 후속)", async () => {
+    // 둘 다 처음 — 2019Q1~2026Q2 + 앞 4분기 = 2018Q1~2026Q2, 기업마다 보고서 34건 × 2 = 68건 > 60
+    state.fetchedYears = [];
+    const res = await patch({
+      filters: { period: { from: "2019Q1", to: "2026Q2" }, peers: [SAMSUNG.stockCode] },
+    });
+    expect(res.status).toBe(413);
+    const { error } = (await res.json()) as {
+      error: { code: string; message: string; details: Record<string, number> };
+    };
+    expect(error.code).toBe("TOO_LARGE");
+    expect(error.message).toContain("줄여");
+    expect(error.message).toContain("SK하이닉스 34건, 삼성전자 34건");
+    expect(error.details).toMatchObject({
+      freshCompanies: 2,
+      estimatedReports: 68,
+      maxReports: 60,
+    });
+    expect(state.runs).toEqual([]);
+
+    // SK하이닉스 보고서는 이미 다 있다 — 삼성전자 34건만 새로 받으면 되니 통과
+    state.fetchedYears = knownYears(TARGET, 2014, 2026);
+    const ok = await patch({
+      filters: { period: { from: "2019Q1", to: "2026Q2" }, peers: [SAMSUNG.stockCode] },
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it("이미 본 기업도 기간을 크게 넓히면 새 보고서를 세어 413 (처음 보는 기업만 세지 않는다)", async () => {
+    // 두 기업 모두 2025~2026년 보고서만 받아 두었다 (원래 분석이 최근 기간)
+    state.fetchedYears = knownYears(TARGET, 2025, 2026).concat(knownYears(SAMSUNG, 2025, 2026));
+    // 2016Q1~2026Q2 + 앞 4분기: 기업마다 2015~2024년 보고서 40건 × 2 = 80건이 새로 필요
+    const res = await patch({
+      filters: { period: { from: "2016Q1", to: "2026Q2" }, peers: [SAMSUNG.stockCode] },
+    });
+    expect(res.status).toBe(413);
+    expect((await res.json()).error.details).toMatchObject({
+      freshCompanies: 2,
+      estimatedReports: 80,
+    });
+    expect(state.runs).toEqual([]);
+  });
+
+  it("보드 결과의 데이터 버전이 원래 분석과 다르면 분석 기준 맨 앞에 알린다 (Phase 3 후속)", async () => {
+    const changed = resultFor("새 기간");
+    changed.basis.dataVersionId = "55555555-5555-4555-8555-555555555555";
+    state.runResult = changed;
+    const res = await patch({ filters: { period: { from: "2024Q1", to: "2026Q2" } } });
+    const flags: string[] = (await res.json()).data.result.basis.flags;
+    expect(flags[0]).toBe(
+      "보드 데이터 버전 55555555 — 원래 분석(44444444)과 다릅니다. 위 [같은 조건으로 재실행]은 원래 분석 기준입니다",
+    );
+  });
+
+  it("같은 데이터 버전이면 알리지 않는다", async () => {
+    const res = await patch({ filters: {} });
+    const flags: string[] = (await res.json()).data.result.basis.flags;
+    expect(flags.some((f) => f.startsWith("보드 데이터 버전"))).toBe(false);
+  });
+
+  it("합계에서 비교 기업을 모두 빼면 '합계 풀림' — 화면이 원래 groupBy를 들고 있어도 분석 기준으로 안다", async () => {
+    state.analysis!.analysis_request = {
+      ...REQUEST,
+      peers: [SAMSUNG],
+      aggregate: "sum",
+      groupBy: "sector",
+    };
+    const res = await patch({ filters: { peers: [] } });
+    expect(res.status).toBe(200);
+    expect(state.runs[0].request).toMatchObject({ groupBy: "quarter", peers: [] });
+    expect(state.runs[0].request.aggregate).toBeUndefined();
+    const flags: string[] = (await res.json()).data.result.basis.flags;
+    expect(flags[0]).toBe("합계 풀림 — 비교 기업을 모두 빼서 SK하이닉스 분기별 추이로 보여 줍니다");
   });
 });
