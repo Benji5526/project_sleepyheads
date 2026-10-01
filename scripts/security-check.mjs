@@ -17,6 +17,10 @@ const ROOT = process.cwd();
 const args = process.argv.slice(2);
 const urlIndex = args.indexOf("--url");
 const siteUrl = urlIndex >= 0 ? args[urlIndex + 1] : null;
+if (urlIndex >= 0 && !/^https?:\/\//.test(siteUrl ?? "")) {
+  console.error("사용법: node scripts/security-check.mjs [--url https://운영주소]");
+  process.exit(2);
+}
 
 // 서버 전용 비밀 값의 이름 (API_SPEC §8.3). 값이 8자 이상일 때만 대조한다
 const SECRET_NAMES = [
@@ -151,9 +155,15 @@ function git(argsList) {
 }
 const tracked = git(["ls-files"]).split("\n").filter(Boolean);
 let trackedBad = 0;
+const skippedLarge = [];
 for (const file of tracked) {
   const path = join(ROOT, file);
-  if (!existsSync(path) || statSync(path).size > 5_000_000) continue;
+  if (!existsSync(path)) continue;
+  // 아주 큰 파일은 따로 알린다 (조용히 건너뛰면 "없음"이 거짓이 될 수 있다)
+  if (statSync(path).size > 5_000_000) {
+    skippedLarge.push(file);
+    continue;
+  }
   const hits = scanText(readFileSync(path, "utf8"), secrets);
   if (hits.length) {
     trackedBad += 1;
@@ -161,6 +171,11 @@ for (const file of tracked) {
   }
 }
 console.log(`② 저장소 작업 트리: 파일 ${tracked.length}개 검사 → 걸린 파일 ${trackedBad}개`);
+if (skippedLarge.length) {
+  console.log(
+    `   ⚠️ 5MB 넘어 검사하지 않은 파일 ${skippedLarge.length}개 — 직접 확인: ${skippedLarge.join(", ")}`,
+  );
+}
 
 // 커밋마다 추가된 줄만 본다 (지워진 줄도 기록에 남으므로 +·- 둘 다)
 const log = git(["log", "--all", "-p", "--no-color", "--format=@@COMMIT %H"]);

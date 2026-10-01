@@ -38,10 +38,10 @@ export function PlanCard({
     // 보통은 부모가 곧바로 "취소한 분석입니다"로 바꿔 이 카드가 사라진다. 남아 있으면 이 안내가 보인다
     return (
       <section role="status" className="rounded-xl border border-line bg-surface p-5 sm:p-6">
-        <h2 className="text-lg font-semibold">분석을 취소했습니다</h2>
+        <h2 className="text-lg font-semibold">분석 취소를 요청했습니다</h2>
         <p className="mt-1 leading-7 text-muted">
-          계획만 보고 닫았습니다. 데이터는 불러오지 않았고 질문 수는 처음 질문할 때 한 번만
-          썼습니다.
+          화면이 바뀌지 않으면 새로 고침하세요 — 지금 상태(취소됨, 또는 취소가 안 됐으면 계획
+          카드)가 보입니다.
         </p>
         <button
           type="button"

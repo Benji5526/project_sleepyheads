@@ -529,6 +529,8 @@ async function finish(
   stop: StopReason | null,
   /** 실행 기록의 멈춘 이유 (없으면 상한 문구) */
   note?: string,
+  /** 마지막 조건부 갱신의 기대 상태 (오래된 실행 정리는 먼저 partial로 바꿔 둔 뒤 부른다) */
+  fromStatuses: AnalysisStatus[] = ["running", "queued"],
 ): Promise<StepResult> {
   const completed = completedSteps(rows);
   const built = outputsOf(completed, "build_result").at(-1);
@@ -558,10 +560,7 @@ async function finish(
 
   if (!built) {
     const status: AnalysisStatus = stop ? "partial" : "failed";
-    await deps.store.updateAnalysis(analysis.id, { status, stop_reason: stop }, [
-      "running",
-      "queued",
-    ]);
+    await deps.store.updateAnalysis(analysis.id, { status, stop_reason: stop }, fromStatuses);
     return { status, progress: progressOf(plan, rows), lastStep: null, next: "done" };
   }
 
@@ -584,16 +583,13 @@ async function finish(
       dataset_version_id: dataVersionId,
       request_hash: requestHashOf(analysis),
     },
-    ["running", "queued"],
+    fromStatuses,
   );
   return { status, progress: progressOf(plan, rows), lastStep: null, next: "done" };
 }
 
 /**
- * 단순 질문(승인이 필요 없는 계획)은 한 요청 안에서 끝까지 (TECH §4.9). 복합 질문은 한 단계만 하고 돌아간다 —
- * 화면이 Q4를 다시 불러 진행 상태를 보여 준다.
- */
-/**
+ * 단순 질문(승인이 필요 없는 계획)은 한 요청 안에서 끝까지 (TECH §4.9), 복합 질문은 한 단계만 하고 돌아간다.
  * 단순 질문이라도 한 요청이 이만큼 걸리면 남은 단계 전에 돌아가 화면이 진행 상태를 보여 준다
  * (WU-399 §2.1: 처음 조회하는 기업은 재무 수집만 수십 초라 진행 칸이 첫 단계에 머물렀다). 화면이 Q4를 이어 부른다
  */
@@ -655,8 +651,16 @@ export async function expireIdleRuns(
     const plan = analysis.plan ?? (analysis.request ? buildStoredPlan(analysis.request) : null);
     const built = outputsOf(completedSteps(rows), "build_result").length > 0;
     if (plan && built) {
-      // 결과까지 만들었으면 그 결과를 살려 부분 결과로 (분석 글 앞에서 끊긴 경우)
-      await finish(analysis, plan, rows, deps, "TIMEOUT", IDLE_NOTE);
+      // 결과까지 만들었으면 그 결과를 살려 부분 결과로 (분석 글 앞에서 끊긴 경우).
+      // 상태부터 조건부로 바꿔 "이긴" 뒤에만 실행 기록·결과를 쓴다 — 그사이 다시 열려 이어서 실행하는 요청(복구)과 겹치면
+      // 그쪽이 이기고, 여기서 남긴 "건너뜀" 줄이 이어지는 실행을 막지 않게
+      const won = await deps.store.updateAnalysis(
+        id,
+        { status: "partial", stop_reason: "TIMEOUT" },
+        ["queued", "running"],
+      );
+      if (!won) continue;
+      await finish(analysis, plan, rows, deps, "TIMEOUT", IDLE_NOTE, ["partial"]);
       expired += 1;
       continue;
     }
