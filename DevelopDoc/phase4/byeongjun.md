@@ -86,9 +86,5 @@
 
 ## 사람이 확인할 것 (병합·배포 뒤)
 1. **현준님 대시보드 7가지** — SECURITY_CHECK "대시보드 확인 안내" 1~7: 이메일·비밀번호 로그인 꺼짐, URL Configuration, 구글 Authorized redirect URIs, 수동 백업 1회, 일시정지 대응, OpenAI Monthly spend limit, Vercel Usage
-2. **복합 질문 실행 시간 상한** `quota_config.max_seconds_per_question` 90초 → **240초 제안** (통합 담당·현준님 결정, 운영 DB 값만 바꾸면 됨)
-   - 근거: 처음 조회하는 경쟁사 3곳 재무 수집이 102초였다(WU-399 §2.1 #3)
-   - 지금 엔진은 상한에 닿아도 결과(`build_result`)까지는 만들어 "부분 결과 + 차트"가 나오지만, 분석 글이 빠진다
-   - 수집 한 단계는 Q4 한 요청(최대 300초) 안에서 끝나므로, 240초면 처음 조회 기업 2~3곳에도 분석 글까지 나온다
-3. `node scripts/security-check.mjs --url https://projectsleepyheads.vercel.app`를 **시연 전에 한 번 더**(새 배포의 번들 확인). Vercel에 비밀 값이 있는 환경에서 돌리면 값 대조까지 된다
-4. WU-599: 운영에서 계획 카드 [닫기], 오래된 running 2건 정리, 장시간 질문 중 [취소]
+2. `node scripts/security-check.mjs --url https://projectsleepyheads.vercel.app`를 **시연 전에 한 번 더**(새 배포의 번들 확인). Vercel에 비밀 값이 있는 환경에서 돌리면 값 대조까지 된다
+3. WU-599: 운영에서 계획 카드 [닫기], 오래된 running 2건 정리, 장시간 질문 중 [취소]

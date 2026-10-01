@@ -43,4 +43,4 @@
 | 집계 실행 시간 | 30초 | **PGlite는 `statement_timeout`을 지키지 않는다**(50ms로 걸어도 1초 `pg_sleep`이 끝까지 감). 서버 쪽은 `aggregateSectorMetrics`의 `AbortSignal.timeout(30s)` → `isAggregateTimeout`(TimeoutError·57014) → 413. 운영 Postgres의 `statement_timeout` 동작은 읽기 조회로 확인 — [SECURITY_CHECK](../../DevelopDoc/SECURITY_CHECK.md) |
 
 ## 남은 것
-- **처음 조회하는 기업의 재무 수집 시간**(WU-399 §2.1 #3: 경쟁사 3곳 102초)은 OpenDART 보고서 수집이라 이 측정과 별개다 — 복합 질문 실행 시간 상한 제안은 `DevelopDoc/phase4/byeongjun.md`.
+- **처음 조회하는 기업의 재무 수집 시간**(WU-399 §2.1 #3: 경쟁사 3곳 102초)은 OpenDART 보고서 수집이라 이 측정과 별개다 — 시간 상한(90초)은 AI 예산 때문에 그대로 둔다(팀 결정, 2026-10-01).
