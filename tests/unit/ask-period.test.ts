@@ -46,6 +46,38 @@ describe("resolvePeriod (TECH §4.3)", () => {
     }
   });
 
+  // 2026-10-01 운영(분석 33a4f8d7…): "SK하이닉스 2026년 2분기 영업이익이 왜 이렇게 늘었어?" → 2026Q2 하나로 계산해
+  // 분석 글이 "비교할 이전 실적이 없어 얼마나 늘었는지 확인하기 어렵다"고 답함
+  it("원인 질문에 분기 하나만 적으면 직전 분기를 붙인다 (다른 질문·범위는 그대로)", () => {
+    expect(resolvePeriod({ specified: true, text: "2026년 2분기" }, "cause", LATEST)).toMatchObject(
+      {
+        ok: true,
+        period: {
+          from: "2026Q1",
+          to: "2026Q2",
+          specified: true,
+          reason: "질문에 지정된 기간: 2026년 2분기 (원인 질문이라 직전 분기와 비교)",
+        },
+      },
+    );
+    expect(
+      resolvePeriod({ specified: true, text: "2026년 2분기" }, "recent", LATEST),
+    ).toMatchObject({ ok: true, period: { from: "2026Q2", to: "2026Q2" } });
+    expect(resolvePeriod({ specified: true, text: "2025년" }, "cause", LATEST)).toMatchObject({
+      ok: true,
+      period: { from: "2025Q1", to: "2025Q4" },
+    });
+    // 아직 조회 범위 밖인 분기("2026년 3분기", latest=2026Q2)는 넓히지 않고 범위 밖으로 — 2분기만으로 답하지 않는다
+    expect(resolvePeriod({ specified: true, text: "2026년 3분기" }, "cause", LATEST)).toEqual({
+      ok: false,
+      code: "OUT_OF_RANGE",
+    });
+    // 2015Q1 하나면 앞 분기가 범위 밖이라 잘린다
+    expect(resolvePeriod({ specified: true, text: "2015년 1분기" }, "cause", LATEST)).toMatchObject(
+      { ok: true, period: { from: "2015Q1", to: "2015Q1", clipped: true } },
+    );
+  });
+
   it("'2013년 매출' → OUT_OF_RANGE", () => {
     const result = resolvePeriod({ specified: true, text: "2013년" }, "recent", LATEST);
     expect(result).toEqual({ ok: false, code: "OUT_OF_RANGE" });

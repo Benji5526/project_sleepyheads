@@ -21,6 +21,8 @@
 - ~~질문에 적은 기간이 무시된다~~ ✅ 현준이 먼저 함 (2026-09-30): `src/lib/ask/period.ts`가 "2023년 1분기부터 2024년 4분기까지"·"2023Q1~2024Q4" 같은 분기 범위를 읽는다 (`ask-period.test.ts`)
 - ~~"현대차" → 현대차증권~~ ✅ 현준이 먼저 함: `src/lib/companies/resolve.ts` 줄임말 표 `COMPANY_ALIASES` (`companies-resolve.test.ts`). 더 넣을 줄임말이 있으면 이 표에
 - ~~기업 비교가 QoQ·YoY를 빼먹음~~ ✅ 현준이 먼저 함: `series-builders.ts` `buildCompanyComparisonSeries`에 기업별 증감률 시리즈 (`tests/accuracy/step3-qoq-compare.test.ts`, 손 계산 정답 대조). 검토 부탁
+- ~~10/1부터 "최신 분기"가 아직 보고서가 없는 2026Q3~~ ✅ 현준이 먼저 함 (2026-10-01, `feat/WU-401-board-ui`): `src/lib/ask/quarter.ts` `latestAvailableQuarter`가 **제출 기한이 지난 분기**만 최신으로 잡는다(1~3분기 +45일, 4분기 +90일). 고치기 전에는 "직전 분기 대비 …" 질문 기간이 2026Q3 하나라 비교가 모두 계산 불가였다 (`ask-quarter.test.ts`). 검토 부탁 — 내 브랜치에서 `quarter.ts`를 고쳤다면 통합 때 이 규칙으로 합친다
+- ~~원인 질문에 분기 하나만 적으면 비교가 없다~~ ✅ 현준이 먼저 함 (2026-10-01): `period.ts` `resolvePeriod` — "2026년 2분기 영업이익이 왜 늘었어?"(cause + 분기 하나)는 직전 분기를 붙여 2026Q1~Q2로 (`ask-period.test.ts` "원인 질문에 분기 하나만 적으면…"). 검토 부탁
 - **운영(Vercel)에서 주가 API 실패** → 경쟁사가 "종목코드 순 (주가를 받지 못함)" (분석 `e2fc3367…`). 같은 요청이 로컬에서는 성공 — `market-cap.ts` 쪽 원인인지 병준님(Vercel 환경변수)과 함께 확인
 - ISC 섹터가 `기타`(반도체 검사 소켓) — 섹터 규칙·수동 지정 검토
 - DB하이텍 2026Q2: 반기보고서 3개월 값과 "반기 누적 − 1분기"가 3,190,705,373원 다르다 — TECH §6.2대로 3개월 값을 쓰는지 확인 (`STEP3_PASS_TEST.md` §3.4)
