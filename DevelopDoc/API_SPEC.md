@@ -740,6 +740,8 @@ interface Analysis {
   - `filters`에 없는 항목은 원래 분석 값. `period`는 `YYYYQn`, 시작 > 끝이면 `400`, 2015Q1 이전·최신 분기 이후는 잘라 계산하지 않고 `422`. `peers`는 6자리 종목코드, 대상 기업·중복을 빼고 5곳 초과면 `400`, 모르는 종목코드 `400`. 본문에 다른 필드가 있으면 `400`.
   - 응답의 `filters`는 정리한 값(대상·중복 제외). 분기·연도별 결과에 비교 기업을 넣으면 **기업 비교 막대 차트가 더해진다**(합계·기업 비교는 그 차트가 비교 기업을 따라 바뀐다). 합계에서 비교 기업을 모두 빼면 대상 기업 추이로 바뀐다.
   - 데이터 버전 규칙(WU-202): 원래 데이터 버전의 출처(접수번호)·전처리 선택은 그대로, 새 기간·기업에 필요한 보고서만 새로 받는다. 다시 계산한 데이터 버전을 저장하고 결과 `basis.dataVersionId`가 그것을 가리킨다. 차트 점이 500개를 넘으면 `basis.flags`에 묶음 단위 안내.
+  - Phase 4 (예림, Phase 3 후속): 기업들의 보고서를 **함께** 받는다(전자공시 동시 5개는 공통 호출기가 지킨다). 처음 조회하는 기업(받아 둔 보고서가 없음)이 받아야 할 보고서가 **60건**(기업마다 요청 분기 + 앞 4분기 + 1)을 넘으면 계산 전에 `413 TOO_LARGE` — 문구에 "처음 보는 비교 기업을 N곳 이하로 … 줄여 주세요", `details: { freshCompanies, estimatedReports, maxReports, maxFreshCompanies }`.
+  - 결과 `basis.flags` 맨 앞: 데이터 버전이 원래 분석과 다르면 `"보드 데이터 버전 xxxxxxxx — 원래 분석(yyyyyyyy)과 다릅니다. 위 [같은 조건으로 재실행]은 원래 분석 기준입니다"`, 합계에서 비교 기업을 모두 빼면 `"합계 풀림 — 비교 기업을 모두 빼서 <대상> 분기별|연도별 추이로 보여 줍니다"`.
 
 ---
 
@@ -771,6 +773,13 @@ interface Analysis {
 - 함수 최대 실행 시간: 300초 (처음이면 보고서 수집 + AI 2회)
 
 응답 `200` → `{ "data": { "regenerated": false, "reason": "no_new_report" } }` (`reason`: `no_new_report` · `no_example` · `new_report` · `forced`)
+
+### C3 `GET /api/cron/prefill-profiles` ⚙️ (Phase 4, 예림)
+- 하루 1회(C1 30분 뒤, `vercel.json`). **기업개황 미리 채우기**: 개황(시장·결산월·섹터)이 없는 상장사를 `corp_code` 순으로 하루 최대 **1,000곳** 채운다 — 입력창 자동완성(S1)은 개황이 있는 기업만 보여 준다(HANDOFF §0.4).
+- 전자공시 한도: 회원 soft limit(`dart_global_soft_limit`)의 **1/4에서 오늘 쓴 호출을 뺀 만큼만** 쓴다. 한도(`QuotaExceeded`)에 걸리면 더 부르지 않고 성공으로 끝난다(다음 날 이어서). 실패한 기업은 건너뛰고 센다.
+- 함수 최대 실행 시간: 300초 (240초가 지나면 새 기업을 시작하지 않는다)
+
+응답 `200` → `{ "data": { "filled": 1000, "failed": 2, "remaining": true, "stoppedBy": "batch", "budget": 3985 } }` (`stoppedBy`: `done` · `batch` · `quota` · `time`)
 
 ---
 

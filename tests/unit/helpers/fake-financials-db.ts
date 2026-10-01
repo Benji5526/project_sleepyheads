@@ -4,7 +4,7 @@ type Row = Record<string, unknown>;
 
 /**
  * WU-105 재무제표 수집 코드가 실제로 쓰는 체인만 지원하는 가짜 Supabase 클라이언트.
- * `select→eq/is/in→order→maybeSingle`(또는 바로 await), `insert(rows)→select(cols)`(또는 바로 await),
+ * `select→eq/is/in/gte/lte→order→maybeSingle`(또는 바로 await), `insert(rows)→select(cols)`(또는 바로 await),
  * `update(patch)→eq(col,val)`, `upsert(rows, {onConflict})`, `select(col, {count, head: true})`(개수만).
  */
 export function createFakeFinancialsDb(initial: Record<string, unknown[]> = {}) {
@@ -42,6 +42,24 @@ export function createFakeFinancialsDb(initial: Record<string, unknown[]> = {}) 
       },
       is(col: string, val: unknown) {
         filters.push((row) => (row[col] ?? null) === val);
+        return builder;
+      },
+      // 날짜("2026-09-30")·숫자 범위 (price/daily.ts)
+      gte(col: string, val: unknown) {
+        filters.push((row) => (row[col] as string | number) >= (val as string | number));
+        return builder;
+      },
+      lte(col: string, val: unknown) {
+        filters.push((row) => (row[col] as string | number) <= (val as string | number));
+        return builder;
+      },
+      // "a.in.(x,y),b.in.(z)" 꼴만 (runner/valuation.ts) — 하나라도 맞으면
+      or(expr: string) {
+        const parts = [...expr.matchAll(/(\w+)\.in\.\(([^)]*)\)/g)].map(([, col, list]) => ({
+          col,
+          vals: list.split(","),
+        }));
+        filters.push((row) => parts.some((p) => p.vals.includes(String(row[p.col]))));
         return builder;
       },
       in(col: string, vals: unknown[]) {

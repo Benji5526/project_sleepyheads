@@ -2,8 +2,8 @@ import type { NullReason } from "@/contracts";
 import type { Computed, ComputedWithFootnote } from "./types";
 
 /**
- * 지표 계산 함수 (TECH §6.4, Step 5 전용인 market_cap·per·pbr는 뺀다).
- * 모두 순수 함수다 — 외부 호출·DB 접근이 없고, 입력값만으로 결과가 정해진다(완료조건).
+ * 지표 계산 함수 (TECH §6.4). 주가가 들어가는 market_cap·per·pbr(WU-502)도 여기 있다 — 주가 조회·결합 검사는
+ * `src/lib/price/`가 하고, 이 함수들은 결합이 끝난 숫자만 받는다. 모두 순수 함수다 — 외부 호출·DB 접근이 없고, 입력값만으로 결과가 정해진다(완료조건).
  */
 
 function percentage(numerator: Computed<bigint>, denominator: Computed<bigint>): Computed<number> {
@@ -132,6 +132,41 @@ export function roe(
   const averageEquityDoubled = latestOwnersEquity.value + ownersEquityFourQuartersAgo.value; // ÷2는 아래서
   if (averageEquityDoubled === BigInt(0)) return { value: null, reason: "ZERO_DENOMINATOR" };
   return { value: (Number(ttmOwnersNi.value) / (Number(averageEquityDoubled) / 2)) * 100 };
+}
+
+/**
+ * 시가총액 = 기준일 종가 × 상장주식수 (보통주만, TECH §6.4·§6.6). 가격이 없으면 `NO_PRICE`.
+ * 원 단위 정수(bigint)로 계산한다 — SK하이닉스 시가총액(약 1,300조 원)은 Number 정밀도(2^53 ≈ 9천조)
+ * 안이지만 종가 × 주식수를 정수로 해 두면 반올림 걱정이 없다.
+ */
+export function marketCap(
+  closePrice: bigint | null | undefined,
+  listedShares: bigint | null | undefined,
+): Computed<bigint> {
+  if (closePrice == null || listedShares == null) return { value: null, reason: "NO_PRICE" };
+  return { value: closePrice * listedShares };
+}
+
+/** 배수 = 시가총액 ÷ 분모. 분모 ≤ 0이면 `nonPositive` 사유 (적자·자본잠식) */
+function multiple(
+  cap: Computed<bigint>,
+  denominator: Computed<bigint>,
+  nonPositive: "DEFICIT" | "CAPITAL_IMPAIRMENT",
+): Computed<number> {
+  if (cap.value == null) return { value: null, reason: cap.reason };
+  if (denominator.value == null) return { value: null, reason: denominator.reason };
+  if (denominator.value <= BigInt(0)) return { value: null, reason: nonPositive };
+  return { value: Number(cap.value) / Number(denominator.value) };
+}
+
+/** PER = 시가총액 ÷ TTM 지배주주 순이익. TTM ≤ 0 → `DEFICIT`(화면 "적자") */
+export function per(cap: Computed<bigint>, ttmOwnersNi: Computed<bigint>): Computed<number> {
+  return multiple(cap, ttmOwnersNi, "DEFICIT");
+}
+
+/** PBR = 시가총액 ÷ 최근 분기말 지배주주지분. 지분 ≤ 0 → `CAPITAL_IMPAIRMENT`(화면 "자본잠식") */
+export function pbr(cap: Computed<bigint>, ownersEquity: Computed<bigint>): Computed<number> {
+  return multiple(cap, ownersEquity, "CAPITAL_IMPAIRMENT");
 }
 
 export type { NullReason };

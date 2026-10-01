@@ -24,9 +24,10 @@ const BASE_FIELDS: Record<MetricId, BaseField[]> = {
   roe: ["owners_net_income", "owners_equity"],
   debt_ratio: ["liabilities", "equity"],
   equity_ratio: ["equity", "assets"],
+  // 주가 지표 (WU-502): 주가는 계정이 아니라 빼고, 재무 쪽 분모만 본다
   market_cap: [],
-  per: [],
-  pbr: [],
+  per: ["owners_net_income"],
+  pbr: ["owners_equity"],
 };
 
 const FIELD_LABEL: Partial<Record<BaseField, string>> = {

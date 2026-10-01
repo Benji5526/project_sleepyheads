@@ -100,10 +100,18 @@ describe("validateAnalysisRequest (TECH §4.5)", () => {
     expect(result.type).toBe("unsupported_question");
   });
 
-  it("Step 5 전용 지표만 요청하면 지원 불가 안내", async () => {
+  it("WU-502: 주가 지표(PER·PBR·시가총액)는 이제 지원한다 — 'SK하이닉스 PER 알려줘'가 거절되지 않는다", async () => {
     const { client } = createFakeCompaniesClient([SK_HYNIX]);
-    const result = await validateAnalysisRequest(baseAiRequest({ metrics: ["per"] }), { client });
-    expect(result.type).toBe("unsupported_question");
+    const result = await validateAnalysisRequest(
+      baseAiRequest({ metrics: ["per", "pbr", "market_cap"] }),
+      { client },
+    );
+    expect(result.type).toBe("resolved");
+    expect(result.type === "resolved" && result.request.metrics).toEqual([
+      "per",
+      "pbr",
+      "market_cap",
+    ]);
   });
 
   it("목록에 아예 없는 지표(예: 직원 만족도)를 물으면 기본 지표로 조용히 대체하지 않고 지원 불가로 거절한다", async () => {

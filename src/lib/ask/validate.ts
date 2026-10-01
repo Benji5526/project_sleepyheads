@@ -7,8 +7,8 @@ import { METRIC_LABEL } from "@/lib/runner/metric-info";
 import type { AiAnalysisRequest } from "./ai-request";
 import { resolvePeriod } from "./period";
 
-/** Step 5 전용 지표(market_cap·per·pbr)는 아직 계산 엔진이 없어 지원하지 않는다 (TECH §6.4). */
-const STEP1_METRICS: readonly MetricId[] = [
+/** 지원하는 지표 (TECH §6.4). 시가총액·PER·PBR은 주가 결합(WU-502, Step 5)으로 계산한다. */
+const SUPPORTED_METRICS: readonly MetricId[] = [
   "revenue",
   "operating_income",
   "net_income",
@@ -20,13 +20,16 @@ const STEP1_METRICS: readonly MetricId[] = [
   "roe",
   "debt_ratio",
   "equity_ratio",
+  "market_cap",
+  "per",
+  "pbr",
 ];
 
 /** 질문이 지표를 지정하지 않았을 때(§4.2 예시) 기본으로 보여줄 실적 지표. */
 const DEFAULT_METRICS: readonly MetricId[] = ["revenue", "operating_income", "net_income"];
 
 /** 화면에 그대로 나가는 문구라 지표 ID(영문) 대신 한글 이름으로 쓴다 */
-const UNSUPPORTED_METRIC_MESSAGE = `아직 지원하지 않는 지표입니다. 확인할 수 있는 지표: ${STEP1_METRICS.filter(
+const UNSUPPORTED_METRIC_MESSAGE = `아직 지원하지 않는 지표입니다. 확인할 수 있는 지표: ${SUPPORTED_METRICS.filter(
   (m) => m !== "yoy" && m !== "qoq",
 )
   .map((m) => METRIC_LABEL[m])
@@ -153,7 +156,7 @@ export async function finishValidation(
 
   const requestedMetrics = ai.metrics.length > 0 ? ai.metrics : [...DEFAULT_METRICS];
   const metrics = requestedMetrics.filter((m): m is MetricId =>
-    STEP1_METRICS.includes(m as MetricId),
+    SUPPORTED_METRICS.includes(m as MetricId),
   );
   if (requestedMetrics.length > 0 && metrics.length === 0) {
     return { type: "unsupported_question", message: UNSUPPORTED_METRIC_MESSAGE };

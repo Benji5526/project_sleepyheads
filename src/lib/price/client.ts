@@ -28,7 +28,8 @@ export interface PriceFetchOptions {
 
 /**
  * 금융위원회_주식시세정보(공공데이터포털) 공통 호출기 (WU-102, TECH §3.2).
- * 실제 종가·시가총액·PER 계산은 Step 5(WU-502)에서 이 함수를 감싸 구현한다.
+ * 종목별 가격·하루 1회 저장은 `./daily.ts`, 재무 결합 검사는 `./join.ts`(WU-502), 경쟁사 순서용 전체 목록은
+ * `sector/market-cap.ts`가 이 함수를 감싼다.
  */
 export async function priceFetch<T extends PriceEnvelope>(
   path: string,
