@@ -56,16 +56,30 @@ export function quarterSpan(from: Quarter, to: Quarter): number {
   return Math.max(span, 0);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
- * 지금(한국 시간) 기준 **가장 최근에 끝난 달력 분기**.
- * 아직 보고서가 없는 분기까지 기본 조회 범위에 넣지 않기 위한 실용적 상한이다 —
- * 실제 데이터 유무는 실행기(WU-110)가 조회 시점에 다시 확인한다.
+ * 지금(한국 시간) 기준 **보고서 제출 기한이 지난 가장 최근 달력 분기**.
+ * 분기·반기보고서는 분기 끝 45일, 사업보고서(4분기)는 90일 안에 낸다(자본시장법). 기한 다음 날부터 쓴다 —
+ * 1분기 5/16, 2분기 8/15, 3분기 11/15, 4분기 다음 해 4/1.
+ * 그냥 "가장 최근에 끝난 분기"로 잡으면 10/1~11/14에 아직 없는 3분기가 기본 기간 끝이 되어
+ * "직전 분기 대비" 비교가 모두 계산 불가가 된다 (2026-10-01 WU-399 운영 재확인에서 찾음).
+ * 기한 전에 일찍 낸 기업이 있어도 기본 범위에는 넣지 않는다 — 실제 데이터 유무는 실행기(WU-110)가 다시 확인한다.
  */
 export function latestAvailableQuarter(now = new Date()): Quarter {
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  const year = kst.getUTCFullYear();
+  const today = Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate());
   const currentQ = (Math.floor(kst.getUTCMonth() / 3) + 1) as 1 | 2 | 3 | 4;
-  return addQuarters(formatQuarter(year, currentQ), -1);
+  let quarter = addQuarters(formatQuarter(kst.getUTCFullYear(), currentQ), -1);
+  while (today < reportsAvailableFrom(quarter)) quarter = addQuarters(quarter, -1);
+  return quarter;
+}
+
+/** 그 분기 보고서를 쓸 수 있는 첫날 (UTC 자정 값, 날짜 비교용) = 분기 마지막 날 + 기한 + 1일 */
+function reportsAvailableFrom(quarter: Quarter): number {
+  const { year, q } = parseQuarter(quarter);
+  const quarterEnd = Date.UTC(year, q * 3, 0); // 다음 분기 첫 달 0일 = 이 분기 마지막 날
+  return quarterEnd + ((q === 4 ? 90 : 45) + 1) * DAY_MS;
 }
 
 /** 달력 분기의 실제 시작·끝 날짜 ("YYYY-MM-DD", 양끝 포함) — `get_disclosures`의 기간 인자용. */

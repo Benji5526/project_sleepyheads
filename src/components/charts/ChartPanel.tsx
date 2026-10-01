@@ -145,8 +145,9 @@ function CartesianChart({ chart, rows }: { chart: Chart; rows: ChartRow[] }) {
           yTitle
             ? {
                 value: `(${yTitle})`,
+                // 음수면 왼쪽 괄호가 SVG 밖으로 나가 잘린다 (375px에서 확인)
                 position: "insideTopLeft",
-                offset: -2,
+                offset: 2,
                 dy: -18,
                 fill: "var(--muted)",
                 fontSize: 12,

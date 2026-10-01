@@ -3,6 +3,7 @@
 import type { AnalysisRequestView, Intent, PeriodRange, Quarter } from "@/contracts";
 import {
   addQuarters,
+  compareQuarters,
   clipToAvailableRange,
   formatQuarter,
   latestAvailableQuarter,
@@ -40,9 +41,19 @@ export function resolvePeriod(
   const parsed = input.specified && input.text ? parsePeriodText(input.text, anchor) : null;
 
   const specified = parsed !== null;
-  const { from, to } = specified ? parsed : defaultRangeFor(intent, anchor);
+  const range = specified ? parsed : defaultRangeFor(intent, anchor);
+  // 원인 질문("2026년 2분기 영업이익이 왜 늘었어?")은 변화를 묻는다 — 분기 하나만 적었으면 직전 분기를 붙여
+  // 비교할 수 있게 한다 (2026-10-01 WU-399 운영: 2026Q2 하나로 계산해 "비교할 이전 실적이 없다"는 글이 나옴)
+  // 그 분기가 아직 조회 범위 밖이면 넓히지 않는다 — 넓힌 뒤 잘리면 3분기를 물었는데 2분기만으로 답하게 된다
+  const widenForCause =
+    specified &&
+    intent === "cause" &&
+    range.from === range.to &&
+    compareQuarters(range.to, latest) <= 0;
+  const from = widenForCause ? addQuarters(range.from, -1) : range.from;
+  const to = range.to;
   const reason = specified
-    ? `질문에 지정된 기간: ${input.text}`
+    ? `질문에 지정된 기간: ${input.text}${widenForCause ? " (원인 질문이라 직전 분기와 비교)" : ""}`
     : `기간 미지정 → ${DEFAULT_SPAN[intent].label}`;
 
   const clippedRange = clipToAvailableRange(from, to, latest);

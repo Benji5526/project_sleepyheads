@@ -36,6 +36,21 @@ test.describe("차트 규격", () => {
     }
   });
 
+  test("Y축 단위 글자가 차트 왼쪽 끝에서 잘리지 않는다 (좁은 화면 포함)", async ({ page }) => {
+    await openSkhynix(page);
+    for (const id of ["c2", "c3"]) {
+      const { left, top } = await page
+        .locator(`#chart-${id} text.recharts-label`, { hasText: /^\(.+\)$/ })
+        .evaluate((t) => {
+          const label = t.getBoundingClientRect();
+          const svg = t.closest("svg")!.getBoundingClientRect();
+          return { left: label.left - svg.left, top: label.top - svg.top };
+        });
+      expect(left).toBeGreaterThanOrEqual(0);
+      expect(top).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   test("2계열 차트만 범례가 있고, 계열마다 무늬가 달라 색 없이도 구분된다", async ({ page }) => {
     await openSkhynix(page);
     const bar = page.locator("#chart-c2");

@@ -33,11 +33,25 @@ describe("quarter 산술", () => {
     expect(quarterSpan("2026Q2", "2025Q3")).toBe(0);
   });
 
-  it("latestAvailableQuarter는 이번 분기 이전(가장 최근에 끝난 분기)이다", () => {
-    // 2026-09-29(3Q) 기준 -> 가장 최근에 끝난 분기는 2Q
-    expect(latestAvailableQuarter(new Date("2026-09-29T00:00:00+09:00"))).toBe("2026Q2");
-    // 연초(1Q 안쪽)는 작년 4Q
-    expect(latestAvailableQuarter(new Date("2026-01-15T00:00:00+09:00"))).toBe("2025Q4");
+  it("latestAvailableQuarter는 보고서 제출 기한이 지난 가장 최근 분기다", () => {
+    const at = (kst: string) => latestAvailableQuarter(new Date(`${kst}+09:00`));
+    // 2026-09-29(3Q 안): 2Q 반기보고서 기한(8/14)이 지났다
+    expect(at("2026-09-29T00:00:00")).toBe("2026Q2");
+    // 10/1~11/14: 3Q는 끝났지만 분기보고서 기한 전 → 여전히 2Q (2026-10-01 운영에서 3Q를 잡던 버그)
+    expect(at("2026-10-01T00:00:00")).toBe("2026Q2");
+    expect(at("2026-11-14T23:59:00")).toBe("2026Q2");
+    expect(at("2026-11-15T00:00:00")).toBe("2026Q3");
+    // 한국 시간 기준: UTC로는 아직 11/14여도 한국이 11/15면 3Q
+    expect(latestAvailableQuarter(new Date("2026-11-14T15:00:00Z"))).toBe("2026Q3");
+    // 4Q 사업보고서는 90일 → 다음 해 3/31까지는 3Q, 4/1부터 4Q
+    expect(at("2026-01-15T00:00:00")).toBe("2025Q3");
+    expect(at("2026-03-31T23:59:00")).toBe("2025Q3");
+    expect(at("2026-04-01T00:00:00")).toBe("2025Q4");
+    // 1Q는 5/15 기한 → 5/16부터, 2Q는 8/14 기한 → 8/15부터
+    expect(at("2026-05-15T12:00:00")).toBe("2025Q4");
+    expect(at("2026-05-16T00:00:00")).toBe("2026Q1");
+    expect(at("2026-08-14T12:00:00")).toBe("2026Q1");
+    expect(at("2026-08-15T00:00:00")).toBe("2026Q2");
   });
 
   describe("clipToAvailableRange", () => {
