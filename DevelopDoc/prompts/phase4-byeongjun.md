@@ -20,6 +20,7 @@
 ### 2. WU-505 배포 전 보안·운영 점검 (자동으로 할 수 있는 부분)
 - `scripts/security-check.mjs`(새): `pnpm build` 결과(`.next/static`)에서 Supabase publishable key 외 키 모양(`sk-`, `service_role`, `DATA_GO_KR`, OpenDART 키 등) 검색, 저장소·커밋 기록 비밀 값 검사(`pnpm dlx` 도구 — 설치 없이)
 - Supabase Security Advisor(MCP `get_advisors`, 읽기)·RLS 전 표·특수 권한 DB 함수 실행 권한 확인
+  - 2026-10-01(Phase 3 병합 직후) Advisor: WARN 2개 — `pg_trgm` 확장이 public 스키마(옮길지·그대로 둘지 근거), 유출 비밀번호 보호 꺼짐(비밀번호 로그인 없음 → 해당 없음 근거). INFO 24개는 서버 전용 표(RLS 켜짐·정책 없음 = 회원 접근 0 — 의도)
 - 결과는 `DevelopDoc/SECURITY_CHECK.md`(새)에 8항목 표로. **대시보드에서만 확인할 수 있는 항목**(Supabase 이메일·비밀번호 로그인 꺼짐, Site URL·Redirect URL, 구글 OAuth 리디렉션, 백업, OpenAI 월 예산)은 현준님께 단계별 안내 — **안내 전에 메뉴가 실제로 있는지 공식 문서·브라우저로 확인**
 - 무료 한도 사용량(TECH §2.1)·Supabase 1주일 미사용 일시정지 대응은 표에 기록
 
