@@ -32,6 +32,7 @@
 | 2026-09-30 | **Phase 2 병합**: PR #33(트랙 A 병준: 계획·단계 실행 엔진)·#32(트랙 B 예림: 경쟁사·비교·섹터·계산식 v3)·트랙 C(현준: 뉴스 연결·분석 글 품질·T4)를 `integrate/phase2`에서 한 번에 합침. 교차 검토 수정(재무 앞 4분기, 상한이 결과 계산을 막지 않음, 재분석 계획 승인, 계산 불가 사유), 마이그레이션 5개 재번호·운영 적용. **T4: 분석 글만 gpt-6-sol + 하루 AI 예산 넘으면 저가 모델(시연용 토큰 보호)**, 질문당 AI 상한 $0.03. **Phase 3 계획**: [PHASE3_PLAN](DevelopDoc/PHASE3_PLAN.md)·지시문 4개·`scripts/phase3-start.*`, 보드 계약(`BoardView`)·한도 함수(`src/lib/limits/size.ts`) 고정 (§0.1·§0.3) |
 | 2026-09-30 | **밤(현준 단독)**: WU-399 운영 1차 확인, Phase 3 현준 트랙(WU-401 화면·Q9·WU-402) + 병준·예림 몫 일부(OpenAI 키 순차 사용, owner-routes, 질문 기간 범위, 줄임말 "현대차"), 운영에서 찾은 버그(기업 비교 QoQ 누락·뉴스 칸 사라짐) 수정 → **main 직접 반영**. 지시문에 "현준이 먼저 함" 표시 (§0.0·§0.3·§0.4) |
 | 2026-10-01 | **Phase 3 병합**: PR #34(병준 WU-403 측정·한도)·#35(예림 WU-401 보드 서버·DB 집계·주가 키 수정·ISC)·현준(WU-399 재확인·"최신 분기" 제출 기한 기준·원인 질문 기간·차트)를 `integrate/phase3`에서 합침. 통합 수정: 보드를 결과 화면에 끼움, Q9 → `loadBoardResult`, 집계 시간 초과 판정 통일, Q6가 보드 기준으로 다시 쓴 설명을 stale로, 옛 분석 422 방지, 분석 글 용어 설명. 마이그레이션 2개(`20260930220000` boards·`230000` ISC). Vercel `OPENAI_API_KEY`에 조원 키 3개(현준님). **Phase 4 계획**: [PHASE4_PLAN](DevelopDoc/PHASE4_PLAN.md)·지시문 4개·`scripts/phase4-start.*` (§0.1·§0.3·§0.4) |
+| 2026-10-01 | **Phase 4 병합**: PR #36(병준 WU-501 작업 큐·WU-505 자동 보안 점검·WU-403 마무리)·#37(예림 WU-502 PER·PBR·WU-503 숫자 정답·보드 후속·기업개황 미리 채우기 cron)·#38(현준 WU-499·WU-503 회귀 세트·WU-504 주입 방어·PER 화면·README)를 `integrate/phase4`에서 합침. 통합 수정: 회귀 숫자 정답 8키·PER 엔진 연결(28/28), 자동 선택 경쟁사가 보드 필터에서 사라지던 문제, 종목코드 기업 찾기, 1차 필터 조사 허용 + 패턴 4개(마이그레이션 `20261001000000`, 데이터만), r07·r09·r15 실제 데이터에 맞춤. **Phase 5(마감) 계획**: [PHASE5_PLAN](DevelopDoc/PHASE5_PLAN.md)·지시문 4개·`scripts/phase5-start.*` (§0.1·§0.3·§0.4) |
 
 > 이 문서 하나만 읽으면 **내 역할, 지금 바로 할 일, 다른 역할과 맞춰야 할 약속**을 알 수 있게 썼다. 자세한 내용은 기준 문서 4개를 따른다.
 
@@ -45,8 +46,8 @@
 1. 내 포크를 원본 main에 맞춘다 — GitHub 내 포크 화면의 **Sync fork → Update branch**, 또는 터미널에서 `git fetch upstream && git switch main && git merge upstream/main` (원본 저장소를 `upstream`으로 등록해 둔 경우)
 2. `pnpm install` (오늘 새 패키지는 없지만 습관으로)
 3. `.env.local` 확인 → `pnpm check:keys`에서 6개 모두 ✅ (Supabase 3개 포함). Supabase 키는 팀이 쓰는 **`sleepyhead` 프로젝트 하나**의 값
-4. `pnpm test` 가 통과하면 준비 끝 (단위·정확도·DB 1,192개 — 2026-10-01 Phase 3 병합 기준)
-5. 상태 한 줄 요약 (2026-10-01): **Phase 3(Step 4) 병합 완료.** 다음은 **Phase 4(Step 5) 병렬 개발** — 각자 `bash scripts/phase4-start.sh 병준|예림|현준`(PowerShell `scripts/phase4-start.ps1`). 이미 Claude Code 안이면 "phase4 지시문대로 시작하자". **⚠️ AI 토큰은 시연용을 남긴다**, **11/14까지 최신 분기는 2026Q2**(3분기보고서 제출 기한)
+4. `pnpm test` 가 통과하면 준비 끝 (단위·정확도·DB 1,310개 + 회귀 28개 `pnpm exec vitest run -c tests/regression/vitest.config.mts` — 2026-10-01 Phase 4 병합 기준)
+5. 상태 한 줄 요약 (2026-10-01): **Phase 4(Step 5) 병합 완료.** 다음은 **Phase 5(마감) 병렬 개발** — 각자 `bash scripts/phase5-start.sh 병준|예림|현준`(PowerShell `scripts/phase5-start.ps1`), 이미 Claude Code 안이면 [PHASE5_PLAN §8](DevelopDoc/PHASE5_PLAN.md) 프롬프트를 붙여 넣는다. **PR만 열고 합치지 않는다**(통합 담당이 한 번에). 끝나면 WU-599 사용자 테스트 → `v1.0`. **⚠️ AI 토큰은 시연용을 남긴다**, **11/14까지 최신 분기는 2026Q2**
 
 ### 0.1 main에 들어간 것 (2026-09-29 ~ 09-30)
 | PR | 내용 | 작성 |
@@ -75,9 +76,10 @@
 | (브랜치) | **Phase 2 트랙 C** `feat/WU-304-link`: WU-299 Step 2 운영 통과 테스트, WU-304 `search_news` 실행기 연결·`news_clues` 표, WU-305 분석 글 품질("2025Q2" 문장 폐기 버그 등)·T4 결정, WU-399 증거표·손 계산 정답 | 현준 |
 | (통합) | **Phase 2 통합** `integrate/phase2`: 교차 검토 수정, **마이그레이션 5개 운영 적용**(`20260930170000` analysis_steps · `180000` quota_consumption_outcome · `190000` wu303_sector_rules · `200000` wu304_news_clues · `210000` llm_cost_cap). 검사: 단위 1,010 · 화면 117 통과. Phase 3 계획·지시문·시작 스크립트 | 현준 |
 | (통합) | **Phase 3 병합** `integrate/phase3` (2026-10-01): PR #34 병준(WU-403 가상 12만 행 측정 — DB 안 집계 2.8배 빠르고 서버 메모리 약 1/90, 413 안내에 줄일 숫자, 30초 상한 함수, 뉴스 핵심어·재사용 시 뉴스 건너뛰기·단순 질문 진행 표시) · PR #35 예림(`boards`·B1·B2·`loadBoardResult`·`aggregate_sector_metrics`, 주가 키 이중 인코딩 수정, ISC → 반도체) · 현준(WU-399 ✅, `latestAvailableQuarter` 제출 기한 기준, 원인 질문 + 분기 하나 → 직전 분기 포함, 차트 Y축 단위). 통합 수정은 변경 이력. **마이그레이션 `20260930220000`·`230000` 운영 적용**. 검사: 단위 1,192 · 화면 147(보드 12개 켬) | 현준 |
+| (통합) | **Phase 4 병합** `integrate/phase4` (2026-10-01): PR #36 병준(오래된 running 정리·실제 Postgres 동시성 테스트·`scripts/security-check.mjs`·`SECURITY_CHECK.md`·집계 함수 재측정·계획 카드 닫기) · PR #37 예림(시가총액·PER·PBR, 종목별 주가 하루 1회·결합 중단 검사·우선주 제외, 회귀 숫자 정답, B2 병렬 수집·새 보고서 60건 한도, 보드 버전·합계 풀림 표시, `prefill-profiles` cron) · PR #38 현준(WU-499 ✅, 회귀 세트·CI·실제 AI 1회, 주입 방어, PER 카드·ⓘ, README). 통합 수정은 변경 이력. 마이그레이션 `20261001000000`(1차 필터 패턴, 데이터만). 검사: 단위 1,310 · 회귀 28 · 화면 157 | 예림 |
 | (직접) | **Phase 3 현준 선행분** `feat/WU-401-board-ui` → main (2026-09-30 밤, 현준 결정): WU-399 운영 1차 확인·기업 비교 QoQ 추가·뉴스 단서 전부 표시, WU-401 보드 화면(`src/components/board/`, **아직 결과 화면에 안 끼움**)·Q9 설명 다시 쓰기 서버, WU-402 차트 규격·용어 설명, OpenAI 키 여러 개 순차 사용, owner-routes Q5~Q8, 질문 분기 범위, 줄임말 표. 마이그레이션 없음. 검사: 단위 1,121 · 화면 133(+ 보드 12개는 통합 때) | 현준 |
 
-- 테스트: 단위 1,192개, 화면 147개 (1280px·375px, 2026-10-01 Phase 3 병합 기준). CI는 Linux·Windows 두 환경에서 돈다. 실제 API 회귀는 `scripts/regression-live.test.ts`(CI 제외, 공유 DB·OpenAI 사용 — **시연용 토큰 때문에 필요할 때만**)
+- 테스트: 단위 1,310개, 회귀 28개, 화면 157개 (1280px·375px, 2026-10-01 Phase 4 병합 기준). CI는 Linux·Windows 두 환경에서 돈다. 실제 API 회귀는 `scripts/regression-live.test.ts`(CI 제외, 공유 DB·OpenAI 사용 — **시연용 토큰 때문에 필요할 때만**)
 - 배포: **https://projectsleepyheads.vercel.app** — 구글 로그인·약관 동의 성공(2026-09-29), **핵심 통과 테스트 질문 성공(2026-09-30 현준 확인)**, 비로그인 첫 화면에 SK하이닉스 예시(2026-09-30 확인).
 - 합치는 방식: 포크 PR이 main과 충돌하면 `merge/pr-<번호>-…` 브랜치에서 그 PR 커밋을 그대로 합치고 충돌만 풀어 새 PR로 올린다 → 합쳐지면 원래 PR도 자동으로 Merged 표시 (#8·#12·#13).
 
@@ -91,7 +93,22 @@
 | 합치는 방식 | 팀원은 **포크에서 PR** → main에 Merge (협업자 초대는 하지 않음). 포크 PR의 CI는 저장소 주인이 PR의 Files changed → **Awaiting approval → Approve workflows to run**을 눌러야 돈다 | 2026-09-29 현준 결정 |
 | Next.js 16 | `middleware.ts` → **`proxy.ts`** | TECH §18.1 |
 
-### 0.3 역할별 다음 할 일 — Phase 4 (Step 5 병렬 개발)
+### 0.3 역할별 다음 할 일 — Phase 5 (마감 병렬 개발 → WU-599 → v1.0)
+**Phase 4(Step 5)는 main에 합쳐졌다(2026-10-01).** 같은 방식: 각자 Claude Code로 끝까지 만들고 자체 검토를 마친 뒤 **PR만 연다(합치지 않음)** → 통합 담당이 한 세션에서 세 개를 한꺼번에 검토·수정·병합. 규칙·파일 소유·통합 절차는 [PHASE5_PLAN](DevelopDoc/PHASE5_PLAN.md).
+
+| 담당 | 맡는 일 | 시작 | 지시문 |
+|---|---|---|---|
+| 병준 (통합/배포) | 시연 전 점검 스크립트(`demo-preflight`)·DB 백업·WU-501 운영 확인·Cron 3개·Supabase 하나 쓰는 것 재검토·운영 응답 시간 | `bash scripts/phase5-start.sh 병준` | [phase5-byeongjun](DevelopDoc/prompts/phase5-byeongjun.md) |
+| 예림 (데이터/서버) | WU-502 운영 확인·조회 시작 분기(2016Q1?) 결정 반영·거래정지 종목 주가·기업개황 영구 실패·`warm-demo`·`refresh-answers` | `bash scripts/phase5-start.sh 예림` | [phase5-yerim](DevelopDoc/prompts/phase5-yerim.md) |
+| 현준 (기획/화면·검증) | **DEMO_SCRIPT(먼저)**·WU-599 STEP5 통과 테스트·USER_TEST·계획 카드 [닫기]·VersionBar(보드)·WU-505 대시보드 👤·FINAL_CHECKLIST | `bash scripts/phase5-start.sh 현준` | [phase5-hyunjoon](DevelopDoc/prompts/phase5-hyunjoon.md) |
+| 통합 담당 (예림, 누구든) | 세 PR 한 번에 합치기·교차 검토·main·사용자 테스트·`v1.0` | — | [phase5-merge](DevelopDoc/prompts/phase5-merge.md) |
+
+- 새 세션에 붙여 넣을 프롬프트: [PHASE5_PLAN §8](DevelopDoc/PHASE5_PLAN.md).
+- 각자 보고서는 `DevelopDoc/phase5/<이름>.md`.
+- **⚠️ 시연용 AI 토큰**: 운영 질문 확인은 지시문에 정해진 1회씩만.
+
+<details><summary>지난 Phase 4 표 (기록용)</summary>
+
 **Phase 3(Step 4)은 main에 합쳐졌다(2026-10-01).** 같은 방식으로 각자 Claude Code로 끝까지 만들고 자체 검토를 마친 브랜치(협업자) 또는 포크 PR을 올리면, 통합 담당이 한 세션에서 한꺼번에 검토·수정·병합한다. 규칙·파일 소유·계약·통합 절차는 [PHASE4_PLAN](DevelopDoc/PHASE4_PLAN.md)이 기준이다.
 
 | 담당 | 맡는 일 | 시작 | 지시문 |
@@ -104,6 +121,9 @@
 - 계약: **바꾸지 않는다** — PER·PBR은 이미 있는 `MetricKey`(`market_cap`·`per`·`pbr`)·`Unit "TIMES"`·`Figure.basis.priceDate`를 쓴다(PHASE4_PLAN §3.1). 회귀 세트 형식은 §3.2.
 - 각자 보고서는 `DevelopDoc/phase4/<이름>.md`.
 - **⚠️ 시연용 AI 토큰**(PHASE4_PLAN §1-7): Vercel `OPENAI_API_KEY`에 현준·병준·예림 키 3개(앞 키 잔액이 떨어지면 다음 키). 실제 AI 실행은 WU-503 범위 판정 1회만.
+
+
+</details>
 
 <details><summary>지난 Phase 3 표 (기록용)</summary>
 
@@ -164,6 +184,10 @@
 | 검증/문서 | T7(Google 뉴스 RSS 이용 조건·AI 입력 가능 여부) | ✅ Phase 1에서 완료 (TECH §21 T7) |
 
 ### 0.4 남은 확인·주의
+- **Phase 4 병합 뒤 사람이 확인할 것** (보고서 3개에서 옮김 — Phase 5 지시문에 나눠 넣음): ① 운영 "SK하이닉스 PER 알려줘" → 카드 + 기준일, 실행 기록 "주가 결합 … → 1행"(예림) ② 경쟁사 자동 선택 질문의 `get_peers`가 "시가총액 순 (날짜 종가)" — 주가 키 수정(Phase 3) 배포 뒤 아직 운영 기록 없음(예림) ③ 다음 날 아침 `prefill-profiles` cron 결과, 개황 없는 기업 3,977곳이 하루 약 1,000곳씩 줄어드는지(예림) ④ 오래된 `running` 2건 정리(병준) ⑤ 회귀 CI 초록불(현준) ⑥ **마이그레이션 `20261001000000`(1차 필터 패턴 4개, 데이터만)** 운영 적용 여부 — 적용 전이어도 코드는 그대로 돈다(조사 허용 매칭은 코드)
+- **Phase 4 통합에서 찾은 것**: OpenDART 재무 API에 **2015년 1·반기·3분기보고서가 없다**(사업보고서만) → 2015 분기는 "보고서 없음", 분기 증감률은 2016Q1부터 "직전 분기 없음". 조회 시작 분기를 2016Q1로 바꿀지 Phase 5에서 결정(예림)
+- **자동 선택 경쟁사 보드 문제는 Phase 4 통합에서 고침** — 경쟁사를 자동으로 고른 분석도 보드 필터를 바꿔도 비교 기업이 유지된다(배포 뒤 시연 리허설에서 확인)
+- `vercel.json` Cron이 3개(`sync-companies` 03:00·`prefill-profiles` 03:30·`refresh-guest-example` 04:00 KST) — Hobby 제한 확인(병준 Phase 5)
 - **Phase 3 병합 뒤 사람이 확인할 것** (보고서 3개에서 옮김 — WU-499에서 함께): ① 로그인 뒤 결과 화면에서 기간 프리셋 → 모든 차트 같은 기간, 질문 수 그대로, 분석 글 "원래 조건 기준" → [설명 다시 쓰기](1회 차감) 뒤 새로 고쳐도 사라져 있음 ② 비교 기업 넣기·빼기, 새로 고쳐도 필터 유지 ③ "SK하이닉스 경쟁사보다 영업이익 나아?" → 실행 기록 경쟁사 고르기가 **"시가총액 순 (날짜 종가)"**(주가 키 이중 인코딩 수정 확인 — 아직 "종목코드 순"이면 Vercel 로그 `[external-api:price]`) ④ ISC 섹터 반도체: `select c.corp_name, s.name from companies c join sectors s on s.id = c.sector_id where c.stock_code = '095340';` ⑤ 기간을 적지 않은 "SK하이닉스 직전 분기 대비 영업이익 변화와 감소한 경쟁사 비교해줘" 계획 카드 기간이 **2026Q2** ⑥ 운영 30초 상한(Phase 4 병준)
 - **규칙 (Phase 3 예림 결정)**: 보드 분석 글 "원래 조건 기준"(B1 stale/ready)은 `boards.updated_at` > `analyses.updated_at`으로 정한다 → **결과가 나온 뒤 `analyses.updated_at`을 올리는 것은 Q9(설명 다시 쓰기)뿐이어야 한다.** 다른 곳이 올려야 하면 `boards.explanation_at`을 따로 두는 쪽으로 바꾼다. Q6(같은 조건 재실행)는 Q9가 `request_hash`를 비운 분석이면 설명을 stale로 복사한다(통합)
 - **Phase 3 통합 교차 검토에서 남긴 것** (Phase 4 예림): 보드 B2가 처음 조회하는 비교 기업 4~5곳이면 60초를 넘을 수 있음(한 곳씩 수집), 보드 데이터 버전과 `VersionBar` 버전이 다름, 합계에서 비교 기업을 모두 빼면 화면이 여전히 합계로 표시
