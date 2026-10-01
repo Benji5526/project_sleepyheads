@@ -39,11 +39,11 @@ export async function priceFetch<T extends PriceEnvelope>(
 
   await checkAndRecordApiUsage({ provider: "price", userId, calls: 1 }, client);
 
-  const serviceKey = process.env.DATA_GO_KR_SERVICE_KEY;
-  if (!serviceKey) throw new Error("DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.");
+  const rawKey = process.env.DATA_GO_KR_SERVICE_KEY?.trim();
+  if (!rawKey) throw new Error("DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.");
 
   const url = new URL(path, BASE_URL);
-  url.searchParams.set("serviceKey", serviceKey);
+  url.searchParams.set("serviceKey", decodedServiceKey(rawKey));
   url.searchParams.set("resultType", "json");
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) url.searchParams.set(key, String(value));
@@ -64,6 +64,33 @@ export async function priceFetch<T extends PriceEnvelope>(
   }
 }
 
+/**
+ * 공공데이터포털은 키를 "Encoding"(이미 %2B·%3D로 바꾼 값)과 "Decoding"(원래 값) 두 가지로 준다.
+ * searchParams.set은 값을 한 번 더 인코딩하므로, 인코딩된 키를 넣으면 %가 %25로 바뀌어 인증 오류가 난다
+ * (2026-09-30 운영에서만 주가 API 실패 — STEP3_PASS_TEST §2.1 #2. check-keys.mjs는 두 모양을 다 받아 로컬 점검은 통과했다).
+ * 그래서 %가 들어 있으면 원래 값으로 되돌린 뒤 넣는다. 원래 값(Decoding 키)에는 %가 없다.
+ */
+export function decodedServiceKey(key: string): string {
+  if (!key.includes("%")) return key;
+  try {
+    return decodeURIComponent(key);
+  } catch {
+    return key;
+  }
+}
+
+/**
+ * 인증 오류 등은 resultType=json을 줘도 XML로 온다 (`<returnReasonCode>30</returnReasonCode>`).
+ * 그대로 json()을 부르면 "Unexpected token '<'"만 남아 원인을 알 수 없으므로 사유 코드를 꺼내 알린다.
+ */
+function xmlErrorReason(text: string): string | null {
+  const pick = (tag: string) => text.match(new RegExp(`<${tag}>([^<]*)</${tag}>`))?.[1]?.trim();
+  const code = pick("returnReasonCode") ?? pick("resultCode");
+  const message = pick("returnAuthMsg") ?? pick("errMsg") ?? pick("resultMsg");
+  if (!code && !message) return null;
+  return `${code ?? "?"}: ${message ?? "알 수 없음"}`;
+}
+
 async function requestOnce<T extends PriceEnvelope>(url: URL, timeoutMs: number): Promise<T> {
   let res: Response;
   try {
@@ -76,7 +103,20 @@ async function requestOnce<T extends PriceEnvelope>(url: URL, timeoutMs: number)
     throw new UpstreamApiError("price", `주가 API HTTP 오류 (${res.status})`, res.status >= 500);
   }
 
-  const body = (await res.json()) as T;
+  const text = await res.text();
+  let body: T;
+  try {
+    body = JSON.parse(text) as T;
+  } catch {
+    const reason = xmlErrorReason(text);
+    throw new UpstreamApiError(
+      "price",
+      reason
+        ? `주가 API 오류 (${reason}) — 서비스 키·활용신청을 확인하세요`
+        : "주가 API 응답이 JSON이 아닙니다",
+      false,
+    );
+  }
   const resultCode = body.response?.header?.resultCode;
   if (resultCode !== "00") {
     throw new UpstreamApiError(

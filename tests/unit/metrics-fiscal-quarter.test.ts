@@ -85,3 +85,21 @@ describe("balanceSheetQuarterValue (TECH §6.2 '재무상태표 항목은 분기
     expect(balanceSheetQuarterValue(1, {})).toEqual({ value: null, reason: "MISSING_ACCOUNT" });
   });
 });
+
+describe("DB하이텍 2026Q2 (STEP3_PASS_TEST §3.4, 실제 공시 값)", () => {
+  it("반기보고서 3개월 값이 '반기 누적 − 1분기'와 달라도 3개월 값을 쓴다 (TECH §6.2)", () => {
+    // 반기보고서가 1분기 값을 고쳐 적어 둘의 차이가 3,190,705,373원 — 정답은 3개월 값 105,233,009,884
+    const reports = {
+      "11013": { amount3m: BigInt("63718313002"), amountCum: BigInt("63718313002") },
+      "11012": { amount3m: BigInt("105233009884"), amountCum: BigInt("172142028259") },
+    };
+    expect(flowQuarterValue(2, reports)).toEqual({ value: BigInt("105233009884") });
+    // 3개월 값이 없을 때만 누적 차이 (108,423,715,257)
+    expect(
+      flowQuarterValue(2, {
+        ...reports,
+        "11012": { amount3m: null, amountCum: BigInt("172142028259") },
+      }),
+    ).toEqual({ value: BigInt("108423715257") });
+  });
+});

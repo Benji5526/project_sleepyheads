@@ -34,6 +34,8 @@ const FORBIDDEN: { name: string; pattern: RegExp }[] = [
 
 // 서버가 부를 수 있는 DB 함수는 마이그레이션에 정의된 고정 목록뿐이다 (API_SPEC §7.3)
 const ALLOWED_RPC = new Set([
+  // WU-403 섹터 합계 (고정 SQL 함수, 인자는 분기·지표 목록만 — DB 함수가 지표 이름을 다시 검사한다)
+  "aggregate_sector_metrics",
   "check_and_record_api_usage",
   "check_request_rate",
   "consume_quota",

@@ -73,6 +73,7 @@ main(Phase 2 병합) ─┬─ A 병준 ─ 측정·한도·키 순차 → 자�
 - `boards` 표(예림 마이그레이션): TECH §15.2 `id`(= `analysis_id`), `analysis_id`, `owner_id … on delete cascade`, `filters jsonb`, `result jsonb`(다시 계산한 결과), `updated_at` + RLS 본인 읽기(쓰기는 서버).
 - 필터 규칙: `period`는 달력 분기, 기간 밖이면 `422 OUT_OF_RANGE`. `peers`는 종목코드 **최대 5** (넘으면 `400`). 필터 바꾸기는 **AI 0건·질문 수 차감 없음**. 다시 계산은 원래 분석의 **데이터 버전 규칙**(WU-202)을 따른다 — 새 기간·기업만 새로 받는다.
 - Q9(현준): 보드의 현재 결과로 분석 글을 다시 쓴다(질문 1회, AI 장애 시 `503 LLM_UNAVAILABLE` + 차감 취소, 기존 설명 유지). 다시 쓴 설명은 `boards`가 아니라 **그 분석의 `explanation`을 새로 쓰고 `explanationStatus`를 `"ready"`로** — 예림님 B1이 `boards.updated_at`과 설명 시각을 비교하거나, Q9가 `boards`에 `explanation_at`을 남긴다(**둘 중 예림님이 정해 §3.1에 한 줄 적고 팀 채팅에 알림**, 현준님은 B1 응답만 본다).
+- **결정 (예림, 2026-10-01)**: B1이 `boards.updated_at`(B2가 필터를 바꾼 시각)과 `analyses.updated_at`(Q9가 설명을 저장할 때 이미 올린다)을 비교한다 — 보드가 더 나중이면 `"stale"`, 아니면 `"ready"`. **Q9는 고칠 것 없음**(`boards`에 쓰지 않는다). 결과가 나온 뒤 `analyses.updated_at`을 올리는 것은 Q9뿐이어야 한다.
 
 ### 3.2 처리 한도 — `src/lib/limits/size.ts` (이름·인자 잠금, 안은 병준)
 - `assertAggregateSize({ companies, quarters, accounts })` — 넘으면 `HttpError("TOO_LARGE", 안내)`. **B2가 계산 전에 부른다**(예림).

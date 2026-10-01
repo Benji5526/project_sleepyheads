@@ -1,0 +1,169 @@
+// @vitest-environment node
+import { describe, expect, it, vi } from "vitest";
+import type { AnalysisRequestView, CompanyRef } from "@/contracts";
+import { applyBoardFilters, parseBoardFilters } from "@/lib/boards/filters";
+
+// WU-401 보드 필터: 본문 검사(400·422)와 "원래 분석 요청에 필터만 덮어쓰기" + 섹터 합계 DB 함수 부르기(WU-403)
+
+const company = (stockCode: string): CompanyRef => ({
+  corpCode: `00${stockCode}`,
+  stockCode,
+  name: stockCode,
+  market: "KOSPI",
+  sector: { name: "반도체", source: "manual", isFinancial: false },
+  fiscalMonth: 12,
+});
+const TARGET = company("000660");
+const PEER = company("005930");
+
+const request: AnalysisRequestView = {
+  intent: "compare",
+  target: TARGET,
+  peers: [PEER],
+  metrics: ["revenue"],
+  period: { from: "2025Q3", to: "2026Q2", specified: false, reason: "기본", clipped: false },
+  groupBy: "year",
+  needsNews: true,
+  aggregate: "sum",
+};
+
+describe("parseBoardFilters", () => {
+  it("빈 필터·기간·비교 기업을 받는다 (대상·중복은 뺌)", () => {
+    expect(parseBoardFilters({ filters: {} }, TARGET.stockCode, "2026Q2")).toEqual({});
+    expect(
+      parseBoardFilters(
+        {
+          filters: {
+            period: { from: "2015Q1", to: "2026Q2" },
+            peers: ["005930", "000660", "005930"],
+          },
+        },
+        TARGET.stockCode,
+        "2026Q2",
+      ),
+    ).toEqual({ period: { from: "2015Q1", to: "2026Q2" }, peers: ["005930"] });
+  });
+
+  it.each([
+    [null, "VALIDATION_ERROR"],
+    [{}, "VALIDATION_ERROR"],
+    [{ filters: { peers: "005930" } }, "VALIDATION_ERROR"],
+    [{ filters: { period: { from: "2026Q1" } } }, "VALIDATION_ERROR"],
+    [{ filters: { period: { from: "2026Q1", to: "2025Q1" } } }, "VALIDATION_ERROR"],
+    [{ filters: { period: { from: "2014Q4", to: "2025Q1" } } }, "OUT_OF_RANGE"],
+    [{ filters: { period: { from: "2026Q1", to: "2026Q3" } } }, "OUT_OF_RANGE"],
+  ])("%j → %s", (body, code) => {
+    expect(() => parseBoardFilters(body, TARGET.stockCode, "2026Q2")).toThrow(
+      expect.objectContaining({ code }),
+    );
+  });
+});
+
+describe("applyBoardFilters", () => {
+  it("기간·비교 기업만 바꾸고 의도·지표·묶음 단위·뉴스 여부는 그대로", () => {
+    const next = applyBoardFilters(
+      request,
+      { period: { from: "2021Q1", to: "2025Q4" }, peers: ["005380"] },
+      [company("005380")],
+    );
+    expect(next).toEqual({
+      ...request,
+      peers: [company("005380")],
+      period: {
+        from: "2021Q1",
+        to: "2025Q4",
+        specified: true,
+        reason: "보드 필터: 2021Q1~2025Q4",
+        clipped: false,
+      },
+    });
+  });
+
+  it("필터에 없는 항목은 원래 값", () => {
+    expect(applyBoardFilters(request, {}, [])).toEqual(request);
+  });
+
+  it("합계에서 비교 기업을 모두 빼면 합계를 풀고 대상 기업 추이로 (연도별은 연도별 그대로)", () => {
+    const next = applyBoardFilters(request, { peers: [] }, []);
+    expect(next.aggregate).toBeUndefined();
+    expect(next.groupBy).toBe("year");
+    expect(applyBoardFilters({ ...request, groupBy: "sector" }, { peers: [] }, []).groupBy).toBe(
+      "quarter",
+    );
+  });
+});
+
+vi.mock("server-only", () => ({}));
+
+describe("aggregateSectorMetrics (DB 함수 부르기)", () => {
+  function fakeAdmin(companyCount: number, rows: unknown[]) {
+    const calls: { fn: string; args: unknown }[] = [];
+    return {
+      calls,
+      client: {
+        from: () => ({
+          select: async () => ({ count: companyCount, error: null }),
+        }),
+        rpc: async (fn: string, args: unknown) => {
+          calls.push({ fn, args });
+          return { data: rows, error: null };
+        },
+      },
+    };
+  }
+
+  it("한도 안이면 DB 함수 결과 행만 받아 원 단위 bigint로 바꾼다", async () => {
+    const { aggregateSectorMetrics } = await import("@/lib/boards/sector-aggregate");
+    const admin = fakeAdmin(2700, [
+      {
+        sector_name: "반도체",
+        is_financial: false,
+        period: "2025",
+        metric: "revenue",
+        total: "9007199254740993",
+        company_count: 12,
+      },
+    ]);
+    const rows = await aggregateSectorMetrics(admin.client as never, {
+      from: "2015Q1",
+      to: "2025Q4",
+      metrics: ["revenue"],
+      byYear: true,
+    });
+    expect(rows).toEqual([
+      {
+        sectorName: "반도체",
+        isFinancial: false,
+        period: "2025",
+        metric: "revenue",
+        total: BigInt("9007199254740993"),
+        companyCount: 12,
+      },
+    ]);
+    expect(admin.calls).toEqual([
+      {
+        fn: "aggregate_sector_metrics",
+        args: {
+          p_from: "2015Q1",
+          p_to: "2025Q4",
+          p_metrics: ["revenue"],
+          p_by_year: true,
+          p_calc_version: "v3",
+        },
+      },
+    ]);
+  });
+
+  it("기업 × 분기가 한도를 넘으면 DB 함수를 부르기 전에 413", async () => {
+    const { aggregateSectorMetrics } = await import("@/lib/boards/sector-aggregate");
+    const admin = fakeAdmin(4000, []);
+    await expect(
+      aggregateSectorMetrics(admin.client as never, {
+        from: "2015Q1",
+        to: "2025Q4",
+        metrics: ["revenue"],
+      }),
+    ).rejects.toMatchObject({ code: "TOO_LARGE" });
+    expect(admin.calls).toEqual([]);
+  });
+});

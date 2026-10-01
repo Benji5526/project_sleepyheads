@@ -722,6 +722,9 @@ interface Analysis {
 
 ### B1 `GET /api/boards/:id` 🛡️ (Step 4)
 응답 `200` → `{ "data": { "id": "b1…", "analysisId": "a1…", "filters": BoardFilters, "result": ResultObject, "explanationStatus": "ready" | "stale" } }`
+- 구현 (WU-401): **보드 ID = 분석 ID**. 남의 것·없는 것 `404`, 결과가 없는 분석(`succeeded`·`partial`이 아님) `409`.
+- 보드가 없으면(필터를 한 번도 안 바꿈) `filters: {}` + 원래 결과 + `"ready"`.
+- `explanationStatus`: `boards.updated_at`(마지막 필터 변경)이 `analyses.updated_at`(Q9가 설명을 다시 쓸 때 올림)보다 나중이면 `"stale"`.
 
 ### B2 `PATCH /api/boards/:id` 🛡️ (Step 4)
 - 필터만 바꿔 **서버가 다시 계산**한다. AI 호출 없음, 질문 차감 없음.
@@ -733,6 +736,10 @@ interface Analysis {
 ```
 응답 `200` → B1과 같은 형태, `explanationStatus: "stale"`
 - 오류: `413 TOO_LARGE`, `422 OUT_OF_RANGE`, 비교 기업 6개 이상 `400`.
+- 구현 (WU-401): 순서는 소유자 검사(`404`) → 결과·분석 요청 있는 분석(`409`) → 필터 검사 → 처리 한도(`413`, **계산 전**) → 다시 계산 → `boards` 저장.
+  - `filters`에 없는 항목은 원래 분석 값. `period`는 `YYYYQn`, 시작 > 끝이면 `400`, 2015Q1 이전·최신 분기 이후는 잘라 계산하지 않고 `422`. `peers`는 6자리 종목코드, 대상 기업·중복을 빼고 5곳 초과면 `400`, 모르는 종목코드 `400`. 본문에 다른 필드가 있으면 `400`.
+  - 응답의 `filters`는 정리한 값(대상·중복 제외). 분기·연도별 결과에 비교 기업을 넣으면 **기업 비교 막대 차트가 더해진다**(합계·기업 비교는 그 차트가 비교 기업을 따라 바뀐다). 합계에서 비교 기업을 모두 빼면 대상 기업 추이로 바뀐다.
+  - 데이터 버전 규칙(WU-202): 원래 데이터 버전의 출처(접수번호)·전처리 선택은 그대로, 새 기간·기업에 필요한 보고서만 새로 받는다. 다시 계산한 데이터 버전을 저장하고 결과 `basis.dataVersionId`가 그것을 가리킨다. 차트 점이 500개를 넘으면 `basis.flags`에 묶음 단위 안내.
 
 ---
 

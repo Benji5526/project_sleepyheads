@@ -115,3 +115,27 @@ describe("운영 데이터 보정 (이미 잘못 분류된 기업)", () => {
     expect(rows[0].sector_id).toBeNull();
   });
 });
+
+describe("ISC → 반도체 (20260930230000, STEP3_PASS_TEST §2.1 #4)", () => {
+  beforeAll(async () => {
+    // 운영 흉내: ISC가 업종 규칙에 안 걸려 `기타`로 분류돼 있다
+    await db.exec(`
+      insert into companies (corp_code, stock_code, corp_name, market, induty_code, acc_mt, sector_id, sector_source, profile_checked_at) values
+        ('00572905', '095340', 'ISC', 'KOSDAQ', '29299', 12, (select id from sectors where name = '기타'), 'other', now());
+    `);
+    const sql = readFileSync(
+      join(ROOT, "migrations", "20260930230000_wu303_sector_isc.sql"),
+      "utf8",
+    );
+    await db.exec(sql);
+    await db.exec(sql); // 두 번 적용해도 같아야 한다
+  }, 60_000);
+
+  it("수동 지정으로 반도체가 되고, 경쟁사 후보(같은 섹터)에 들어간다", async () => {
+    expect(await sectorOf("00572905")).toMatchObject({ name: "반도체", sector_source: "manual" });
+    const { rows } = await db.query<{ n: number }>(
+      "select count(*)::int as n from sector_overrides where corp_code = '00572905'",
+    );
+    expect(rows[0].n).toBe(1);
+  });
+});

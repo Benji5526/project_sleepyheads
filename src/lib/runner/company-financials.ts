@@ -88,6 +88,62 @@ export async function ensureCompanyFinancials(
 }
 
 /**
+ * 보드 필터 다시 계산(WU-401 B2)용: 원래 데이터 버전(`base`)에 있는 보고서는 **그 출처 그대로** 쓰고,
+ * 새 기간·새 기업 때문에 더 필요한 보고서만 새로 확보한다(캐시 우선, WU-202 데이터 버전 규칙).
+ * 그래서 원래 분석과 겹치는 분기의 숫자는 원래 분석과 같다. `freshKeys`는 이번에 새로 받은 보고서 키
+ * (`corpCode|bsnsYear|reprtCode`) — 전처리 선택은 이것들에만 새로 적용한다.
+ */
+export async function ensureCompanyFinancialsOver(
+  company: CompanyRef,
+  from: Quarter,
+  to: Quarter,
+  base: readonly DataSource[],
+  options: EnsureCompanyFinancialsOptions = {},
+): Promise<CompanyFinancials & { freshKeys: Set<string> }> {
+  const fiscalRefByQuarter = mapCalendarRangeToFiscalQuarters(company.fiscalMonth, from, to);
+  const reports = reportsForCalendarRange(fiscalRefByQuarter, company.fiscalMonth);
+  const baseByKey = new Map(
+    base.filter((s) => s.corpCode === company.corpCode).map((s) => [sourceKeyOf(s), s]),
+  );
+
+  const gate = createConcurrencyGate(REPORT_FETCH_CONCURRENCY);
+  const freshKeys = new Set<string>();
+  let externalCalls = 0;
+  const sources: DataSource[] = await Promise.all(
+    reports.map(async (report) => {
+      const key = sourceKeyOf({ corpCode: company.corpCode, ...report });
+      const kept = baseByKey.get(key);
+      if (kept) return kept;
+      const r = await gate.run(() =>
+        ensureReportValues(company.corpCode, report.bsnsYear, report.reprtCode, {
+          userId: options.userId ?? null,
+          analysisId: options.analysisId ?? null,
+          client: options.client,
+        }),
+      );
+      freshKeys.add(key);
+      externalCalls += r.externalCalls;
+      return {
+        corpCode: company.corpCode,
+        bsnsYear: r.bsnsYear,
+        reprtCode: r.reprtCode,
+        fsDiv: r.fsDiv,
+        rceptNo: r.fsDiv ? r.rceptNo : null,
+      };
+    }),
+  );
+  const financials = await financialsFromSources(company, from, to, sources, {
+    client: options.client,
+  });
+  return { ...financials, externalCalls, freshKeys };
+}
+
+/** 출처 한 줄의 키 — 같은 기업·연도·보고서 종류면 같다 */
+export function sourceKeyOf(s: Pick<DataSource, "corpCode" | "bsnsYear" | "reprtCode">): string {
+  return `${s.corpCode}|${s.bsnsYear}|${s.reprtCode}`;
+}
+
+/**
  * 정해진 출처(데이터 버전)만으로 계산한다 — 외부 호출 없음. 재실행(WU-202)과 전처리 선택을
  * 적용한 재계산(WU-203)이 쓴다. 출처에 없는 보고서는 읽지 않는다.
  */
