@@ -1,0 +1,10 @@
+{
+  "id": "r05-per",
+  "title": "정상 — PER (Step 5, WU-502)",
+  "question": "SK하이닉스 PER 알려줘",
+  "kind": "normal",
+  "expect": {
+    "metrics": ["per"],
+    "answerRef": "answers/skhynix.json#per-2026-09-30"
+  }
+}

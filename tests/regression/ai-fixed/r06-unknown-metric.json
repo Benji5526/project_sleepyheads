@@ -1,0 +1,10 @@
+{
+  "companies": [
+    {
+      "query": "삼성전자",
+      "role": "target"
+    }
+  ],
+  "metrics": [],
+  "unsupported_metric_requested": true
+}

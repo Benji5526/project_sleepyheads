@@ -1,7 +1,7 @@
 import type { Chart, Explanation, InsightKind } from "@/contracts";
 import { RewriteSlot } from "@/components/board/rewrite-context";
 import { TermText } from "@/components/glossary/Term";
-import { isWebUrl } from "@/lib/news/web-url";
+import { isGoogleNewsUrl } from "@/lib/news/web-url";
 
 const KIND: Record<InsightKind, { label: string; className: string }> = {
   positive: { label: "긍정 요인", className: "bg-accent-soft text-accent" },
@@ -216,8 +216,8 @@ export function ExplanationPanel({
                     분석 글 근거
                   </span>
                 )}
-                {/* 링크는 RSS가 준 주소 그대로 (TECH §10.2). http(s)가 아니면 링크로 만들지 않는다 */}
-                {isWebUrl(n.url) ? (
+                {/* 링크는 RSS가 준 주소 그대로 (TECH §10.2). Google 뉴스 주소가 아니면 링크로 만들지 않는다 (WU-504) */}
+                {isGoogleNewsUrl(n.url) ? (
                   <a
                     href={n.url}
                     target="_blank"

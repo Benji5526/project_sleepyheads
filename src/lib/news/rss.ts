@@ -1,7 +1,7 @@
 // Google 뉴스 RSS XML 해석 (TECH §3.3). 공식 API가 아닌 공개 피드라 형식이 예고 없이 바뀔 수 있다 —
 // 모양이 기대와 다르면 던지지 않고 `null`(형식 오류)을 돌려주고, 호출부는 "뉴스 없음"으로 넘어간다.
 import { XMLParser } from "fast-xml-parser";
-import { isWebUrl } from "./web-url";
+import { isGoogleNewsUrl, isWebUrl } from "./web-url";
 
 /** RSS `item` 하나를 정리한 것. **본문은 없다** — RSS에도 본문·요약은 오지 않는다(description은 링크 HTML뿐). */
 export interface RssItem {
@@ -54,7 +54,8 @@ function toItem(raw: unknown): RssItem | null {
   const link = text(record.link);
   const rawTitle = text(record.title);
   const published = new Date(text(record.pubDate));
-  if (!rawTitle || !isWebUrl(link) || Number.isNaN(published.getTime())) return null;
+  // 기사 주소는 Google 뉴스 RSS 주소만 받는다 — 피드 안에 다른 주소가 끼어도 화면 링크가 되지 않게 (WU-504)
+  if (!rawTitle || !isGoogleNewsUrl(link) || Number.isNaN(published.getTime())) return null;
 
   const source = record.source;
   const sourceName = text(source);

@@ -1,0 +1,4 @@
+{
+  "intent": "recent",
+  "metrics": ["revenue", "operating_income", "net_income"]
+}

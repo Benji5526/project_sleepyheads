@@ -8,3 +8,13 @@ export function isWebUrl(value: string): boolean {
     return false;
   }
 }
+
+/** 뉴스 검색 API(Google 뉴스 RSS)가 주는 기사 주소인가 — 화면 뉴스 링크는 이 주소만 (TECH §10.2·§17, WU-504) */
+export function isGoogleNewsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "news.google.com";
+  } catch {
+    return false;
+  }
+}

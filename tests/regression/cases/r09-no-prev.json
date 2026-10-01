@@ -1,0 +1,14 @@
+{
+  "id": "r09-no-prev",
+  "title": "직전 분기 없음 — 조회 시작 분기(2015Q1)의 QoQ(NO_PREV_PERIOD)",
+  "question": "SK하이닉스 2015년 1분기 영업이익 직전 분기 대비 증감률 알려줘",
+  "kind": "normal",
+  "expect": {
+    "metrics": ["operating_income", "qoq"],
+    "period": {
+      "from": "2015Q1",
+      "to": "2015Q1"
+    },
+    "answerRef": "answers/edge.json#no-prev-period"
+  }
+}

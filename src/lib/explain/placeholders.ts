@@ -60,10 +60,11 @@ export function fillPlaceholders(rawText: string, figures: Record<string, Figure
  * 자리표시자를 채우고, 아래 중 하나라도 걸리면 폐기한다(문장 전체를 버림 — 완료조건):
  * - 없는 ID를 가리킴
  * - ID가 아닌 숫자(연도·분기 표기 제외)가 남아 있음
+ * - 채우지 못한 중괄호가 남아 있음 (`{{rev}}`처럼 f숫자가 아닌 ID — 화면에 "{{…}}"가 그대로 나가지 않게)
  * 통과하면 서버가 실제 값으로 채운 최종 문장을 돌려준다.
  */
 export function resolveText(rawText: string, figures: Record<string, Figure>): string | null {
   if (hasDisallowedRawNumber(rawText)) return null;
   const { text, ok } = fillPlaceholders(rawText, figures);
-  return ok ? text : null;
+  return ok && !/\{\{|\}\}/.test(text) ? text : null;
 }

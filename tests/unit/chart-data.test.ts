@@ -4,6 +4,7 @@ import {
   cellText,
   isChangeSeries,
   periodLabel,
+  priceDateLabel,
   seriesStyle,
   sourceText,
   toRechartsData,
@@ -14,8 +15,9 @@ import {
 import type { Chart } from "@/contracts";
 import { samsungRevenueTrend } from "../fixtures/mock/samsung-revenue-trend";
 import { skhynixRecent } from "../fixtures/mock/skhynix-recent";
+import { MOCK_JOIN_WARNING, skhynixValuation } from "../fixtures/mock/skhynix-valuation";
 
-const fixtures = [samsungRevenueTrend, skhynixRecent];
+const fixtures = [samsungRevenueTrend, skhynixRecent, skhynixValuation];
 
 describe("차트 값 = 표 값 (PRD F-V5)", () => {
   for (const analysis of fixtures) {
@@ -144,5 +146,42 @@ describe("범례 — 색 말고도 구분 (TECH §12.3)", () => {
 
   it("색은 밝은·어두운 화면 모두 정의된 CSS 토큰을 쓴다", () => {
     for (const i of [0, 1, 2]) expect(seriesStyle(i).color).toMatch(/^var\(--series-[1-3]\)$/);
+  });
+});
+
+// WU-502 화면 (PHASE4_PLAN §3.1): 시가총액·PER·PBR — 서버가 포맷한 display를 그대로, 기준일, 적자·자본잠식, 결합 경고
+describe("주가 지표 (PER·PBR) 가짜 결과 = 계약 모양", () => {
+  const result = skhynixValuation.result!;
+
+  it("주가가 들어간 숫자는 모두 기준일이 있고, 단위는 시가총액 KRW · PER·PBR TIMES", () => {
+    for (const figure of Object.values(result.figures)) {
+      expect(figure.basis.priceDate, figure.id).toBe("2026-09-30");
+      expect(figure.unit).toBe(/시가총액/.test(figure.label) ? "KRW" : "TIMES");
+      // 계산 불가면 value null + 이유 (API_SPEC §1.4)
+      if (figure.value === null) expect(figure.reason, figure.id).toBeDefined();
+    }
+    expect(result.basis.priceDate).toBe("2026-09-30");
+  });
+
+  it("기준일은 '기준일 9월 30일 종가'로 보인다", () => {
+    expect(priceDateLabel("2026-09-30")).toBe("기준일 9월 30일 종가");
+    expect(priceDateLabel("2026-10-01")).toBe("기준일 10월 1일 종가");
+    // 모양이 다르면 받은 글자를 그대로 (지어내지 않는다)
+    expect(priceDateLabel("20260930")).toBe("기준일 20260930 종가");
+  });
+
+  it("표에서 적자·자본잠식은 '계산 불가'가 아니라 그 말 그대로, 주가가 없으면 계산 불가 + 이유", () => {
+    const table = result.charts.find((c) => c.type === "table")!;
+    const rows = buildChartRows(table, result.figures);
+    const byX = Object.fromEntries(rows.map((r) => [r.x, r]));
+    expect(cellText(byX["SK하이닉스"].cells.per)).toBe("12.34배");
+    expect(cellText(byX["에코프로비엠"].cells.per)).toBe("적자");
+    expect(cellText(byX["예시기업"].cells.pbr)).toBe("자본잠식");
+    expect(cellText(byX["카카오"].cells.per)).toBe("계산 불가 (주가 없음)");
+  });
+
+  it("결합을 멈춘 경고는 분석 기준(basis.flags)에 한 줄", () => {
+    expect(result.basis.flags).toEqual([MOCK_JOIN_WARNING]);
+    expect(MOCK_JOIN_WARNING).toMatch(/^주가 결합 중단 — /);
   });
 });

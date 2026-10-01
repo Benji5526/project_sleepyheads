@@ -4,6 +4,7 @@
 import type { Chart, Explanation, Figure, Insight, NewsClue } from "@/contracts";
 import { EXPLANATION_LIMITS } from "@/contracts";
 import { containsBannedWord } from "./banned-words";
+import { containsLeak } from "./output-guard";
 import type { AiExplanation } from "./ai-explanation";
 import { resolveText } from "./placeholders";
 
@@ -24,6 +25,11 @@ const CAUSE_TO_CHECK =
 function looksLikeCausalClaim(text: string): boolean {
   const claim = text.replace(CAUSE_TO_CHECK, "");
   return CAUSAL_KEYWORDS.some((kw) => claim.includes(kw));
+}
+
+/** 권유 금지어(§11.5) 또는 링크 주소·비밀 값(WU-504 주입 방어)이 든 문장은 버린다 */
+function rejected(text: string): boolean {
+  return containsBannedWord(text) || containsLeak(text);
 }
 
 function chartRefOrNull(ref: string | null, chartIds: ReadonlySet<string>): string | null {
@@ -72,7 +78,7 @@ export function buildExplanation(input: BuildExplanationInput): Explanation {
   for (const raw of input.ai.conclusion) {
     if (conclusion.length >= EXPLANATION_LIMITS.conclusionSentences) break;
     const text = resolveText(raw, input.figures);
-    if (text === null || containsBannedWord(text)) continue;
+    if (text === null || rejected(text)) continue;
     // 결론도 뉴스 근거 없이 원인을 단정하지 않는다 (투자 포인트와 같은 검사, TECH §11.5)
     const causal = looksLikeCausalClaim(text);
     if (causal && citedNewsIds.length === 0) continue;
@@ -89,7 +95,7 @@ export function buildExplanation(input: BuildExplanationInput): Explanation {
   const insights: Insight[] = [];
   for (const raw of input.ai.insights) {
     const text = resolveText(raw.text, input.figures);
-    if (text === null || containsBannedWord(text)) continue;
+    if (text === null || rejected(text)) continue;
     if (text.length > EXPLANATION_LIMITS.insightMaxChars) continue;
 
     const figureIds = raw.figure_ids.filter((id) => id in input.figures);
@@ -120,7 +126,7 @@ export function buildExplanation(input: BuildExplanationInput): Explanation {
   const evidence = input.ai.evidence
     .map((e) => {
       const text = resolveText(e.text, input.figures);
-      return text && !containsBannedWord(text)
+      return text && !rejected(text)
         ? { text, chartRef: chartRefOrNull(e.chart_ref, chartIds) }
         : null;
     })
@@ -142,7 +148,7 @@ export function buildExplanation(input: BuildExplanationInput): Explanation {
     FIXED_DISCLAIMER,
     ...input.ai.caveats
       .map((raw) => resolveText(raw, input.figures))
-      .filter((text): text is string => text !== null && !containsBannedWord(text)),
+      .filter((text): text is string => text !== null && !rejected(text)),
     ...(input.unavailableNotes ?? []),
     ...(input.mixedScope ? [MIXED_SCOPE_NOTICE] : []),
   ];

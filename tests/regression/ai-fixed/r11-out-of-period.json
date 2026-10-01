@@ -1,0 +1,17 @@
+{
+  "companies": [
+    {
+      "query": "삼성전자",
+      "role": "target"
+    }
+  ],
+  "metrics": ["revenue"],
+  "period": {
+    "specified": true,
+    "from": "2013Q1",
+    "to": "2013Q4",
+    "text": "2013년"
+  },
+  "group_by": "year",
+  "intent": "annual"
+}

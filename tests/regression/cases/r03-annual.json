@@ -1,0 +1,14 @@
+{
+  "id": "r03-annual",
+  "title": "정상 — 연간 (달력 연도 합)",
+  "question": "삼성전자 2025년 연간 매출 알려줘",
+  "kind": "normal",
+  "expect": {
+    "metrics": ["revenue"],
+    "period": {
+      "from": "2025Q1",
+      "to": "2025Q4"
+    },
+    "answerRef": "answers/samsung.json#revenue-2025"
+  }
+}

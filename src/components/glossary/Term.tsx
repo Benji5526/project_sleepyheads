@@ -12,7 +12,19 @@ const EDGE = 8;
  * - 누르면 고정되고 한 번 더 누르거나 바깥을 누르면 닫힌다. Esc는 언제든 닫는다.
  * - 설명 칸은 화면 기준(fixed)으로 띄워, 가로 스크롤 표 안에서도 잘리지 않는다.
  */
-export function Term({ entry, children }: { entry: GlossaryEntry; children?: React.ReactNode }) {
+export function Term({
+  entry,
+  children,
+  label,
+  className,
+}: {
+  entry: GlossaryEntry;
+  children?: React.ReactNode;
+  /** 버튼 글자가 기호(ⓘ)뿐일 때 화면 낭독기가 읽을 이름 */
+  label?: string;
+  /** 기본(점선 밑줄) 대신 쓸 모양 */
+  className?: string;
+}) {
   const tipId = `${useId()}-term`;
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -77,6 +89,7 @@ export function Term({ entry, children }: { entry: GlossaryEntry; children?: Rea
         ref={buttonRef}
         type="button"
         aria-describedby={tipId}
+        aria-label={label}
         data-term={entry.term}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => {
@@ -89,7 +102,10 @@ export function Term({ entry, children }: { entry: GlossaryEntry; children?: Rea
           setPinned(next);
           setOpen(next);
         }}
-        className="cursor-help rounded-sm underline decoration-muted decoration-dotted underline-offset-4 hover:decoration-accent"
+        className={
+          className ??
+          "cursor-help rounded-sm underline decoration-muted decoration-dotted underline-offset-4 hover:decoration-accent"
+        }
       >
         {children ?? entry.term}
       </button>

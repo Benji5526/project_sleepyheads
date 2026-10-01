@@ -1,0 +1,17 @@
+{
+  "intent": "annual",
+  "companies": [
+    {
+      "query": "삼성전자",
+      "role": "target"
+    }
+  ],
+  "metrics": ["revenue"],
+  "period": {
+    "specified": true,
+    "from": "2025Q1",
+    "to": "2025Q4",
+    "text": "2025년"
+  },
+  "group_by": "year"
+}

@@ -5,6 +5,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RssItem } from "./rss";
+import { isGoogleNewsUrl } from "./web-url";
 
 export const NEWS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -18,7 +19,9 @@ function isRssItem(value: unknown): value is RssItem {
   return (
     typeof v.title === "string" &&
     typeof v.press === "string" &&
+    // 캐시에 옛 형식(다른 주소)의 기사가 있으면 캐시를 버리고 다시 받는다 — 화면 링크는 Google 뉴스 주소만 (WU-504)
     typeof v.link === "string" &&
+    isGoogleNewsUrl(v.link) &&
     typeof v.publishedAt === "string" &&
     (v.pressUrl === null || typeof v.pressUrl === "string")
   );

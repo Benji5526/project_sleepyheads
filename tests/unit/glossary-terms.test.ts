@@ -1,7 +1,16 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { MetricId } from "@/contracts";
 import { METRIC_LABEL } from "@/lib/runner/metric-info";
-import { GLOSSARY, METRIC_GLOSSARY, lookupTerm, splitTerms } from "@/components/glossary/terms";
+import {
+  GLOSSARY,
+  METRIC_FORMULA,
+  METRIC_GLOSSARY,
+  formulaFor,
+  lookupTerm,
+  splitTerms,
+} from "@/components/glossary/terms";
 
 // WU-402 완료조건: 재무 용어 한 줄 설명 (PRD F-Z5)
 
@@ -69,5 +78,50 @@ describe("splitTerms — 화면 글자에서 용어 찾기", () => {
       .filter((p) => p.entry)
       .map((p) => p.entry!.term);
     expect(terms).toEqual(["영업이익률", "영업이익", "매출"]);
+  });
+});
+
+// WU-502 완료조건 "화면의 PER·PBR ⓘ 계산식이 TECH §6.4와 같다" — 문서를 직접 읽어 비교한다
+describe("ⓘ 계산식 = TECH §6.4 지표 정의 표", () => {
+  const doc = readFileSync(resolve(__dirname, "../../DevelopDoc/TECH_SPEC.md"), "utf8");
+  const section = doc.slice(doc.indexOf("### 6.4 지표 정의"), doc.indexOf("### 6.5"));
+  /** 표 한 줄: | `per` | PER | 계산식 | 비고 | → 마크다운 기호(\| · `)와 "(Step 5)"를 걷어낸 칸들 */
+  const rowOf = (metric: string) => {
+    const line = section.split("\n").find((l) => l.startsWith(`| \`${metric}\` |`));
+    if (!line) return null;
+    const cells = line
+      .replaceAll("\\|", "\u0000")
+      .split("|")
+      .map((c) =>
+        c
+          .replace(/\u0000/g, "|")
+          .replace(/`/g, "")
+          .replace("(Step 5)", "")
+          .trim(),
+      );
+    return { formula: cells[3], note: cells[4] };
+  };
+
+  for (const [metric, entry] of Object.entries(METRIC_FORMULA)) {
+    it(`${metric}: ${entry!.formula}`, () => {
+      const row = rowOf(metric);
+      expect(row, `TECH §6.4에 ${metric} 줄이 없습니다`).not.toBeNull();
+      expect(entry!.formula).toBe(row!.formula);
+      if (entry!.note) expect(row!.note).toBe(entry!.note);
+    });
+  }
+
+  it("PER·PBR·시가총액은 반드시 계산식이 있다", () => {
+    for (const metric of ["market_cap", "per", "pbr"]) {
+      expect(formulaFor(metric)?.formula, metric).toBeTruthy();
+    }
+    expect(formulaFor("per")).toEqual({
+      term: "PER",
+      formula: "시가총액 ÷ TTM 지배주주 순이익",
+      note: "TTM ≤ 0 → 적자",
+    });
+    // 계정 그대로인 지표·지표가 아닌 key는 ⓘ가 없다
+    expect(formulaFor("revenue")).toBeNull();
+    expect(formulaFor("revenue_yoy")).toBeNull();
   });
 });

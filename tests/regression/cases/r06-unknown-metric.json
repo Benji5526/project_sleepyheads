@@ -1,0 +1,9 @@
+{
+  "id": "r06-unknown-metric",
+  "title": "없는 지표 — 공시로 계산할 수 없는 지표",
+  "question": "삼성전자 직원 만족도 알려줘",
+  "kind": "error",
+  "expect": {
+    "errorCode": "UNSUPPORTED_QUESTION"
+  }
+}

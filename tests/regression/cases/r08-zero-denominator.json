@@ -1,0 +1,14 @@
+{
+  "id": "r08-zero-denominator",
+  "title": "분모 0 — 직전 값이 0이면 증감률 계산 불가(ZERO_DENOMINATOR)",
+  "question": "SK하이닉스 2026년 2분기 영업이익 직전 분기 대비 증감률 알려줘",
+  "kind": "normal",
+  "expect": {
+    "metrics": ["operating_income", "qoq"],
+    "period": {
+      "from": "2026Q2",
+      "to": "2026Q2"
+    },
+    "answerRef": "answers/edge.json#zero-denominator"
+  }
+}

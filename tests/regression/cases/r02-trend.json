@@ -1,0 +1,14 @@
+{
+  "id": "r02-trend",
+  "title": "정상 — 추이 (최근 8분기)",
+  "question": "SK하이닉스 최근 8분기 영업이익 추이 보여줘",
+  "kind": "normal",
+  "expect": {
+    "metrics": ["operating_income"],
+    "period": {
+      "from": "2024Q3",
+      "to": "2026Q2"
+    },
+    "answerRef": "answers/skhynix.json#operating_income-2024Q3"
+  }
+}

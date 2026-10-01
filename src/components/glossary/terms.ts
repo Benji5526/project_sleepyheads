@@ -93,6 +93,36 @@ export const METRIC_GLOSSARY: Record<MetricId, GlossaryEntry> = {
   },
 };
 
+/**
+ * 지표 옆 ⓘ에 보여 줄 계산식 (TECH §6.4 지표 정의 표의 "계산식"·"비고" 칸과 **같은 글자**).
+ * 문서와 어긋나지 않는지 단위 테스트(`glossary-terms.test.ts`)가 TECH_SPEC.md를 직접 읽어 비교한다.
+ * 매출·영업이익·순이익은 공시 계정 그대로라 계산식이 없다.
+ */
+export const METRIC_FORMULA: Partial<Record<MetricId, { formula: string; note?: string }>> = {
+  operating_margin: { formula: "영업이익 ÷ 매출 × 100" },
+  net_margin: { formula: "당기순이익 ÷ 매출 × 100" },
+  yoy: { formula: "(이번 − 전년 같은 분기) ÷ |전년 같은 분기| × 100", note: "분모 0 → 계산 불가" },
+  qoq: { formula: "(이번 − 직전 분기) ÷ |직전 분기| × 100", note: "분모 0·직전 없음 → 계산 불가" },
+  ttm_owners_ni: { formula: "최근 4개 달력 분기 합" },
+  roe: {
+    formula: "TTM 지배주주 순이익 ÷ 평균 지배주주지분 × 100",
+    note: "평균 = (최근 분기말 + 4개 분기 전) ÷ 2",
+  },
+  debt_ratio: { formula: "부채총계 ÷ 자본총계 × 100" },
+  equity_ratio: { formula: "자본총계 ÷ 자산총계 × 100" },
+  market_cap: { formula: "기준일 종가 × 상장주식수", note: "보통주만" },
+  per: { formula: "시가총액 ÷ TTM 지배주주 순이익", note: "TTM ≤ 0 → 적자" },
+  pbr: { formula: "시가총액 ÷ 최근 분기말 지배주주지분", note: "지분 ≤ 0 → 자본잠식" },
+};
+
+/** 계열 key("per", "operating_margin")에 맞는 계산식 — 없으면 null */
+export function formulaFor(key: string): { term: string; formula: string; note?: string } | null {
+  if (!Object.hasOwn(METRIC_FORMULA, key)) return null;
+  const metric = key as MetricId;
+  const entry = METRIC_FORMULA[metric];
+  return entry ? { term: METRIC_GLOSSARY[metric].term, ...entry } : null;
+}
+
 /** 지표는 아니지만 분석 기준·표에 자주 나오는 말 */
 export const EXTRA_GLOSSARY: GlossaryEntry[] = [
   {
