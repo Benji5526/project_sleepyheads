@@ -6,7 +6,7 @@
 | 문서 종류 | WORK_UNITS (단위 작업 명세) |
 | 작성자 | Sung, Hyun-Joon · Lee, Yelim · ByeongJun Min |
 | 작성일 | 2026-09-28 |
-| 버전 | v0.3.9 |
+| 버전 | v0.4.0 |
 | 기준 문서 | [PRD.md](./PRD.md) v0.6, [TECH_SPEC.md](./TECH_SPEC.md) v0.6, [API_SPEC.md](./API_SPEC.md) v0.3.7 |
 
 ### 변경 이력
@@ -27,6 +27,7 @@
 | v0.3.7 | 2026-09-30 | **WU-003 ✅** 완료조건 4/4 (Vercel 무료 플랜·결제 수단 없음 현준 확인), Supabase 하나로 유지 결정 기록. **WU-114 ✅** 완료조건 9/9 (운영 남은 질문 표시·차감 확인) |
 | v0.3.8 | 2026-09-30 | **WU-108 ✅** (로컬 로그인 현준 확인), **WU-199 🟨** 통과 테스트 8개 ✅(증거표 `STEP1_PASS_TEST.md`, 손 계산 정답표 `tests/accuracy/`), 시연 3개 남음. 12월 외 결산 분기 1년 어긋남 수정(WU-106), 흑자전환 표시, 합계 기능(F-N3) |
 | v0.3.9 | 2026-09-30 | **Step 1 완료조건 전수 점검** — WU-101~115·199 조건마다 증거(테스트·운영 확인)를 달고 ✅. 점검 중 찾은 버그 수정: 회원 한 명이 OpenDART 한도를 채우면 서비스 전체 차단·soft limit 미적용(`20260930040000`), 정정 공시 미연결·공시 확인 기록 미저장(WU-107), 투자 권유 추천 질문의 `○○`, 범위 밖 추천 질문의 PER. 조건 문구를 실제와 맞춤(quota 키 11개, KB금융 매출 계산 불가, 기업 찾기 외부 호출, 계산식 v2, 응답 30초). 다음 Step으로 옮김: 거절 질문 목록 표시(WU-201), 결과·설명 재사용(WU-202), 분석 글 품질(WU-305). Vercel 예약 실행은 운영 DB 갱신 시각으로 확인(무료 플랜 로그 1시간 보관) |
+| **v0.4.0** | 2026-10-01 | **Phase 3 병합**(Step 4): WU-401 ✅(보드 화면·서버·Q9 통합), WU-402 ✅, WU-403 🟨(재측정 남음), WU-399 ✅(운영 재확인). Phase 4(Step 5) 담당: 병준 WU-501·505, 예림 WU-502·503 정답, 현준 WU-499·503 틀·504·506 — [PHASE4_PLAN](./PHASE4_PLAN.md) |
 
 ---
 
@@ -98,10 +99,10 @@
 ### Step 4 — 분석 보드·품질
 | WU | 이름 | 담당 | 규모 | 선행 | 상태 |
 |---|---|---|---|---|---|
-| WU-401 | 분석 보드·필터 연동·설명 다시 쓰기 | 🤖 | L | WU-399 | 🟨 화면·Q9 완료(현준, 통합 때 `AnalysisScreen`에 연결), 서버 B1·B2·`boards`·SQL 집계 완료(예림 `feat/WU-401-board-server`) — 통합 때 화면 e2e 켜고 체크 |
-| WU-402 | 차트 규격 완성·표 보기·용어 설명 | 🤖 | M | WU-401 | ✅ 코드 완료(Phase 3 C, `feat/WU-402-charts`) — 확인표 `STEP4_PASS_TEST.md` §2, 분석 글 용어 설명은 통합 때 |
-| WU-403 | 대용량 성능 측정·처리 한도 | 🤖 | M | WU-401 | 🟨 측정·한도 완료(Phase 3 A), 예림 집계 함수로 재측정·30초는 운영 확인 남음 |
-| **WU-499** | **Step 4 통과 테스트·배포 시연** | 👤🤖 | M | WU-401~403 | ⬜ |
+| WU-401 | 분석 보드·필터 연동·설명 다시 쓰기 | 🤖 | L | WU-399 | ✅ Phase 3 병합(화면·Q9 현준 + 서버 B1·B2·`boards`·SQL 집계 예림, 통합 2026-10-01) — 운영 확인 WU-499 |
+| WU-402 | 차트 규격 완성·표 보기·용어 설명 | 🤖 | M | WU-401 | ✅ Phase 3 병합 — 분석 글(결론·투자 포인트) 용어 설명도 통합 때 붙임 |
+| WU-403 | 대용량 성능 측정·처리 한도 | 🤖 | M | WU-401 | 🟨 측정·한도 완료(Phase 3 병준) — 예림 집계 함수 `aggregate_sector_metrics`로 재측정·운영 30초 확인은 Phase 4 병준 |
+| **WU-499** | **Step 4 통과 테스트·배포 시연** | 👤🤖 | M | WU-401~403 | ⬜ Phase 4 시작 직후 현준 (`STEP4_PASS_TEST.md`) |
 
 ### Step 5 — 확장·운영 준비
 | WU | 이름 | 담당 | 규모 | 선행 | 상태 |
@@ -839,11 +840,11 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 | 선행 | WU-399 |
 
 **완료조건**
-- [ ] 기간 필터를 바꾸면 보드의 **모든** 차트·표가 같은 기간으로 다시 계산된다 — 🟨 화면 ✅(현준, 가짜 모드): `BoardPanel`이 B2 결과를 결과 화면 그대로 다시 그림, e2e `board.spec.ts` "기간 프리셋을 바꾸면 모든 분기 차트 제목·표가 같은 기간으로…"(통합 때 켬 — 2026-09-30 임시 연결로 12개 통과 확인). 서버 ✅(예림): B2가 원래 요청에 기간만 덮어써 다시 계산 — `tests/unit/api/boards-route.test.ts` "필터만 덮어써 다시 계산하고 boards에 저장…", 겹치는 분기는 원래 출처·새 분기만 새로 `tests/accuracy/board-recompute.test.ts` "기간을 늘리면 겹치는 분기는 원래 접수번호(C1) 값…"
-- [ ] 비교 기업을 추가·삭제하면 비교 차트·표가 함께 바뀐다 — 🟨 화면 ✅: `PeerFilter`(S1 찾기·칩 빼기·최대 5), e2e "비교 기업을 넣으면 기업 비교 차트가 생기고, 빼면 사라진다". 서버 ✅(예림): 분기·연도별 결과에 기업 비교 막대를 더함(합계·비교는 그 차트가 따라 바뀜) `board-recompute.test.ts` "비교 기업을 넣으면 분기별 차트는 대상 그대로 두고 기업 비교 막대를 더한다", 6곳 이상 400 `boards-route.test.ts`
-- [ ] 필터 변경은 AI 호출 0건, 질문 수 미차감 — 🟨 화면: e2e "…질문 수는 그대로"(가짜 모드). 서버 ✅(예림): `boards-route.test.ts` "…AI 0건·질문 차감 없음"(AI·질문 수 함수가 불리면 실패하게 막아 둠)
-- [ ] 필터 변경 후 분석 글에 "원래 조건 기준 설명" 표시, [설명 다시 쓰기] 시 새 조건으로 다시 작성(1회 차감) — 🟨 화면·Q9 ✅: 안내 + [설명 다시 쓰기](질문 1회 확인 단계), Q9 서버(`rewrite/route.ts`: 소유자 404·1회 차감·AI 실패 503 + 환불·기존 설명 유지·요청 해시 비움) `tests/unit/rewrite-route.test.ts`, e2e "필터를 바꾸면 '원래 조건 기준 설명' — [설명 다시 쓰기]…", "AI 장애면 기존 설명을 그대로…". 통합 때 `board-result.ts`를 예림 `loadBoardResult`로 바꾸고, 다시 쓴 뒤 B1이 "ready"로 돌아오는 방법(예림 결정)을 맞춘다 — **결정(예림)**: B1이 `boards.updated_at`과 `analyses.updated_at`(Q9가 이미 올림)을 비교, Q9 변경 없음. `boards-route.test.ts` "필터를 바꾼 뒤…stale, Q9가 다시 쓴 뒤면 ready". `loadBoardResult`는 `@/lib/boards`
-- [ ] 필터 상태가 저장되어 다시 열어도 유지된다 — 🟨 화면 ✅: B1로 불러옴, e2e "필터 상태는 새로 고쳐도 유지된다 (B1)". 저장 ✅(예림): `boards` 표(보드 ID = 분석 ID, RLS 본인 읽기·cascade) `tests/unit/db/boards.test.ts`, B1이 저장된 필터·결과를 돌려줌 `boards-route.test.ts`
+- [x] 기간 필터를 바꾸면 보드의 **모든** 차트·표가 같은 기간으로 다시 계산된다 — 🟨 화면 ✅(현준, 가짜 모드): `BoardPanel`이 B2 결과를 결과 화면 그대로 다시 그림, e2e `board.spec.ts` "기간 프리셋을 바꾸면 모든 분기 차트 제목·표가 같은 기간으로…"(통합 때 켬 — 2026-09-30 임시 연결로 12개 통과 확인). 서버 ✅(예림): B2가 원래 요청에 기간만 덮어써 다시 계산 — `tests/unit/api/boards-route.test.ts` "필터만 덮어써 다시 계산하고 boards에 저장…", 겹치는 분기는 원래 출처·새 분기만 새로 `tests/accuracy/board-recompute.test.ts` "기간을 늘리면 겹치는 분기는 원래 접수번호(C1) 값…" — **통합 ✅(2026-10-01 `integrate/phase3`)**: `AnalysisScreen`에 `BoardPanel`을 끼우고 `board.spec.ts` 12개 켬(1280px·375px 통과), Q9가 `loadBoardResult`로 보드 결과를 읽음(`rewrite-route.test.ts` "필터를 바꾼 보드가 있으면…"). 운영 확인은 WU-499
+- [x] 비교 기업을 추가·삭제하면 비교 차트·표가 함께 바뀐다 — 🟨 화면 ✅: `PeerFilter`(S1 찾기·칩 빼기·최대 5), e2e "비교 기업을 넣으면 기업 비교 차트가 생기고, 빼면 사라진다". 서버 ✅(예림): 분기·연도별 결과에 기업 비교 막대를 더함(합계·비교는 그 차트가 따라 바뀜) `board-recompute.test.ts` "비교 기업을 넣으면 분기별 차트는 대상 그대로 두고 기업 비교 막대를 더한다", 6곳 이상 400 `boards-route.test.ts` — **통합 ✅(2026-10-01 `integrate/phase3`)**: `AnalysisScreen`에 `BoardPanel`을 끼우고 `board.spec.ts` 12개 켬(1280px·375px 통과), Q9가 `loadBoardResult`로 보드 결과를 읽음(`rewrite-route.test.ts` "필터를 바꾼 보드가 있으면…"). 운영 확인은 WU-499
+- [x] 필터 변경은 AI 호출 0건, 질문 수 미차감 — 🟨 화면: e2e "…질문 수는 그대로"(가짜 모드). 서버 ✅(예림): `boards-route.test.ts` "…AI 0건·질문 차감 없음"(AI·질문 수 함수가 불리면 실패하게 막아 둠) — **통합 ✅(2026-10-01 `integrate/phase3`)**: `AnalysisScreen`에 `BoardPanel`을 끼우고 `board.spec.ts` 12개 켬(1280px·375px 통과), Q9가 `loadBoardResult`로 보드 결과를 읽음(`rewrite-route.test.ts` "필터를 바꾼 보드가 있으면…"). 운영 확인은 WU-499
+- [x] 필터 변경 후 분석 글에 "원래 조건 기준 설명" 표시, [설명 다시 쓰기] 시 새 조건으로 다시 작성(1회 차감) — 🟨 화면·Q9 ✅: 안내 + [설명 다시 쓰기](질문 1회 확인 단계), Q9 서버(`rewrite/route.ts`: 소유자 404·1회 차감·AI 실패 503 + 환불·기존 설명 유지·요청 해시 비움) `tests/unit/rewrite-route.test.ts`, e2e "필터를 바꾸면 '원래 조건 기준 설명' — [설명 다시 쓰기]…", "AI 장애면 기존 설명을 그대로…". 통합 때 `board-result.ts`를 예림 `loadBoardResult`로 바꾸고, 다시 쓴 뒤 B1이 "ready"로 돌아오는 방법(예림 결정)을 맞춘다 — **결정(예림)**: B1이 `boards.updated_at`과 `analyses.updated_at`(Q9가 이미 올림)을 비교, Q9 변경 없음. `boards-route.test.ts` "필터를 바꾼 뒤…stale, Q9가 다시 쓴 뒤면 ready". `loadBoardResult`는 `@/lib/boards` — **통합 ✅(2026-10-01 `integrate/phase3`)**: `AnalysisScreen`에 `BoardPanel`을 끼우고 `board.spec.ts` 12개 켬(1280px·375px 통과), Q9가 `loadBoardResult`로 보드 결과를 읽음(`rewrite-route.test.ts` "필터를 바꾼 보드가 있으면…"). 운영 확인은 WU-499
+- [x] 필터 상태가 저장되어 다시 열어도 유지된다 — 🟨 화면 ✅: B1로 불러옴, e2e "필터 상태는 새로 고쳐도 유지된다 (B1)". 저장 ✅(예림): `boards` 표(보드 ID = 분석 ID, RLS 본인 읽기·cascade) `tests/unit/db/boards.test.ts`, B1이 저장된 필터·결과를 돌려줌 `boards-route.test.ts` — **통합 ✅(2026-10-01 `integrate/phase3`)**: `AnalysisScreen`에 `BoardPanel`을 끼우고 `board.spec.ts` 12개 켬(1280px·375px 통과), Q9가 `loadBoardResult`로 보드 결과를 읽음(`rewrite-route.test.ts` "필터를 바꾼 보드가 있으면…"). 운영 확인은 WU-499
 
 ---
 
