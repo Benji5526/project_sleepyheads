@@ -5,6 +5,8 @@ import type { Analysis } from "@/contracts";
 
 // WU-301 계획 카드 (PRD F-T1·T2, TECH §4.6): 복합 질문은 무엇을 할지 먼저 보여 주고, [분석 시작](Q7) 뒤에만 실행한다.
 // [닫기]는 Q8 취소 — 분석은 canceled로 남는다. 승인 전에는 데이터를 불러오지 않는다.
+// Phase 4: [닫기] 뒤 화면이 바뀌지 않고 카드·[분석 시작]이 남던 일(2026-10-01 운영, DB는 canceled)이 있어,
+// 닫기를 마치면 카드가 스스로 버튼을 거두고 "취소했습니다"로 바뀐다 — 화면 새로 고침이 늦거나 빠져도 다시 누를 수 없게.
 export function PlanCard({
   analysis,
   onApprove,
@@ -16,6 +18,7 @@ export function PlanCard({
 }) {
   const titleId = useId();
   const [pending, setPending] = useState<"approve" | "close" | null>(null);
+  const [closed, setClosed] = useState(false);
   const plan = analysis.plan;
   if (!plan) return null;
   const request = analysis.request;
@@ -25,9 +28,30 @@ export function PlanCard({
     setPending(kind);
     try {
       await (kind === "approve" ? onApprove() : onClose());
+      if (kind === "close") setClosed(true);
     } finally {
       setPending(null);
     }
+  }
+
+  if (closed) {
+    // 보통은 부모가 곧바로 "취소한 분석입니다"로 바꿔 이 카드가 사라진다. 남아 있으면 이 안내가 보인다
+    return (
+      <section role="status" className="rounded-xl border border-line bg-surface p-5 sm:p-6">
+        <h2 className="text-lg font-semibold">분석을 취소했습니다</h2>
+        <p className="mt-1 leading-7 text-muted">
+          계획만 보고 닫았습니다. 데이터는 불러오지 않았고 질문 수는 처음 질문할 때 한 번만
+          썼습니다.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-4 h-10 rounded-lg border border-line px-4 font-medium hover:bg-paper"
+        >
+          새로 고침
+        </button>
+      </section>
+    );
   }
 
   return (

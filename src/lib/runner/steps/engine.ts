@@ -527,6 +527,8 @@ async function finish(
   rows: StepRow[],
   deps: EngineDeps,
   stop: StopReason | null,
+  /** 실행 기록의 멈춘 이유 (없으면 상한 문구) */
+  note?: string,
 ): Promise<StepResult> {
   const completed = completedSteps(rows);
   const built = outputsOf(completed, "build_result").at(-1);
@@ -546,7 +548,7 @@ async function finish(
         outputSummary: null,
         output: null,
         durationMs: null,
-        errorReason: STOP_MESSAGE[stop] ?? stop,
+        errorReason: note ?? STOP_MESSAGE[stop] ?? stop,
         externalCalls: 0,
         llmCostUsd: 0,
         startedAt: null,
@@ -612,4 +614,58 @@ export async function runStepRequest(analysisId: string, deps: EngineDeps): Prom
     result = await runOneStep(analysisId, deps);
   }
   return result;
+}
+
+/**
+ * WU-501: 이만큼 아무 단계도 시작·진행하지 않은 실행 대기·실행 중 분석은 끊긴 것으로 본다 (창을 닫고 돌아오지 않음 등).
+ * 이 시간 안에 다시 열면 지금처럼 마지막 성공 단계 다음부터 이어서 한다(복구). HANDOFF §0.4 "오래된 running 정리"
+ */
+export const IDLE_RUN_EXPIRE_MS = 60 * 60_000;
+
+const IDLE_NOTE = "오래 진행되지 않아 정리함 (창을 닫은 뒤 1시간 넘게 이어지지 않음)";
+
+/**
+ * 이 회원의 오래 멈춘 `queued`·`running` 분석을 끝낸다: 결과 단계까지 했으면 부분 결과, 아니면 실패(TIMEOUT).
+ * 실행 중인 단계(최근에 시작했거나 아직 시간이 남은 단계)가 있으면 건드리지 않는다. 상태 조건부 갱신이라
+ * 그사이 다른 요청이 이어서 실행하면(복구) 그쪽이 이긴다. 질문(Q1) 때마다 그 회원 것만 본다.
+ * @returns 정리한 분석 수
+ */
+export async function expireIdleRuns(
+  ownerId: string,
+  // 도구는 부르지 않는다 — 질문 경로(Q1)가 도구 모듈(무거운 수집·AI 코드)을 불러오지 않게 저장소만 받는다
+  options: Pick<EngineDeps, "store" | "now">,
+  idleMs = IDLE_RUN_EXPIRE_MS,
+): Promise<number> {
+  const deps = { ...options, tools: {} as ToolTable, client: {} as SupabaseClient };
+  const now = deps.now ?? Date.now;
+  const cutoff = now() - idleMs;
+  const ids = await deps.store.listIdleRuns(ownerId, new Date(cutoff).toISOString());
+  let expired = 0;
+  for (const id of ids) {
+    const analysis = await deps.store.loadAnalysis(id);
+    if (!analysis || (analysis.status !== "queued" && analysis.status !== "running")) continue;
+    const rows = await deps.store.listSteps(id);
+    // 최근에 시작한 단계가 있으면 아직 실행 중일 수 있다 (긴 수집 단계 — Q4 최대 300초)
+    const active = rows.some(
+      (r) =>
+        r.startedAt &&
+        Date.parse(r.startedAt) + Math.max(r.durationMs ?? 0, STALE_RUNNING_MS) > cutoff,
+    );
+    if (active) continue;
+    const plan = analysis.plan ?? (analysis.request ? buildStoredPlan(analysis.request) : null);
+    const built = outputsOf(completedSteps(rows), "build_result").length > 0;
+    if (plan && built) {
+      // 결과까지 만들었으면 그 결과를 살려 부분 결과로 (분석 글 앞에서 끊긴 경우)
+      await finish(analysis, plan, rows, deps, "TIMEOUT", IDLE_NOTE);
+      expired += 1;
+      continue;
+    }
+    // 결과가 없으면 실패로 — "부분 결과"인데 보여 줄 것이 없는 화면이 되지 않게
+    const done = await deps.store.updateAnalysis(id, { status: "failed", stop_reason: "TIMEOUT" }, [
+      "queued",
+      "running",
+    ]);
+    if (done) expired += 1;
+  }
+  return expired;
 }

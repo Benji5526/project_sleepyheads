@@ -101,17 +101,17 @@
 |---|---|---|---|---|---|
 | WU-401 | 분석 보드·필터 연동·설명 다시 쓰기 | 🤖 | L | WU-399 | ✅ Phase 3 병합(화면·Q9 현준 + 서버 B1·B2·`boards`·SQL 집계 예림, 통합 2026-10-01) — 운영 확인 WU-499 |
 | WU-402 | 차트 규격 완성·표 보기·용어 설명 | 🤖 | M | WU-401 | ✅ Phase 3 병합 — 분석 글(결론·투자 포인트) 용어 설명도 통합 때 붙임 |
-| WU-403 | 대용량 성능 측정·처리 한도 | 🤖 | M | WU-401 | 🟨 측정·한도 완료(Phase 3 병준) — 예림 집계 함수 `aggregate_sector_metrics`로 재측정·운영 30초 확인은 Phase 4 병준 |
+| WU-403 | 대용량 성능 측정·처리 한도 | 🤖 | M | WU-401 | ✅ (Phase 4 병준: 집계 함수로 재측정, 운영 30초 57014 확인) |
 | **WU-499** | **Step 4 통과 테스트·배포 시연** | 👤🤖 | M | WU-401~403 | ⬜ Phase 4 시작 직후 현준 (`STEP4_PASS_TEST.md`) |
 
 ### Step 5 — 확장·운영 준비
 | WU | 이름 | 담당 | 규모 | 선행 | 상태 |
 |---|---|---|---|---|---|
-| WU-501 | 작업 큐 보강 (복구·중복 방지·장시간 취소) | 🤖 | M | WU-499 | ⬜ |
+| WU-501 | 작업 큐 보강 (복구·중복 방지·장시간 취소) | 🤖 | M | WU-499 | 🟨 코드·DB 테스트 완료(Phase 4 A), 운영 확인 WU-599 |
 | WU-502 | 재무+주가 결합 (시가총액·PER·PBR, 키 중복·행 증가 검증) | 🤖 | L | WU-499 | ⬜ |
 | WU-503 | 회귀 테스트 세트 (질문 10개 이상) | 🤖 | M | WU-501, WU-502 | ⬜ |
 | WU-504 | 프롬프트 주입 방어 검증 | 🤖 | M | WU-503 | ⬜ |
-| WU-505 | 배포 전 보안·운영 점검 (8항목) | 👤🤖 | M | WU-504 | ⬜ |
+| WU-505 | 배포 전 보안·운영 점검 (8항목) | 👤🤖 | M | WU-504 | 🟨 자동 점검 완료([SECURITY_CHECK](./SECURITY_CHECK.md)), 대시보드 확인 👤 현준 |
 | WU-506 | README·운영 문서 | 🤖 | S | WU-505 | ⬜ |
 | **WU-599** | **Step 5 통과 테스트·최종 시연·사용자 테스트** | 👤🤖 | M | WU-501~506 | ⬜ |
 
@@ -875,7 +875,7 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 **완료조건**
 - [x] 가상 데이터 약 12만 행(상장사 2,700곳 × 44개 분기 규모)을 테스트 DB에 넣었다 (실제 API 호출 없이) — `report_values` 모양 **118,800행**을 PGlite에 SQL `generate_series`로 넣음(2.3초, 운영 DB 아님). 근거: `tests/perf/synthetic-db.ts`, `tests/perf/aggregate.perf.test.ts` "상장사 2,700곳 × 44개 분기 ≈ 12만 행…"
 - [x] 섹터별·연도별 집계의 **실행 환경·행 수·집계 시간·메모리·차트 응답 시간**을 측정해 `tests/perf/` 결과표로 남겼다 — [`tests/perf/RESULTS.md`](../tests/perf/RESULTS.md): 섹터별×연도별 DB 안 집계 428ms·서버 힙 1.1MB·374행 반환, 차트 응답 400ms(374점). 원자료 `tests/perf/results.json`. 실행 `npx vitest run -c tests/perf/vitest.config.mts`(`pnpm test`·CI 제외)
-- [ ] 집계가 DB 안에서 SQL로 처리된다 (서버로 12만 행을 가져오지 않음) — 같은 모양의 SQL로 확인: DB 안 집계 428ms·1.1MB·24KB vs 서버로 가져오기 1,201ms·99.5MB·15.6MB. **실제 경로(B2)는 예림님 집계 DB 함수가 들어온 뒤** 통합에서 그 함수로 다시 재고 체크
+- [x] 집계가 DB 안에서 SQL로 처리된다 (서버로 12만 행을 가져오지 않음) — **보드 B2와 같은 DB 함수 `aggregate_sector_metrics`**로 다시 잼(Phase 4): 섹터별×연도별 815ms·서버 힙 1.6MB·45KB(374행) vs 원자료를 서버로 가져오기 1,634ms·92.3MB·15.1MB. 운영 Postgres `statement_timeout`이 57014로 끊는 것 확인(읽기 조회). 근거: [`tests/perf/RESULTS.md`](../tests/perf/RESULTS.md)
 - [x] 15만 행 초과 요청은 `TOO_LARGE`로 거절되고 줄이는 방법이 안내된다 — `assertAggregateSize`가 413 + "기간을 27분기 이하로, 또는 기업을 1,704곳 이하로"처럼 한쪽만 줄여도 되는 숫자를 안내(`details`에도). 행 수 추정 = 실제(118,800). 근거: `tests/unit/limits-size.test.ts`(8), perf "15만 행 한도…". 30초 상한은 `aggregateTimeoutError()`(PGlite는 `statement_timeout`을 지키지 않아 운영 Postgres에서 확인)
 - [x] 차트 점 500개 초과 시 묶음 단위를 키우라는 안내가 나온다 — `chartPointsNotice`: 섹터별×분기별 1,496점 → "분기에서 연도로 키우거나…", 섹터별×연도별 374점은 안내 없음. 근거: `limits-size.test.ts` "차트 점 500개", perf "분기 단위로 섹터별을 그리면…"
 
@@ -903,11 +903,11 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 | 선행 | WU-499 |
 
 **완료조건**
-- [ ] 실행 중 창을 닫았다 다시 열면 **마지막 성공 단계 다음부터** 이어서 실행된다
-- [ ] 같은 단계를 동시에 두 번 호출해도 한 번만 실행된다 (DB 잠금 테스트)
-- [ ] 같은 멱등키로 질문을 두 번 제출하면 분석이 하나만 생긴다
-- [ ] 장시간 작업 중 취소 시 이후 외부 호출 0건, `running` 상태로 남은 분석이 없다
-- [ ] 외부 API 한도 초과 흉내 시 분석이 `failed`로 끝나고 재시도가 반복되지 않는다
+- [x] 실행 중 창을 닫았다 다시 열면 **마지막 성공 단계 다음부터** 이어서 실행된다 — 근거: `tests/unit/queue-engine.test.ts`(실제 Postgres·PGlite) "창을 닫았다 다시 열면(새 요청)…", `steps-engine.test.ts` "복구"
+- [x] 같은 단계를 동시에 두 번 호출해도 한 번만 실행된다 (DB 잠금 테스트) — `analysis_steps (analysis_id, seq)` 고유 키 + 상태·시작 시각 조건부 갱신(운영 store.ts와 같은 SQL). 근거: `queue-engine.test.ts` "같은 단계를 동시에 두 번 불러도 한 번만…"(두 요청 동시, 도구 1회·단계 줄 1개)
+- [x] 같은 멱등키로 질문을 두 번 제출하면 분석이 하나만 생긴다 — `analyses (owner_id, idempotency_key)` 고유 + Q1 차감 기록(WU-114·Phase 1 후속). 근거: `queue-engine.test.ts` "같은 멱등키로 두 번 제출해도 분석은 하나", `tests/unit/api/ask-duplicate.test.ts`
+- [x] 장시간 작업 중 취소 시 이후 외부 호출 0건, `running` 상태로 남은 분석이 없다 — 실행 중이던 단계 결과는 버림(`skipped`), 이후 Q4는 도구 0건 409. **오래된 running 정리 규칙**(HANDOFF §0.4): 1시간 넘게 아무 단계도 진행하지 않은 `queued`·`running`은 질문(Q1) 때 그 회원 것을 정리(결과가 있으면 부분 결과, 없으면 실패 TIMEOUT). 근거: `queue-engine.test.ts` "장시간 단계 중 취소…", "1시간 넘게…", "방금 시작한 긴 단계가 있으면…", "결과 단계까지 끝났으면…". 운영에 지금 1시간 넘은 `running` 2건 — 병합 뒤 그 회원의 다음 질문에서 정리(WU-599에서 확인)
+- [x] 외부 API 한도 초과 흉내 시 분석이 `failed`로 끝나고 재시도가 반복되지 않는다 — 재시도 대상이 아닌 실패는 1회로 끝, 다시 열어도 도구 0건. 근거: `queue-engine.test.ts` "외부 API 한도 초과 흉내…". ※ OpenDART 020(요청 제한 초과)은 지금 도구(`data-tools`, 예림)가 재시도 대상으로 돌려줘 2회 더 시도한다(두 번째부터는 "오늘 이미 차단"으로 외부 호출 없이 바로 실패) — 예림님께 부탁
 
 ---
 
@@ -973,17 +973,17 @@ Vercel 무료 플랜 실행 시간 실측(T3)은 미완.
 | 담당 / 규모 | 👤 현준님(대시보드 설정 확인) + 🤖 / M |
 
 **완료조건 — 배포 전 보안·운영 체크리스트 8항목**
-- [ ] **① 키 관리**: 브라우저 번들에 Supabase publishable key 외 키가 없다 (빌드 결과 검색). 한 번이라도 노출된 키는 재발급
+- [x] **① 키 관리**: 브라우저 번들에 Supabase publishable key 외 키가 없다 (빌드 결과 검색). 한 번이라도 노출된 키는 재발급 — `scripts/security-check.mjs`: 빌드 결과 21개·**운영 JS 11개** 0건, 노출 없음 → 재발급 없음 ([SECURITY_CHECK](./SECURITY_CHECK.md) ①)
 - [ ] **② 이메일 확인·SMTP**: 해당 없음(구글 로그인 단일). Supabase **이메일 가입이 꺼져 있음** 확인
 - [ ] **③ 비밀번호 정책**: 해당 없음. Supabase **비밀번호 로그인이 꺼져 있음** 확인
 - [ ] **④ 남용 방어**: 분당 제한·회원별 한도·전체 한도·질문당 상한이 배포 주소에서 동작
-- [ ] **⑤ 접근 제어**: 모든 테이블 RLS, Security Advisor 경고 0건, 특수 권한 DB 함수(`consume_quota` 등)는 필요한 역할에만 실행 권한
+- [ ] **⑤ 접근 제어**: 모든 테이블 RLS, Security Advisor 경고 0건, 특수 권한 DB 함수(`consume_quota` 등)는 필요한 역할에만 실행 권한 — 🤖 32개 표 모두 RLS, SECURITY DEFINER 8개는 service_role만(anon·authenticated 없음). Advisor WARN 2개는 근거를 적어 남김(`pg_trgm` public — 시연 뒤 옮기기 안건, 유출 비밀번호 보호 — 비밀번호 로그인 없음). "경고 0건"은 아니라 체크하지 않음 ([SECURITY_CHECK](./SECURITY_CHECK.md) ⑤)
 - [ ] **⑥ 주소 설정**: Supabase Site URL·Redirect URL 허용 목록, 구글 OAuth 승인된 리디렉션 주소가 운영 주소와 정확히 일치. HTTPS 확인
 - [ ] **⑦ 운영 기본기**: 무료 플랜 백업 제공 여부 확인, 없으면 DB 수동 백업 1회 + 복구 리허설. 탈퇴 시 파기 동작 확인
 - [ ] **⑧ 무료 티어 한계**: TECH §2.1 한도별 현재 사용량 확인 (Vercel CPU, Supabase 용량, OpenDART·주가·Google 뉴스 RSS 호출 수, OpenAI 비용). **Supabase 1주일 미사용 일시정지** 대응을 운영 문서에 기록
 - [ ] OpenAI 월 예산 상한 설정 확인
-- [ ] 저장소 전체·커밋 기록에 비밀 값 없음 (비밀 값 검사 도구)
-- [ ] 뉴스 본문이 DB·로그 어디에도 저장되지 않음 재확인
+- [x] 저장소 전체·커밋 기록에 비밀 값 없음 (비밀 값 검사 도구) — `security-check.mjs` 작업 트리 484개·커밋 170개 0건, `pnpm dlx @secretlint/quick-start` 1건은 테스트의 가짜 주소(오탐)
+- [x] 뉴스 본문이 DB·로그 어디에도 저장되지 않음 재확인 — 운영 `news_clues`·`news_search_cache`에 본문 모양 칸 0개, `src/lib/news` 로그는 건수·토큰·오류만
 
 ---
 

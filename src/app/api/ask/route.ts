@@ -24,6 +24,8 @@ import {
   takeOverStaleConsumption,
   type SettledOutcome,
 } from "@/lib/quota/question-quota";
+import { expireIdleRuns } from "@/lib/runner/steps/engine";
+import { createSupabaseEngineStore } from "@/lib/runner/steps/store";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { SessionClient } from "@/lib/supabase/server";
 
@@ -77,6 +79,11 @@ export const POST = route(
     if (await hasReachedDeclineLimit(userId, admin)) {
       throw new HttpError("DECLINE_LIMIT", undefined, { resetAt: nextKstMidnight() });
     }
+
+    // WU-501: 이 회원의 오래 멈춘 실행 대기·실행 중 분석을 정리한다(목록에 "분석 중"으로 남지 않게). 실패해도 질문은 계속
+    await expireIdleRuns(userId, { store: createSupabaseEngineStore(admin, supabase) }).catch(
+      (expireError) => console.warn(`[${ctx.requestId}] 오래 멈춘 분석 정리 실패:`, expireError),
+    );
 
     let alreadyConsumed = await consumeOrThrow(userId, idempotencyKey, admin);
 
