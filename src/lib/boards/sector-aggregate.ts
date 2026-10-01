@@ -6,8 +6,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Quarter } from "@/contracts";
 import { quarterSpan } from "@/lib/ask/quarter";
-import { HttpError } from "@/lib/api/errors";
-import { assertAggregateSize } from "@/lib/limits/size";
+import {
+  aggregateTimeoutError,
+  assertAggregateSize,
+  isAggregateTimeout,
+  MAX_AGGREGATE_SECONDS,
+} from "@/lib/limits/size";
 import { CALC_VERSION } from "@/lib/metrics/types";
 
 /** 더할 수 있는 금액 지표 (비율·잔액은 더하면 뜻이 없다 — DB 함수도 같은 목록만 받는다) */
@@ -19,34 +23,8 @@ export const SUMMABLE_SECTOR_METRICS = [
 ] as const;
 export type SummableSectorMetric = (typeof SUMMABLE_SECTOR_METRICS)[number];
 
-/** 집계 실행 시간 상한 (TECH §12.5 "집계 실행 시간 30초 — 중단 + 안내") */
-export const AGGREGATE_TIMEOUT_MS = 30_000;
-
-/**
- * 집계가 시간 상한에 걸렸는가 — 서버가 요청을 끊었거나(AbortSignal.timeout → TimeoutError/AbortError),
- * DB가 statement_timeout으로 멈췄거나(57014 query_canceled).
- * 통합 때 병준님 `@/lib/limits`의 `isAggregateTimeout`이 생기면 그것으로 바꾼다.
- */
-function isAggregateTimeoutError(error: {
-  code?: string;
-  message?: string;
-  name?: string;
-}): boolean {
-  return (
-    error.code === "57014" ||
-    error.name === "TimeoutError" ||
-    error.name === "AbortError" ||
-    /TimeoutError|AbortError|statement timeout|canceling statement/i.test(error.message ?? "")
-  );
-}
-
-/** 시간 상한 초과 안내 — 413 TOO_LARGE. 통합 때 병준님 `aggregateTimeoutError()`로 바꾼다 */
-function aggregateTimeout(): HttpError {
-  return new HttpError(
-    "TOO_LARGE",
-    `집계가 ${AGGREGATE_TIMEOUT_MS / 1000}초 안에 끝나지 않아 중단했습니다. 기간이나 기업 수를 줄여 주세요.`,
-  );
-}
+/** 집계 실행 시간 상한 (TECH §12.5 "집계 실행 시간 30초 — 중단 + 안내", `@/lib/limits/size`) */
+export const AGGREGATE_TIMEOUT_MS = MAX_AGGREGATE_SECONDS * 1000;
 
 export interface SectorAggregateParams {
   from: Quarter;
@@ -111,12 +89,12 @@ export async function aggregateSectorMetrics(
       })
       .abortSignal(AbortSignal.timeout(AGGREGATE_TIMEOUT_MS));
   } catch (err) {
-    if (err instanceof Error && isAggregateTimeoutError(err)) throw aggregateTimeout();
+    if (isAggregateTimeout(err)) throw aggregateTimeoutError();
     throw err;
   }
   const { data, error } = response;
   if (error) {
-    if (isAggregateTimeoutError(error)) throw aggregateTimeout();
+    if (isAggregateTimeout(error)) throw aggregateTimeoutError();
     throw new Error(`섹터 합계 계산 실패: ${error.message}`);
   }
   return ((data ?? []) as RpcRow[]).map((row) => ({

@@ -88,6 +88,11 @@ describe("집계 30초 상한", () => {
     expect(isAggregateTimeout({ code: "23505" })).toBe(false);
     expect(isAggregateTimeout(new Error("x"))).toBe(false);
     expect(isAggregateTimeout(null)).toBe(false);
+    // 서버가 AbortSignal.timeout으로 끊은 경우도 (예림 aggregateSectorMetrics)
+    expect(isAggregateTimeout(new DOMException("signal timed out", "TimeoutError"))).toBe(true);
+    expect(isAggregateTimeout({ message: "TimeoutError: signal timed out" })).toBe(true);
+    // 연결이 끊긴 것(AbortError)은 시간 초과가 아니다 — "줄여 주세요" 안내를 하지 않는다
+    expect(isAggregateTimeout({ name: "AbortError", message: "aborted" })).toBe(false);
     const error = aggregateTimeoutError();
     expect(error.code).toBe("TOO_LARGE");
     expect(error.message).toContain("30초");

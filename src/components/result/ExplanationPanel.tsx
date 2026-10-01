@@ -1,5 +1,6 @@
 import type { Chart, Explanation, InsightKind } from "@/contracts";
 import { RewriteSlot } from "@/components/board/rewrite-context";
+import { TermText } from "@/components/glossary/Term";
 import { isWebUrl } from "@/lib/news/web-url";
 
 const KIND: Record<InsightKind, { label: string; className: string }> = {
@@ -120,7 +121,10 @@ export function ExplanationPanel({
           </h3>
           <div className="space-y-1.5 text-[17px] font-medium leading-7 sm:text-lg sm:leading-8">
             {explanation.conclusion.map((sentence) => (
-              <p key={sentence}>{sentence}</p>
+              // 재무 용어에 한 줄 설명 (WU-402 — Phase 3 통합 때 분석 글에도)
+              <p key={sentence}>
+                <TermText text={sentence} />
+              </p>
             ))}
           </div>
         </section>
@@ -140,7 +144,7 @@ export function ExplanationPanel({
                     >
                       {KIND[insight.kind].label}
                     </span>
-                    {insight.text}
+                    <TermText text={insight.text} />
                     {insight.inferred && (
                       <span
                         className="ml-1.5 whitespace-nowrap text-xs text-muted"

@@ -135,7 +135,9 @@ export function BoardPanel({
   const applyPeriod = (p: Period) => void apply({ period: p, peers: peerCodes });
   const applyPeers = (next: Peer[], added?: CompanyRef) => {
     if (added) setNames((prev) => ({ ...prev, [added.stockCode]: added.name }));
-    void apply({ period, peers: next.map((p) => p.stockCode) });
+    // 기간은 사용자가 바꾼 적이 있을 때만 보낸다. 원래 기간을 그대로 보내면 그 사이 조회 범위 규칙이 바뀐 옛 분석
+    // (예: 10/1 배포 전 "2026Q3"까지 잡힌 분석)이 비교 기업만 바꿔도 범위 밖(422)으로 거절된다 (Phase 3 통합)
+    void apply({ period: board.filters.period, peers: next.map((p) => p.stockCode) });
   };
 
   // 같은 [설명 다시 쓰기]를 다시 누르면(응답을 못 받은 경우 등) 같은 멱등키 — 서버가 두 번 차감하지 않는다.

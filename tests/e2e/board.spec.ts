@@ -2,10 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 // WU-401 분석 보드: 필터 막대(기간·비교 기업) → 모든 차트·표가 같은 조건으로, "원래 조건 기준 설명" + [설명 다시 쓰기].
 // 가짜 모드(src/lib/api-client/mock-boards.ts)로 돈다.
-// 통합 때 ResultView에 끼운 뒤 켠다 — 지금은 결과 화면(ResultView·AnalysisScreen, 잠금)에 BoardPanel이 없어
-// 화면에서 닿을 수 없다. 끼우는 자리는 DevelopDoc/phase3 현준 보고서 "끼울 곳"에 적었다.
 test.describe.configure({ mode: "parallel" });
-test.skip(true, "통합 때 ResultView에 끼운 뒤 켠다");
 
 async function openBoard(page: Page) {
   await page.goto("/");

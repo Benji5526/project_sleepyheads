@@ -10,7 +10,7 @@ import { HttpError } from "@/lib/api/errors";
 export const MAX_AGGREGATE_ROWS = 150_000;
 /** 차트 한 개의 점 수 상한 — 넘으면 거절이 아니라 "묶음 단위를 키우세요" 안내 */
 export const MAX_CHART_POINTS = 500;
-/** 집계 한 번의 실행 시간 상한 (TECH §12.5) — DB 함수는 `set local statement_timeout`에 이 값을 쓴다 */
+/** 집계 한 번의 실행 시간 상한 (TECH §12.5) — 서버가 이 시간에 DB 함수 호출을 끊는다(`boards/sector-aggregate.ts`) */
 export const MAX_AGGREGATE_SECONDS = 30;
 /** Postgres `statement_timeout` 값 ("30s") */
 export const AGGREGATE_STATEMENT_TIMEOUT = `${MAX_AGGREGATE_SECONDS}s`;
@@ -66,13 +66,17 @@ export function chartPointsNotice(points: number): string | null {
     : null;
 }
 
-/** Postgres가 `statement_timeout`으로 집계를 멈췄는가 (SQLSTATE 57014 query_canceled) */
+/** 집계가 30초 상한에 걸렸는가 — Postgres `statement_timeout`(SQLSTATE 57014) 또는 서버 쪽 요청 끊기(AbortSignal.timeout) */
 export function isAggregateTimeout(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const { code, name, message } = err as { code?: unknown; name?: unknown; message?: unknown };
+  // DB가 statement_timeout으로 멈췄거나(57014), 서버가 AbortSignal.timeout으로 요청을 끊었거나(TimeoutError —
+  // supabase-js는 "TimeoutError: signal timed out" 문구로 돌려준다). 그냥 AbortError(연결 끊김 등)는 시간 초과가 아니다
   return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: unknown }).code === "57014"
+    code === "57014" ||
+    name === "TimeoutError" ||
+    (typeof message === "string" &&
+      /TimeoutError|statement timeout|canceling statement/i.test(message))
   );
 }
 

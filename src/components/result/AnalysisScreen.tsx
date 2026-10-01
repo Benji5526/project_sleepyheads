@@ -21,7 +21,7 @@ import { ClarificationCard } from "./ClarificationCard";
 import { DiagnosisPanel } from "./DiagnosisPanel";
 import { DeclineCard } from "./DeclineCard";
 import { PlanCard } from "./PlanCard";
-import { ResultView } from "./ResultView";
+import { BoardPanel } from "@/components/board/BoardPanel";
 import { RunProgress } from "./RunProgress";
 import { StatusCard, describeStatus } from "./StatusCard";
 import { StepLog } from "./StepLog";
@@ -300,10 +300,14 @@ function AnalysisBody({
 
           {(analysis.status === "succeeded" || analysis.status === "partial") &&
             analysis.result && (
-              <ResultView
+              // WU-401 분석 보드 — 필터 막대 + 결과(ResultView를 감싸 그린다). 분석이 바뀌면 보드 상태도 새로
+              <BoardPanel
+                key={analysis.id}
+                analysisId={analysis.id}
                 result={analysis.result}
                 explanation={analysis.explanation}
                 groupBy={analysis.request?.groupBy}
+                peers={analysis.request?.peers}
               />
             )}
 

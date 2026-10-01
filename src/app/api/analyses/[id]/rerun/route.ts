@@ -37,6 +37,8 @@ interface OriginalRow {
   explanation: Explanation | null;
   diagnoses: Diagnosis[] | null;
   dataset_version_id: string | null;
+  /** 분석 요청 해시. 비어 있으면 Q9(설명 다시 쓰기)가 보드 조건 기준으로 설명을 다시 쓴 분석이다 */
+  request_hash: string | null;
 }
 
 // Q6 POST /api/analyses/:id/rerun 🔑 🛡️ — API_SPEC §4 (WU-202)
@@ -63,7 +65,7 @@ export const POST = route(
     const { data, error } = await supabase
       .from("analyses")
       .select(
-        "id, owner_id, project_id, question, status, mixed_scope, analysis_request, result, explanation, diagnoses, dataset_version_id",
+        "id, owner_id, project_id, question, status, mixed_scope, analysis_request, result, explanation, diagnoses, dataset_version_id, request_hash",
       )
       .eq("id", ctx.params.id)
       .maybeSingle();
@@ -130,9 +132,11 @@ export const POST = route(
       const result = outcome.result;
       result.basis.newerDataVersionAvailable = await isNewerDataAvailable(admin, version.sources);
       const same = sameNumbers(original.result, result);
-      // 숫자가 같으면 설명도 그대로 맞다. 다르면(있어서는 안 되는 경우) 옛 설명을 "갱신 필요"로 표시한다
+      // 숫자가 같으면 설명도 그대로 맞다. 다르면(있어서는 안 되는 경우) 옛 설명을 "갱신 필요"로 표시한다.
+      // 설명을 보드 조건으로 다시 쓴 분석(Q9가 request_hash를 비움)도 — 다시 계산한 원래 숫자와 맞지 않는다 (Phase 3 통합)
+      const rewrittenForBoard = original.request_hash === null;
       const explanation =
-        original.explanation && !same
+        original.explanation && (!same || rewrittenForBoard)
           ? { ...original.explanation, status: "stale" as const }
           : original.explanation;
 

@@ -227,6 +227,7 @@ beforeEach(() => {
     explanation: EXPLANATION,
     diagnoses: [],
     dataset_version_id: VERSION,
+    request_hash: "request-hash",
   };
   state.existingByKey = null;
   state.inserts = [];
@@ -267,6 +268,13 @@ describe("POST /api/analyses/:id/rerun (WU-202)", () => {
     state.rerunValue = 101;
     const res = await rerun(false);
     expect((await res.json()).data.sameNumbers).toBe(false);
+    expect((state.inserts[0].explanation as { status: string }).status).toBe("stale");
+  });
+
+  it("설명을 보드 조건으로 다시 쓴 분석(Q9가 request_hash를 비움)은 숫자가 같아도 설명을 '갱신 필요'로", async () => {
+    state.original!.request_hash = null;
+    const res = await rerun(false);
+    expect((await res.json()).data.sameNumbers).toBe(true);
     expect((state.inserts[0].explanation as { status: string }).status).toBe("stale");
   });
 

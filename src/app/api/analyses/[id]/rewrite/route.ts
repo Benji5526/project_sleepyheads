@@ -1,6 +1,7 @@
 import type { Explanation } from "@/contracts";
 import { HttpError } from "@/lib/api/errors";
 import { ownedOrNotFound } from "@/lib/api/guards";
+import { loadBoardResult } from "@/lib/boards";
 import { ok } from "@/lib/api/respond";
 import { route } from "@/lib/api/route";
 import { generateExplanationWithUsage } from "@/lib/explain/generate";
@@ -10,7 +11,6 @@ import {
   refundQuestionQuota,
 } from "@/lib/quota/question-quota";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { loadBoardResultForRewrite } from "./board-result";
 
 // API_SPEC §8.2
 export const maxDuration = 60;
@@ -47,7 +47,7 @@ export const POST = route(
     if (analysis.status !== "succeeded" && analysis.status !== "partial") {
       throw new HttpError("INVALID_STATE", "결과가 있는 분석만 설명을 다시 쓸 수 있습니다.");
     }
-    const result = await loadBoardResultForRewrite(analysis.id, supabase);
+    const result = await loadBoardResult(analysis.id, supabase);
     if (!result) {
       throw new HttpError("INVALID_STATE", "결과가 있는 분석만 설명을 다시 쓸 수 있습니다.");
     }

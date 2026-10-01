@@ -36,6 +36,8 @@ const RESULT = { basis: { flags: [] }, figures: {}, charts: [] } as unknown as R
 const state = vi.hoisted(() => ({
   row: null as Record<string, unknown> | null,
   boardResult: null as unknown,
+  /** boards 행 (없으면 null — 필터를 한 번도 바꾸지 않았다) */
+  boardRow: null as Record<string, unknown> | null,
   updates: [] as Record<string, unknown>[],
   consumed: 0,
   refunded: 0,
@@ -57,7 +59,8 @@ vi.mock("@/lib/supabase/server", () => ({
         eq: () => builder,
         maybeSingle: async () => {
           if (table === "profiles") return { data: { agreed_terms_at: "2026-09-29" }, error: null };
-          // 보드 결과 읽기(board-result.ts)는 result만 고른다
+          // 보드 결과 읽기(@/lib/boards loadBoardResult): boards 행이 있으면 그 결과, 없으면 분석의 result
+          if (table === "boards") return { data: state.boardRow, error: null };
           if (columns === "result") return { data: { result: state.boardResult }, error: null };
           return { data: state.row, error: null };
         },
@@ -136,6 +139,7 @@ beforeEach(() => {
     explanation: OLD,
   };
   state.boardResult = RESULT;
+  state.boardRow = null;
   state.updates = [];
   state.consumed = 0;
   state.refunded = 0;
@@ -158,6 +162,14 @@ describe("POST /api/analyses/:id/rewrite (Q9, WU-401)", () => {
     // 보드 결과로 쓰고, 뉴스는 새로 찾지 않고 기존 단서를 넘긴다
     expect(state.generateInputs[0].result).toBe(RESULT);
     expect(state.generateInputs[0].newsClues).toEqual(OLD.newsClues);
+  });
+
+  it("필터를 바꾼 보드가 있으면 그 다시 계산한 결과로 쓴다 (loadBoardResult)", async () => {
+    const boardResult = { ...RESULT, charts: [{ id: "c1" }] } as unknown as ResultObject;
+    state.boardRow = { filters: { period: { from: "2025Q1", to: "2026Q2" } }, result: boardResult };
+    const res = await rewrite();
+    expect(res.status).toBe(200);
+    expect(state.generateInputs[0].result).toBe(boardResult);
   });
 
   it("남의 분석이면 404 — 질문 수를 쓰지 않고 AI도 부르지 않는다", async () => {
