@@ -635,7 +635,7 @@ interface Analysis {
 | `wait_preprocess` | 진단 카드 표시 → Q5 |
 
 - 취소된 분석이면 `409 INVALID_STATE` (외부 호출 없음).
-- 구현 (WU-302, `src/lib/runner/steps/engine.ts`): 계획(`analyses.plan`)의 다음 단계 하나를 `TOOLS[도구]`로 실행하고 `analysis_steps`에 남긴다. **단순 질문은 한 요청 안에서 끝까지**, 복합 질문은 한 요청에 한 단계. 계획 없이 `queued`가 된 분석(되묻기 답·최신 데이터 재분석)은 여기서 계획을 만들고, 복합이면 `awaiting_approval`로 돌려 `next: "done"`(화면이 계획 카드를 보여 줌).
+- 구현 (WU-302, `src/lib/runner/steps/engine.ts`): 계획(`analyses.plan`)의 다음 단계 하나를 `TOOLS[도구]`로 실행하고 `analysis_steps`에 남긴다. **단순 질문은 한 요청 안에서 끝까지**(다만 한 요청이 8초를 넘으면 남은 단계 전에 `next: "step"`으로 돌아가 화면이 진행 상태를 보여 준다 — 처음 조회하는 기업, WU-399 §2.1·Phase 3), 복합 질문은 한 요청에 한 단계. 그래서 화면은 단순 질문도 `next`가 `"step"`이면 Q4를 다시 부른다. 계획 없이 `queued`가 된 분석(되묻기 답·최신 데이터 재분석)은 여기서 계획을 만들고, 복합이면 `awaiting_approval`로 돌려 `next: "done"`(화면이 계획 카드를 보여 줌).
 - 같은 단계를 다른 요청이 실행 중이면 실행하지 않고 `status: "running"`, `lastStep.status: "running"`, `next: "step"` — 화면은 잠깐 기다렸다 다시 부른다. 맡은 요청이 끊겨 320초 넘게 `running`인 단계는 다음 요청이 재시도 1회로 세고 다시 맡는다.
 - 재시도(외부 API 오류·시간 초과, `max_retries_per_step`)는 다음 Q4에서 한다. 선택 단계(`get_peers`·`get_disclosures`·`search_news`)는 끝내 실패해도 건너뛰고 계속, 필수 단계가 실패하면 `failed`(결과가 이미 있으면 `partial`).
 - 상한은 다음 단계를 시작하기 전에 검사한다: 단계 수·AI 비용은 모든 질문, 실행 시간(단계 시간 합)은 복합 질문만 → `partial` + `stopReason`.

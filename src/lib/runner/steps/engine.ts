@@ -312,12 +312,96 @@ export async function runOneStep(analysisId: string, deps: EngineDeps): Promise<
   return afterFinalFailure(analysis, plan, next, deps, outcome.retryable);
 }
 
+/** 뉴스 단계를 "분석 글 재사용 예정"으로 건너뛰었다는 표시 (search_news 결과 notes) */
+export const NEWS_SKIPPED_FOR_REUSE = "저장된 분석 글을 다시 쓸 예정이라 뉴스 검색을 건너뜀";
+
+/**
+ * Phase 2 후속: 같은 요청으로 끝난 분석이 있고 그 뒤 새 공시가 없으면, 분석 글을 재사용해 뉴스 단서를 쓰지 않으므로
+ * 뉴스 검색·요지(RSS·AI 비용)를 건너뛴다. 판단이 실패하면 건너뛰지 않는다(원래대로 검색).
+ */
+async function skipNewsForReuse(
+  analysis: EngineAnalysis,
+  deps: EngineDeps,
+): Promise<ToolOutcome | null> {
+  const likely = await deps.store
+    .hasReusableCandidate({
+      ownerId: analysis.ownerId,
+      requestHash: requestHashOf(analysis),
+      excludeAnalysisId: analysis.id,
+    })
+    .catch(() => false);
+  if (!likely) return null;
+  return {
+    status: "succeeded",
+    output: { clues: [], notes: [NEWS_SKIPPED_FOR_REUSE] },
+    inputSummary: "같은 질문·같은 데이터의 저장된 분석 글 있음",
+    outputSummary: "뉴스 검색 건너뜀 — 저장된 분석 글 재사용 예정 (외부 호출 없음)",
+    usage: { externalCalls: 0, llmCostUsd: 0 },
+  };
+}
+
+function runTool(
+  step: PlannedStep,
+  analysis: EngineAnalysis,
+  previous: CompletedStep[],
+  deps: EngineDeps,
+): Promise<ToolOutcome> {
+  const tool = deps.tools[step.tool] as Tool<ToolName>;
+  return tool(step.input, {
+    request: analysis.request!,
+    question: analysis.question,
+    mixedScope: analysis.mixedScope,
+    analysisId: analysis.id,
+    userId: analysis.ownerId,
+    client: deps.client,
+    decisions: analysis.decisions,
+    previous,
+  });
+}
+
+/**
+ * 재사용할 줄 알고 뉴스를 건너뛰었는데 결국 재사용하지 못하면(데이터 버전이 달라짐), 분석 글을 쓰기 전에
+ * 뉴스를 지금 찾는다 — 뉴스 단서 없는 분석 글이 되지 않게
+ */
+async function withLateNews(
+  analysis: EngineAnalysis,
+  previous: CompletedStep[],
+  deps: EngineDeps,
+): Promise<CompletedStep[]> {
+  const skipped = previous.find(
+    (p) =>
+      p.tool === "search_news" &&
+      (p.output as { notes?: string[] }).notes?.includes(NEWS_SKIPPED_FOR_REUSE),
+  );
+  const planned = analysis.plan?.steps.find((s) => s.seq === skipped?.seq);
+  if (!skipped || !planned) return previous;
+  const now = deps.now ?? Date.now;
+  const t0 = now();
+  const fresh = await runTool(planned, analysis, previous, deps).catch(() => null);
+  if (fresh?.status !== "succeeded") return previous;
+  // 뉴스 단계 줄을 실제 결과로 바꿔 둔다 — 실행 기록·외부 호출·AI 비용(상한)이 맞고, 분석 글 단계를 다시 해도
+  // (재시도·복구) 뉴스를 또 찾지 않는다
+  await deps.store.updateStep(analysis.id, skipped.seq, {
+    output: fresh.output,
+    inputSummary: fresh.inputSummary,
+    outputSummary: `${fresh.outputSummary} (분석 글을 다시 쓸 수 없어 분석 글 직전에 찾음)`,
+    durationMs: Math.max(0, Math.round(now() - t0)),
+    externalCalls: fresh.usage.externalCalls,
+    llmCostUsd: fresh.usage.llmCostUsd,
+  });
+  return previous.map((p) => (p === skipped ? { ...p, output: fresh.output } : p));
+}
+
 async function executeTool(
   step: PlannedStep,
   analysis: EngineAnalysis,
   previous: CompletedStep[],
   deps: EngineDeps,
 ): Promise<ToolOutcome> {
+  if (step.tool === "search_news") {
+    const skipped = await skipNewsForReuse(analysis, deps);
+    if (skipped) return skipped;
+  }
   // WU-202: 같은 요청 + 같은 데이터 버전의 설명이 있으면 AI를 다시 부르지 않는다 (TECH §4.10)
   if (step.tool === "write_explanation") {
     const built = outputsOf(previous, "build_result").at(-1);
@@ -342,18 +426,10 @@ async function executeTool(
     }
   }
 
-  const tool = deps.tools[step.tool] as Tool<ToolName>;
   try {
-    return await tool(step.input, {
-      request: analysis.request!,
-      question: analysis.question,
-      mixedScope: analysis.mixedScope,
-      analysisId: analysis.id,
-      userId: analysis.ownerId,
-      client: deps.client,
-      decisions: analysis.decisions,
-      previous,
-    });
+    const context =
+      step.tool === "write_explanation" ? await withLateNews(analysis, previous, deps) : previous;
+    return await runTool(step, analysis, context, deps);
   } catch (err) {
     // 도구는 던지지 않기로 했지만(계약), 던져도 분석 전체가 500이 되지 않게 실패로 기록한다
     return {
@@ -515,7 +591,15 @@ async function finish(
  * 단순 질문(승인이 필요 없는 계획)은 한 요청 안에서 끝까지 (TECH §4.9). 복합 질문은 한 단계만 하고 돌아간다 —
  * 화면이 Q4를 다시 불러 진행 상태를 보여 준다.
  */
+/**
+ * 단순 질문이라도 한 요청이 이만큼 걸리면 남은 단계 전에 돌아가 화면이 진행 상태를 보여 준다
+ * (WU-399 §2.1: 처음 조회하는 기업은 재무 수집만 수십 초라 진행 칸이 첫 단계에 머물렀다). 화면이 Q4를 이어 부른다
+ */
+export const SIMPLE_PROGRESS_RETURN_MS = 8_000;
+
 export async function runStepRequest(analysisId: string, deps: EngineDeps): Promise<StepResult> {
+  const now = deps.now ?? Date.now;
+  const started = now();
   let result = await runOneStep(analysisId, deps);
   // 재시도까지 넉넉히: 단계 상한 × (1 + 재시도 2회)
   for (let i = 0; i < 30 && result.next === "step"; i++) {
@@ -523,6 +607,8 @@ export async function runStepRequest(analysisId: string, deps: EngineDeps): Prom
     if (!analysis?.plan || analysis.plan.complex) break;
     // 다른 요청이 맡아 실행 중이면 기다리지 않고 진행 상태를 돌려준다
     if (result.lastStep?.status === "running") break;
+    // 오래 걸리는 단순 질문은 중간에 돌아가 진행 상태를 보여 준다 (빠른 질문은 지금처럼 한 요청에서 끝)
+    if (now() - started >= SIMPLE_PROGRESS_RETURN_MS) break;
     result = await runOneStep(analysisId, deps);
   }
   return result;

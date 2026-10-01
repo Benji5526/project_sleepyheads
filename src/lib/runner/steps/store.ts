@@ -4,7 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AnalysisRequestView, AnalysisStatus, Explanation, StopReason } from "@/contracts";
 import type { PreprocessDecisions } from "@/lib/preprocess/types";
 import type { ToolName } from "@/lib/runner/tools/types";
-import { findReusableExplanation, saveDataVersion } from "@/lib/versions/store";
+import {
+  findReusableExplanation,
+  isNewerDataAvailable,
+  loadDataVersion,
+  saveDataVersion,
+} from "@/lib/versions/store";
 import type { DataVersionContent } from "@/lib/versions/version";
 import type { StoredPlan } from "./plan";
 
@@ -89,6 +94,15 @@ export interface EngineStore {
     requestHash: string;
     excludeAnalysisId: string;
   }): Promise<Explanation | null>;
+  /**
+   * 같은 요청으로 끝난 분석이 있고, 그 데이터 버전 이후 새 공시가 없는가 — 그러면 이번에도 같은 데이터 버전이 나와
+   * 분석 글을 재사용할 것이 거의 확실하다 (뉴스 단계를 건너뛸지 판단, Phase 2 후속)
+   */
+  hasReusableCandidate(params: {
+    ownerId: string;
+    requestHash: string;
+    excludeAnalysisId: string;
+  }): Promise<boolean>;
 }
 
 interface AnalysisDb {
@@ -270,5 +284,29 @@ export function createSupabaseEngineStore(
 
     saveDataVersion: (params) => saveDataVersion(admin, params),
     findReusableExplanation: (params) => findReusableExplanation(session, params),
+
+    async hasReusableCandidate({ ownerId, requestHash, excludeAnalysisId }) {
+      const { data, error } = await session
+        .from("analyses")
+        .select("id, dataset_version_id, explanation")
+        .eq("owner_id", ownerId)
+        .eq("request_hash", requestHash)
+        .eq("status", "succeeded")
+        .not("dataset_version_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(3);
+      if (error) throw error;
+      const rows = (data ?? []) as {
+        id: string;
+        dataset_version_id: string;
+        explanation: Explanation | null;
+      }[];
+      const candidate = rows.find(
+        (r) => r.id !== excludeAnalysisId && r.explanation?.status === "ready",
+      );
+      if (!candidate) return false;
+      const version = await loadDataVersion(admin, candidate.dataset_version_id);
+      return !!version && !(await isNewerDataAvailable(admin, version.sources));
+    },
   };
 }
