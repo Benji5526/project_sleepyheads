@@ -18,6 +18,8 @@ export interface MemoryState {
   savedVersions: unknown[];
   reusable: Explanation | null;
   reuseQueries: unknown[];
+  /** hasReusableCandidate 응답 (뉴스 건너뛰기 판단) */
+  reuseCandidate: boolean;
 }
 
 export function createMemoryStore(analysis: EngineAnalysis): {
@@ -32,6 +34,7 @@ export function createMemoryStore(analysis: EngineAnalysis): {
     savedVersions: [],
     reusable: null,
     reuseQueries: [],
+    reuseCandidate: false,
   };
 
   const store: EngineStore = {
@@ -76,6 +79,9 @@ export function createMemoryStore(analysis: EngineAnalysis): {
     async findReusableExplanation(params) {
       state.reuseQueries.push(params);
       return state.reusable;
+    },
+    async hasReusableCandidate() {
+      return state.reuseCandidate;
     },
   };
   return { store, state };

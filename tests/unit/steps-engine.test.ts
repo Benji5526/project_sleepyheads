@@ -6,7 +6,9 @@ import type { AnalysisRequestView, Explanation } from "@/contracts";
 import {
   AnalysisCanceledError,
   runOneStep,
+  NEWS_SKIPPED_FOR_REUSE,
   runStepRequest,
+  SIMPLE_PROGRESS_RETURN_MS,
   STALE_RUNNING_MS,
   type ToolTable,
 } from "@/lib/runner/steps/engine";
@@ -180,8 +182,18 @@ describe("단순 질문 — 한 요청 안에서 끝까지 (지금과 같은 동
 
   it("단순 질문에는 실행 시간 상한을 걸지 않는다 (처음 조회 기업의 긴 수집도 끝까지)", async () => {
     toolMs = 120_000;
-    const res = await runStepRequest(ID, deps());
+    let res = await runStepRequest(ID, deps());
+    for (let i = 0; i < 5 && res.next === "step"; i++) res = await runStepRequest(ID, deps());
     expect(res.status).toBe("succeeded");
+    expect(memory.analysis.stop_reason).toBeNull();
+  });
+
+  it("오래 걸리는 단순 질문은 중간에 돌아가 진행 상태를 보여 준다 (WU-399 §2.1, 빠르면 한 요청에서 끝)", async () => {
+    toolMs = SIMPLE_PROGRESS_RETURN_MS + 1;
+    const first = await runStepRequest(ID, deps());
+    expect(first).toMatchObject({ status: "running", next: "step" });
+    expect(first.progress).toMatchObject({ current: 1, total: 3 });
+    expect(calls.map((c) => c.tool)).toEqual(["get_financials"]);
   });
 });
 
@@ -476,6 +488,55 @@ describe("전처리 확인 (needs_preprocess → Q5 → build_result부터)", ()
     expect(calls.map((c) => c.tool)).toEqual(["build_result", "write_explanation"]);
     expect(calls[0].ctx.decisions).toEqual({ missing_account: "show_blank" });
     expect(calls[0].ctx.previous.map((p) => p.tool)).toEqual(["get_financials"]);
+  });
+});
+
+describe("설명 재사용이 거의 확실하면 뉴스를 건너뛴다 (Phase 2 후속)", () => {
+  beforeEach(() => {
+    setup(newsRequest);
+    approve();
+  });
+
+  async function runAll() {
+    for (
+      let i = 0;
+      i < 6 && !["succeeded", "partial", "failed"].includes(memory.analysis.status);
+      i++
+    ) {
+      await runStepRequest(ID, deps());
+    }
+  }
+
+  it("같은 요청의 저장된 분석이 있고 새 공시가 없으면 search_news를 부르지 않고, 분석 글은 재사용", async () => {
+    memory.reuseCandidate = true;
+    memory.reusable = { ...EXPLANATION, conclusion: ["저장된 설명"] };
+    await runAll();
+    expect(calls.map((c) => c.tool)).toEqual(["get_financials", "build_result"]);
+    const news = memory.steps.find((s) => s.tool === "search_news")!;
+    expect(news).toMatchObject({ status: "succeeded", externalCalls: 0 });
+    expect(news.outputSummary).toContain("뉴스 검색 건너뜀");
+    expect(memory.analysis.status).toBe("succeeded");
+  });
+
+  it("건너뛰었는데 결국 재사용하지 못하면 분석 글 직전에 뉴스를 찾아 넘긴다", async () => {
+    memory.reuseCandidate = true;
+    memory.reusable = null;
+    await runAll();
+    expect(calls.map((c) => c.tool)).toEqual([
+      "get_financials",
+      "build_result",
+      "search_news",
+      "write_explanation",
+    ]);
+    const writer = calls.find((c) => c.tool === "write_explanation")!;
+    const news = writer.ctx.previous.find((p) => p.tool === "search_news")!;
+    expect((news.output as { notes: string[] }).notes).not.toContain(NEWS_SKIPPED_FOR_REUSE);
+  });
+
+  it("후보가 없으면 지금처럼 뉴스를 검색한다", async () => {
+    await runAll();
+    expect(calls.map((c) => c.tool)).toContain("search_news");
+    expect(calls.findIndex((c) => c.tool === "search_news")).toBe(1);
   });
 });
 

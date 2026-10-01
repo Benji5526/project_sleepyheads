@@ -656,6 +656,8 @@ sequenceDiagram
 | 집계 실행 시간 | 30초 | 중단 + 안내 |
 - 대용량 집계는 **DB 안에서 SQL로** 처리하고 결과만 서버로 가져온다 (서버 메모리 절약).
 - 측정: 가상 데이터 약 12만 행(상장사 2,700곳 × 44개 분기 규모)으로 집계 시간·메모리·차트 응답 시간 기록 (§20).
+- 측정 결과 (WU-403, 2026-10-01, [`tests/perf/RESULTS.md`](../tests/perf/RESULTS.md)): PGlite에 118,800행 → 섹터별×연도별 **DB 안 집계 457ms·서버 메모리 약 1MB**, 같은 일을 원자료를 서버로 가져와 하면 1,182ms·92MB·15.6MB 전송. 행 수 추정(기업 × 분기 × 계정) = 실제 행 수. 한도 값(15만 행·500점)은 그대로 둔다.
+- 구현 (`src/lib/limits/size.ts`): 15만 행을 넘으면 `413 TOO_LARGE` + "기간을 N분기 이하로, 또는 기업을 M곳 이하로"(한쪽만 줄여도 되는 값). 30초 상한은 집계 DB 함수 안에서 `set local statement_timeout = '30s'`(`AGGREGATE_STATEMENT_TIMEOUT`), 서버는 Postgres 57014를 `aggregateTimeoutError()`(413 + 안내)로 바꾼다. PGlite는 `statement_timeout`을 지키지 않아 운영 Postgres에서 확인한다.
 
 ---
 

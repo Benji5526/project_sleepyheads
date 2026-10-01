@@ -30,6 +30,8 @@ function builder(table: string) {
     in: record("in"),
     is: record("is"),
     order: record("order"),
+    not: record("not"),
+    limit: record("limit"),
     maybeSingle: async () => result,
     then: (resolve: (v: unknown) => unknown) => resolve(result),
   };
@@ -134,7 +136,55 @@ describe("createSupabaseEngineStore", () => {
   });
 });
 
+const versions = vi.hoisted(() => ({ version: null as unknown, newer: false }));
 vi.mock("@/lib/versions/store", () => ({
   saveDataVersion: async () => undefined,
   findReusableExplanation: async () => null,
+  loadDataVersion: async () => versions.version,
+  isNewerDataAvailable: async () => versions.newer,
 }));
+
+describe("hasReusableCandidate (뉴스 건너뛰기 판단)", () => {
+  const params = { ownerId: "u1", requestHash: "h", excludeAnalysisId: "a-now" };
+
+  beforeEach(() => {
+    versions.version = { sources: [{ corpCode: "1" }] };
+    versions.newer = false;
+  });
+
+  it("같은 요청으로 끝난 분석(분석 글 ready)이 있고 그 뒤 새 공시가 없으면 true", async () => {
+    result = {
+      data: [{ id: "a-old", dataset_version_id: "v1", explanation: { status: "ready" } }],
+      error: null,
+    };
+    expect(await store.hasReusableCandidate(params)).toBe(true);
+    expect(ops()).toEqual(
+      expect.arrayContaining([
+        ["eq", "owner_id", "u1"],
+        ["eq", "request_hash", "h"],
+        ["eq", "status", "succeeded"],
+        ["not", "dataset_version_id", "is", null],
+      ]),
+    );
+  });
+
+  it("새 공시가 있거나, 분석 글이 실패였거나, 지금 분석뿐이면 false", async () => {
+    result = {
+      data: [{ id: "a-old", dataset_version_id: "v1", explanation: { status: "ready" } }],
+      error: null,
+    };
+    versions.newer = true;
+    expect(await store.hasReusableCandidate(params)).toBe(false);
+    versions.newer = false;
+    result = {
+      data: [{ id: "a-old", dataset_version_id: "v1", explanation: { status: "failed" } }],
+      error: null,
+    };
+    expect(await store.hasReusableCandidate(params)).toBe(false);
+    result = {
+      data: [{ id: "a-now", dataset_version_id: "v1", explanation: { status: "ready" } }],
+      error: null,
+    };
+    expect(await store.hasReusableCandidate(params)).toBe(false);
+  });
+});

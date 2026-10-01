@@ -5,6 +5,7 @@ import {
   AUTO_PEER_COUNT,
   buildStoredPlan,
   isComplexPlan,
+  newsKeywords,
   planSteps,
   toPlanView,
 } from "@/lib/runner/steps/plan";
@@ -65,6 +66,31 @@ describe("planSteps — 순서와 조건", () => {
     expect(tools({ ...base, intent: "event" })).toContain("get_disclosures");
     const news = planSteps({ ...base, needsNews: true }).find((s) => s.tool === "search_news");
     expect(news?.input).toMatchObject({ keywords: ["매출", "영업이익", "영업이익률"] });
+  });
+});
+
+describe("뉴스 핵심어 (Phase 2 후속)", () => {
+  it("증감률·파생 지표(YoY·QoQ·TTM)는 빼고 기본 지표 이름만, 최대 3개", () => {
+    expect(
+      newsKeywords({
+        ...base,
+        metrics: ["operating_income", "yoy", "qoq", "revenue", "ttm_owners_ni"],
+      }),
+    ).toEqual(["영업이익", "매출"]);
+    expect(
+      newsKeywords({ ...base, metrics: ["revenue", "operating_income", "net_income", "roe"] }),
+    ).toHaveLength(3);
+  });
+
+  it("남는 지표가 없으면 '실적'", () => {
+    expect(newsKeywords({ ...base, metrics: ["yoy"] })).toEqual(["실적"]);
+  });
+
+  it("계획의 뉴스 단계 입력에 그대로 들어간다", () => {
+    const news = planSteps({ ...base, needsNews: true, metrics: ["operating_income", "yoy"] }).find(
+      (s) => s.tool === "search_news",
+    );
+    expect(news?.input).toMatchObject({ keywords: ["영업이익"] });
   });
 });
 

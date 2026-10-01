@@ -1,6 +1,6 @@
 // WU-301 계획: 분석 요청 → 실행 단계(PlannedStep[]) + 복합 판별 + 계획 카드 (TECH §4.6, PHASE2_PLAN §3.2).
 // 순수 함수만 둔다 — DB·외부 호출 없음 (승인 전에는 아무것도 부르지 않는다).
-import type { AnalysisRequestView, Plan } from "@/contracts";
+import type { AnalysisRequestView, MetricId, Plan } from "@/contracts";
 import { addQuarters, quarterSpan } from "@/lib/ask/quarter";
 import { METRIC_LABEL } from "@/lib/runner/metric-info";
 import type { PlannedStep, ToolName } from "@/lib/runner/tools/types";
@@ -51,6 +51,18 @@ function reportCalls(request: AnalysisRequestView): number {
   return quarterSpan(fetchFrom(request), request.period.to) + 1;
 }
 
+/** 증감률·파생 지표는 기사 제목에 거의 나오지 않는 이름이라 뉴스 핵심어에서 뺀다 ("YoY 증감률" 등) */
+const DERIVED_METRICS: ReadonlySet<MetricId> = new Set(["yoy", "qoq", "ttm_owners_ni"]);
+/** 뉴스 검색 핵심어 수 (src/lib/news: 0~3개) */
+export const MAX_NEWS_KEYWORDS = 3;
+
+/** 뉴스 핵심어 = 요청 지표 중 기본 지표의 한글 이름 (최대 3개). 없으면 "실적" */
+export function newsKeywords(request: AnalysisRequestView): string[] {
+  const names = request.metrics.filter((m) => !DERIVED_METRICS.has(m)).map((m) => METRIC_LABEL[m]);
+  const unique = [...new Set(names)].slice(0, MAX_NEWS_KEYWORDS);
+  return unique.length > 0 ? unique : ["실적"];
+}
+
 /** 계획 규칙 (PHASE2_PLAN §3.2). 순서: 경쟁사 → 재무(대상) → 재무(경쟁사) → 공시 → 뉴스 → 결과 → 분석 글 */
 export function planSteps(request: AnalysisRequestView): PlannedStep[] {
   const { target, period } = request;
@@ -95,7 +107,7 @@ export function planSteps(request: AnalysisRequestView): PlannedStep[] {
     steps.push({
       tool: "search_news",
       label: `${target.name} 관련 뉴스 찾기`,
-      input: { company: target, period, keywords: request.metrics.map((m) => METRIC_LABEL[m]) },
+      input: { company: target, period, keywords: newsKeywords(request) },
     });
   }
   steps.push({ tool: "build_result", label: "차트·표 계산", input: {} });
