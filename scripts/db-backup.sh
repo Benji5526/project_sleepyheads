@@ -14,6 +14,19 @@ ROOT="$(git rev-parse --show-toplevel)"
 STAMP="$(date +%Y%m%d-%H%M)"
 OUT="${1:-$ROOT/../sleepyheads-backups}/$STAMP"
 
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker Desktop을 먼저 켜세요 — supabase db dump가 컨테이너 안에서 pg_dump를 돌립니다."
+  exit 1
+fi
+
+# --linked는 supabase link가 남긴 프로젝트 ref가 있어야 한다 (로그인만으로는 부족)
+if [ ! -s "$ROOT/supabase/.temp/project-ref" ] || ! pnpm dlx supabase projects list >/dev/null 2>&1; then
+  echo "먼저 Supabase에 로그인하고 이 폴더를 프로젝트에 연결하세요 (한 번만):"
+  echo "  pnpm dlx supabase login"
+  echo "  pnpm dlx supabase link --project-ref <프로젝트 ref>   # Supabase 대시보드 Project Settings 에 있음"
+  exit 1
+fi
+
 # 저장소 안에는 절대 쓰지 않는다 (실수로 커밋되지 않게)
 mkdir -p "$OUT"
 OUT_ABS="$(cd "$OUT" && pwd -P)"
@@ -25,18 +38,6 @@ case "$OUT_ABS/" in
     exit 1
     ;;
 esac
-
-if ! docker info >/dev/null 2>&1; then
-  echo "Docker Desktop을 먼저 켜세요 — supabase db dump가 컨테이너 안에서 pg_dump를 돌립니다."
-  exit 1
-fi
-
-if ! pnpm dlx supabase projects list >/dev/null 2>&1; then
-  echo "먼저 Supabase에 로그인하고 프로젝트를 연결하세요 (한 번만):"
-  echo "  pnpm dlx supabase login"
-  echo "  pnpm dlx supabase link --project-ref <프로젝트 ref>   # Supabase 대시보드 Project Settings 에 있음"
-  exit 1
-fi
 
 echo "== 백업 → $OUT_ABS"
 pnpm dlx supabase db dump --linked -f "$OUT_ABS/roles.sql" --role-only

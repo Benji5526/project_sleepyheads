@@ -28,6 +28,8 @@ if (!/^https?:\/\//.test(SITE)) {
 const LIMITS = {
   /** 기업 목록 동기화(매일 03시 KST, ±59분)가 이보다 오래 안 돌았으면 ⚠️ */
   syncMaxHours: 30,
+  /** 동기화가 돌았다고 볼 최소 갱신 기업 수 (상장사 약 4,000곳을 한 번에 upsert) */
+  syncMinCompanies: 1_000,
   /** 오늘 AI 비용이 이보다 크면 ⚠️ (키 3개 각 약 5천 원 — 하루 $1이면 며칠 못 간다) */
   llmDailyWarnUsd: 1,
   /** OpenDART 하루 한도 20,000회의 80% */
@@ -136,7 +138,17 @@ async function checkDb(env, now = new Date()) {
   if (usageError) {
     report("운영 DB", "오늘 사용량", false, usageError.message);
   } else {
+    // 그 날 기록이 없으면 0, 기록이 있는데 칸이 비면(표 모양이 바뀜) 확인 못 함으로
     const of = (p) => usage.find((u) => u.provider === p) ?? { calls: 0, cost_usd: 0 };
+    const shapeOk = usage.every((u) => typeof u.calls === "number" && u.cost_usd !== undefined);
+    if (!shapeOk) {
+      report(
+        "운영 DB",
+        "오늘 사용량",
+        false,
+        "api_usage_daily 칸 모양이 예상과 다름 — 스크립트 확인",
+      );
+    }
     const llm = of("llm");
     const dart = of("dart");
     const price = of("price");
@@ -180,13 +192,19 @@ async function checkDb(env, now = new Date()) {
     return data?.[0]?.[column] ?? null;
   };
   try {
-    const sync = await latest("companies", "updated_at");
-    const h = sync ? hoursSince(sync, now) : Infinity;
+    // 질문 때 기업개황을 채우면서도 updated_at이 바뀌므로, 마지막 시각 대신 "최근 30시간에 바뀐 기업 수"로 본다 —
+    // 동기화는 상장사 전체(약 4,000곳)를 한 번에 갱신한다
+    const since = new Date(now.getTime() - LIMITS.syncMaxHours * 3_600_000).toISOString();
+    const { count, error } = await db
+      .from("companies")
+      .select("corp_code", { count: "exact", head: true })
+      .gte("updated_at", since);
+    if (error) throw error;
     report(
       "크론",
       "기업 목록 동기화 (sync-companies, 매일 03시 KST)",
-      h <= LIMITS.syncMaxHours,
-      sync ? `마지막 ${sync} (${h.toFixed(1)}시간 전)` : "기록 없음",
+      (count ?? 0) >= LIMITS.syncMinCompanies,
+      `최근 ${LIMITS.syncMaxHours}시간에 갱신된 기업 ${count ?? 0}곳 (동기화가 돌았으면 ${LIMITS.syncMinCompanies.toLocaleString("ko-KR")}곳 이상)`,
     );
   } catch (err) {
     report("크론", "기업 목록 동기화", false, err.message);
@@ -202,10 +220,10 @@ async function checkDb(env, now = new Date()) {
     const h = prefill ? hoursSince(prefill, now) : Infinity;
     report(
       "크론",
-      "기업개황 미리 채우기 (prefill-profiles, 매일 03시 30분 KST)",
+      "기업개황 채움 흔적 (prefill-profiles 크론 + 질문 때 채운 것)",
       h <= LIMITS.syncMaxHours ? true : null,
       prefill
-        ? `채워진 기업 ${count ?? "?"}곳, 마지막 ${prefill} (${h.toFixed(1)}시간 전)${h > LIMITS.syncMaxHours ? " — 하루 넘게 안 돌았으면 Vercel Cron 로그 확인" : ""}`
+        ? `채워진 기업 ${count ?? "?"}곳, 마지막 ${prefill} (${h.toFixed(1)}시간 전) — 질문 때 채운 것도 섞여 있어 크론이 돌았는지는 Vercel Cron 로그로${h > LIMITS.syncMaxHours ? " (하루 넘게 새로 채운 곳 없음)" : ""}`
         : "아직 없음",
     );
   } catch (err) {
