@@ -144,7 +144,7 @@ pnpm check:keys
 ## 9. 운영 메모
 
 ### 9.1 시연 전 점검 — Supabase 일시정지 해제
-Supabase 무료 플랜은 **7일 동안 활동이 적으면 프로젝트를 일시정지**합니다 (약 1주 전 경고 메일, 정지 후 확인 메일. 정지 후 90일 안에는 되살릴 수 있음 — [Supabase 공식 문서](https://supabase.com/docs/guides/platform/free-project-pausing), 2026-10-01 확인).
+Supabase 무료 플랜은 **7일 동안 활동이 적으면 프로젝트를 일시정지**합니다 (약 1주 전 경고 메일, 정지 후 확인 메일. 정지 후 1년 안에는 대시보드에서 되살릴 수 있음 — [Supabase 공식 문서](https://supabase.com/docs/guides/platform/free-project-pausing), 2026-10-01 확인).
 
 1. https://supabase.com/dashboard 에 로그인 → 조직 → `sleepyhead` 프로젝트를 누릅니다.
 2. 일시정지 상태면 **Resume project**를 누르고 확인합니다. 데이터·설정은 그대로 돌아옵니다 (몇 분 걸림).
@@ -193,4 +193,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" "https://projectsleepyheads.vercel.
 - **남용 방어 ✅**: 분당 요청 제한, 회원 하루 질문 수, 외부 API 전체 상한, 질문당 단계·시간·AI 비용 상한
 - **사람이 확인할 것 👤**: Supabase 이메일 가입 꺼짐 · Site URL·Redirect URL과 구글 OAuth 리디렉션 주소 · OpenAI 키별 월 예산 상한 · Vercel 사용량
 - **⚠️ 무료 플랜은 자동 백업이 없다** — 시연 전 `supabase db dump`로 한 번 내려받아 보관
-- 다시 점검: `node scripts/security-check.mjs --url https://projectsleepyheads.vercel.app`
+- **Security Advisor 경고 2개는 근거를 적고 남김**: `pg_trgm` 확장이 public 스키마 — 권한이 센 함수가 아니라 위험이 낮고, 옮기면 기업 찾기(유사도 검색)가 깨질 수 있어 시연 뒤로 / 유출 비밀번호 보호 꺼짐 — 비밀번호 로그인을 쓰지 않아 해당 없음
+- **비밀 값 검사 도구(`secretlint`)의 1건은 오탐**: `tests/unit/news-safety.test.ts`의 `https://아이디:비밀번호@…` 가짜 주소(이런 주소를 거절하는지 보는 테스트)
+- **오래 멈춘 분석 정리 (WU-501)**: 1시간 넘게 진행이 없는 "분석 중" 분석은 그 회원이 다음에 질문할 때 정리된다(결과가 있으면 부분 결과, 없으면 실패). 그 안에 다시 열면 마지막 성공 단계 다음부터 이어서 한다
+- 다시 점검: `node scripts/security-check.mjs --url https://projectsleepyheads.vercel.app` — 끝에 ✅면 통과, ⚠️면 걸린 파일·커밋 위치만 나온다(키 값은 출력하지 않음, 종료 코드 1)
