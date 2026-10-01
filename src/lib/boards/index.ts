@@ -2,6 +2,7 @@
 export { applyBoardFilters, MAX_BOARD_PEERS, parseBoardFilters } from "./filters";
 export { maxChartPoints, recomputeBoard, resolveBoardPeers } from "./recompute";
 export {
+  AGGREGATE_TIMEOUT_MS,
   aggregateSectorMetrics,
   SUMMABLE_SECTOR_METRICS,
   type SectorAggregateParams,

@@ -96,17 +96,28 @@ describe("applyBoardFilters", () => {
 vi.mock("server-only", () => ({}));
 
 describe("aggregateSectorMetrics (DB 함수 부르기)", () => {
-  function fakeAdmin(companyCount: number, rows: unknown[]) {
+  function fakeAdmin(
+    companyCount: number,
+    rows: unknown[],
+    rpcResult?: { data: unknown; error: { code?: string; message: string } | null },
+  ) {
     const calls: { fn: string; args: unknown }[] = [];
+    const signals: AbortSignal[] = [];
     return {
       calls,
+      signals,
       client: {
         from: () => ({
           select: async () => ({ count: companyCount, error: null }),
         }),
-        rpc: async (fn: string, args: unknown) => {
+        rpc: (fn: string, args: unknown) => {
           calls.push({ fn, args });
-          return { data: rows, error: null };
+          return {
+            abortSignal: async (signal: AbortSignal) => {
+              signals.push(signal);
+              return rpcResult ?? { data: rows, error: null };
+            },
+          };
         },
       },
     };
@@ -163,7 +174,54 @@ describe("aggregateSectorMetrics (DB 함수 부르기)", () => {
         to: "2025Q4",
         metrics: ["revenue"],
       }),
-    ).rejects.toMatchObject({ code: "TOO_LARGE" });
+    ).rejects.toMatchObject({ code: "TOO_LARGE", message: expect.stringContaining("줄여") });
     expect(admin.calls).toEqual([]);
+  });
+
+  it("DB 함수 호출에 30초 시간 제한을 건다", async () => {
+    const { aggregateSectorMetrics, AGGREGATE_TIMEOUT_MS } =
+      await import("@/lib/boards/sector-aggregate");
+    const admin = fakeAdmin(10, []);
+    await aggregateSectorMetrics(admin.client as never, {
+      from: "2025Q1",
+      to: "2025Q4",
+      metrics: ["revenue"],
+    });
+    expect(AGGREGATE_TIMEOUT_MS).toBe(30_000);
+    expect(admin.signals).toHaveLength(1);
+    expect(admin.signals[0]).toBeInstanceOf(AbortSignal);
+  });
+
+  it.each([
+    ["서버가 30초에서 끊음", { code: "", message: "TimeoutError: signal timed out" }],
+    [
+      "DB statement_timeout",
+      { code: "57014", message: "canceling statement due to statement timeout" },
+    ],
+  ])("시간 상한에 걸리면(%s) 413 TOO_LARGE + 줄이라는 안내", async (_name, error) => {
+    const { aggregateSectorMetrics } = await import("@/lib/boards/sector-aggregate");
+    const admin = fakeAdmin(10, [], { data: null, error });
+    await expect(
+      aggregateSectorMetrics(admin.client as never, {
+        from: "2025Q1",
+        to: "2025Q4",
+        metrics: ["revenue"],
+      }),
+    ).rejects.toMatchObject({ code: "TOO_LARGE", message: expect.stringContaining("줄여") });
+  });
+
+  it("그 밖의 DB 오류는 413이 아니라 그대로 실패", async () => {
+    const { aggregateSectorMetrics } = await import("@/lib/boards/sector-aggregate");
+    const admin = fakeAdmin(10, [], {
+      data: null,
+      error: { code: "22023", message: "더할 수 없는 지표" },
+    });
+    await expect(
+      aggregateSectorMetrics(admin.client as never, {
+        from: "2025Q1",
+        to: "2025Q4",
+        metrics: ["revenue"],
+      }),
+    ).rejects.toThrow(/섹터 합계 계산 실패/);
   });
 });

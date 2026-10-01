@@ -15,6 +15,11 @@
 - **`loadBoardResult(analysisId, client)`** — `@/lib/boards`에서 내보낸다(이름 고정). 보드가 있으면 보드 결과, 없으면 원래 결과.
 - **"ready"로 돌아오는 방법 (결정)**: B1이 `boards.updated_at` > `analyses.updated_at`이면 `"stale"`. Q9는 이미 설명 저장 때 `analyses.updated_at`을 올리므로 **Q9는 고칠 것 없음**. PHASE3_PLAN §3.1에 한 줄 적음. → **팀 채팅 알림 필요 (사람이)**
 - **DB 안 SQL 집계** `aggregate_sector_metrics(from, to, metrics[], by_year, calc_version)`: `calendar_quarter_metrics` 전체를 섹터별·분기별(연도별) 합계로 DB 안에서 계산해 결과 행만 돌려준다. 금액 지표 4개만(비율·잔액은 더하면 뜻이 없어 거절), 연결 우선, 연도별은 1~4분기가 다 있는 기업만, 합계는 글자로 내보내 2^53을 넘어도 정확. `service_role`만 실행. 서버 쪽 `aggregateSectorMetrics(admin, …)`(`src/lib/boards/sector-aggregate.ts`)가 한도 검사 뒤 부른다. 기간 인덱스 `calendar_quarter_metrics_period_idx` 추가.
+  - **집계 시간 30초** (TECH §12.5, 병준님 부탁 2026-10-01): `aggregateSectorMetrics`가 DB 함수 호출에 `abortSignal(AbortSignal.timeout(30_000))`를 걸고, 서버가 끊었거나(TimeoutError) DB가 멈췄으면(57014) **413 TOO_LARGE "…기간이나 기업 수를 줄여 주세요"**. `boards-filters.test.ts` "시간 상한에 걸리면…" 2건.
+    - 부탁하신 **함수 안 `set local statement_timeout = '30s'`는 넣지 않았다**: statement_timeout 타이머는 바깥 쿼리가 시작될 때 맞춰져서, 함수 안에서 바꾸면 이미 돌고 있는 그 호출에는 걸리지 않는 것으로 안다(로컬 Postgres가 없어 직접 확인은 못 함 — PGlite는 타임아웃 자체가 안 먹음). DB 쪽 상한이 꼭 필요하면 `alter role service_role set statement_timeout = '30s'`(서버 쿼리 전체에 걸림) 또는 운영에서 위 문장이 실제로 걸리는지 확인 뒤 정하자.
+    - **B2에는 넣지 않았다**: B2는 집계 함수를 부르지 않는다(기업 최대 6곳 재무를 `runAnalysis`로 다시 계산). 집계 함수를 부르는 곳은 `aggregateSectorMetrics` 하나뿐이라 시간 처리를 거기에 넣었다.
+    - 부탁하신 `isAggregateTimeout(err)`·`aggregateTimeoutError()`는 아직 어느 브랜치에도 없어서(2026-10-01 원격 전부 확인) `sector-aggregate.ts` 안에 같은 일을 하는 비공개 함수(`isAggregateTimeoutError`·`aggregateTimeout`)를 두었다. **통합 때 병준님 함수로 바꾸면 된다**(주석에 표시).
+    - 다시 잴 함수 이름: DB `aggregate_sector_metrics(p_from text, p_to text, p_metrics text[], p_by_year boolean, p_calc_version text)` / 서버 `aggregateSectorMetrics(admin, { from, to, metrics, byYear })` (`@/lib/boards`).
   - **병준님께**: `metrics` jsonb 모양은 `{"revenue":{"value":"123"}}`(계산 엔진 `Computed`) 또는 `{"revenue":123}` 둘 다 읽는다. 지금 운영에서는 `calendar_quarter_metrics`에 저장하는 경로가 쓰이지 않아(`saveCalendarQuarterMetrics` 호출부 없음) 측정은 가상 행을 직접 넣어 하면 된다. 한도 검사는 "기업 수 × 분기 수 × 1"(한 행에 모든 지표)로 셌다 — 2,700곳 × 44분기 = 118,800행이면 통과.
 
 ### Phase 2 후속
@@ -41,6 +46,7 @@
   4. 증감률용 앞 분기 수 상수 중복 → `CHANGE_LOOKBACK_QUARTERS` 내보내 씀 ✅
   5. 같은 모듈 import 두 줄 → 합침 ✅
   6. 새 비교 기업을 하나씩 찾음 → 함께 ✅
+- 413 테스트는 문구를 통째로 비교하지 않고 `code` + "줄여" 포함만 본다(병준님 부탁 — 문구 뒤에 예시가 붙음): `boards-route.test.ts` "처리 한도를 넘으면 계산 전에 413", `boards-filters.test.ts` 한도·시간 초과
   7. (설계대로) 원래 버전에서 "보고서 없음"이던 분기는 보드에서도 없음 — 데이터 버전 규칙. 대신 `newerDataVersionAvailable`이 켜진다
   8. (알고 둠) `stale`/`ready`가 `analyses.updated_at`에 기대므로, **결과가 나온 뒤 `analyses.updated_at`을 올리는 곳은 Q9뿐이어야 한다**. 다른 곳이 올리게 되면(예: WU-501 복구) `boards`에 `explanation_at`을 따로 두는 쪽으로 바꾼다
 
@@ -58,6 +64,7 @@
   - `src/lib/runner/execute.ts`·`company-financials.ts`·`diagnostics.ts`는 내 소유(`runner/**`, steps·tools 제외). 기존 호출 동작은 그대로(`base`·`peerComparisonChart`는 기본 꺼짐).
 - **다른 트랙에 부탁**
   - **통합**: `src/app/api/analyses/[id]/rewrite/board-result.ts`의 `loadBoardResultForRewrite`를 `@/lib/boards`의 `loadBoardResult`로 바꾸기(같은 인자). `rewrite-route.test.ts`의 가짜 클라이언트는 `boards` 표에 `null`을 돌려주게 해야 원래 결과로 넘어간다.
+  - **병준**: `isAggregateTimeout`·`aggregateTimeoutError`를 올리시면 통합 때 `sector-aggregate.ts`의 비공개 함수 2개를 그것으로 바꿔 주세요. 운영 DB에서 30초 상한이 실제로 걸리는지(서버 끊기 + DB 쪽) 확인 부탁.
   - **병준**: Vercel `DATA_GO_KR_SERVICE_KEY`가 Encoding 키인지 Decoding 키인지 확인(이번 수정으로 둘 다 되지만, 다른 원인이면 로그 `[external-api:price] 주가 API 오류 (…)`에 사유가 이제 나온다). `check-keys.mjs`는 이미 두 모양을 다 받는다. `tests/perf/`에서 `aggregate_sector_metrics` 측정.
   - **현준**: B2 응답 `filters`는 서버가 정리한 값(대상·중복 제외)이라 화면 칩 상태를 응답 값으로 맞춰 주세요. 분기·연도별 분석에 비교 기업을 넣으면 차트가 1개(또는 단위별 2개) **더해진다**(id `c{n+1}`…) — 가짜 모드 `board-peers`와 같은 동작.
   - **통합**: HANDOFF에 "결과가 나온 뒤 `analyses.updated_at`을 올리는 것은 Q9뿐" 규칙을 옮겨 주세요.

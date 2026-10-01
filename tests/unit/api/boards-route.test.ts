@@ -368,7 +368,10 @@ describe("B2 PATCH /api/boards/:id", () => {
     });
     const res = await patch({ filters: { period: { from: "2015Q1", to: "2026Q2" } } });
     expect(res.status).toBe(413);
-    expect((await res.json()).error.code).toBe("TOO_LARGE");
+    // 문구 뒤에 예시가 붙을 수 있어 통째로 비교하지 않는다 — 코드 + "줄여"만
+    const { error } = (await res.json()) as { error: { code: string; message: string } };
+    expect(error.code).toBe("TOO_LARGE");
+    expect(error.message).toContain("줄여");
     expect(state.runs).toEqual([]);
     expect(state.saved).toEqual([]);
     // 한도 함수에 넘긴 크기: 기업 1곳 × (46분기 + 증감률용 4분기) × 원자료 계정 8개

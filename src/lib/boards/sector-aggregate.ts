@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Quarter } from "@/contracts";
 import { quarterSpan } from "@/lib/ask/quarter";
+import { HttpError } from "@/lib/api/errors";
 import { assertAggregateSize } from "@/lib/limits/size";
 import { CALC_VERSION } from "@/lib/metrics/types";
 
@@ -17,6 +18,35 @@ export const SUMMABLE_SECTOR_METRICS = [
   "owners_net_income",
 ] as const;
 export type SummableSectorMetric = (typeof SUMMABLE_SECTOR_METRICS)[number];
+
+/** 집계 실행 시간 상한 (TECH §12.5 "집계 실행 시간 30초 — 중단 + 안내") */
+export const AGGREGATE_TIMEOUT_MS = 30_000;
+
+/**
+ * 집계가 시간 상한에 걸렸는가 — 서버가 요청을 끊었거나(AbortSignal.timeout → TimeoutError/AbortError),
+ * DB가 statement_timeout으로 멈췄거나(57014 query_canceled).
+ * 통합 때 병준님 `@/lib/limits`의 `isAggregateTimeout`이 생기면 그것으로 바꾼다.
+ */
+function isAggregateTimeoutError(error: {
+  code?: string;
+  message?: string;
+  name?: string;
+}): boolean {
+  return (
+    error.code === "57014" ||
+    error.name === "TimeoutError" ||
+    error.name === "AbortError" ||
+    /TimeoutError|AbortError|statement timeout|canceling statement/i.test(error.message ?? "")
+  );
+}
+
+/** 시간 상한 초과 안내 — 413 TOO_LARGE. 통합 때 병준님 `aggregateTimeoutError()`로 바꾼다 */
+function aggregateTimeout(): HttpError {
+  return new HttpError(
+    "TOO_LARGE",
+    `집계가 ${AGGREGATE_TIMEOUT_MS / 1000}초 안에 끝나지 않아 중단했습니다. 기간이나 기업 수를 줄여 주세요.`,
+  );
+}
 
 export interface SectorAggregateParams {
   from: Quarter;
@@ -67,14 +97,28 @@ export async function aggregateSectorMetrics(
     accounts: 1,
   });
 
-  const { data, error } = await admin.rpc("aggregate_sector_metrics", {
-    p_from: params.from,
-    p_to: params.to,
-    p_metrics: params.metrics,
-    p_by_year: params.byYear ?? false,
-    p_calc_version: CALC_VERSION,
-  });
-  if (error) throw new Error(`섹터 합계 계산 실패: ${error.message}`);
+  // 30초에서 서버가 요청을 끊는다. 함수 안의 `set local statement_timeout`은 이미 시작된 이 호출에는
+  // 걸리지 않아(타이머는 바깥 쿼리 시작 때 맞춰진다) 쓰지 않았다 — DB 쪽 상한은 운영에서 역할 설정으로 확인
+  let response;
+  try {
+    response = await admin
+      .rpc("aggregate_sector_metrics", {
+        p_from: params.from,
+        p_to: params.to,
+        p_metrics: params.metrics,
+        p_by_year: params.byYear ?? false,
+        p_calc_version: CALC_VERSION,
+      })
+      .abortSignal(AbortSignal.timeout(AGGREGATE_TIMEOUT_MS));
+  } catch (err) {
+    if (err instanceof Error && isAggregateTimeoutError(err)) throw aggregateTimeout();
+    throw err;
+  }
+  const { data, error } = response;
+  if (error) {
+    if (isAggregateTimeoutError(error)) throw aggregateTimeout();
+    throw new Error(`섹터 합계 계산 실패: ${error.message}`);
+  }
   return ((data ?? []) as RpcRow[]).map((row) => ({
     sectorName: row.sector_name,
     isFinancial: row.is_financial,
